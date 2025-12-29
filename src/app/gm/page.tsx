@@ -6,793 +6,484 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import {
   collection,
   doc,
-  getDoc,
-  getDocs,
+  getDocs, // For lists
+  getDoc,  // For editing specific items
+  setDoc,  // For custom IDs (Items)
+  addDoc,  // For auto IDs (Questions/Foes)
+  deleteDoc,
   limit,
   query,
-  setDoc,
+  orderBy
 } from "firebase/firestore";
 
-const GM_EMAIL = "oliveru1996@gmail.com"; // 👈 change to your GM email
+// Types imported from your game.ts
+import { 
+  GameItem, ItemType, EquipmentSlot, 
+  QuestionDoc, Monster, EncounterDoc 
+} from "@/types/game";
 
-// ---------- Types ----------
+const GM_EMAIL = "oliveru1996@gmail.com"; 
 
-type QuestionDoc = {
-  title?: string;
-  promptType?: "text" | "latex" | "image";
-  promptText?: string;
-  promptLatex?: string;
-  promptImageUrl?: string;
-  choices: string[];
-  choiceType?: "text" | "latex";
-  correctIndex: number;
-  rewardXp: number;
-  rewardGold: number;
-  difficulty?: number;
-  tags: string[];
-  order?: number;
-};
+export default function GMPage() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // 🗂️ TABS STATE
+  const [activeTab, setActiveTab] = useState<"questions" | "foes" | "encounters" | "items">("questions");
 
-type FoeDoc = {
-  name: string;
-  maxHp: number;
-  attackDamage: number;
-};
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
 
-type EncounterDoc = {
-  title: string;
-  foeId: string;
-  questionTag: string;
-  damagePerCorrect: number;
-  winRewardXp: number;
-  winRewardGold: number;
-  timeLimitSeconds?: number;
-};
+  if (loading) return <div className="p-8">Loading...</div>;
+  if (!user || user.email !== GM_EMAIL) return <div className="p-8 text-red-600 font-bold">Access Denied</div>;
 
-function cleanUndefined<T extends object>(obj: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([_, v]) => v !== undefined)
-  ) as Partial<T>;
+  return (
+    <main className="min-h-screen p-6 max-w-6xl mx-auto space-y-6">
+      {/* HEADER */}
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
+        <div>
+          <h1 className="text-3xl font-bold">🛠️ GM Dashboard</h1>
+          <p className="text-sm text-gray-400">Master Control Panel</p>
+        </div>
+        <div className="flex flex-wrap gap-2 bg-gray-100 p-1 rounded-xl">
+          <TabButton label="Questions" active={activeTab === "questions"} onClick={() => setActiveTab("questions")} />
+          <TabButton label="Foes" active={activeTab === "foes"} onClick={() => setActiveTab("foes")} />
+          <TabButton label="Encounters" active={activeTab === "encounters"} onClick={() => setActiveTab("encounters")} />
+          <TabButton label="Item Factory" active={activeTab === "items"} onClick={() => setActiveTab("items")} />
+        </div>
+      </header>
+
+      {/* ACTIVE PANEL RENDERING */}
+      <div className="bg-gray-50 p-1 rounded-2xl min-h-[600px]">
+        {activeTab === "questions" && <QuestionsPanelOriginal />}
+        {activeTab === "foes" && <FoesPanel />}
+        {activeTab === "encounters" && <EncountersPanel />}
+        {activeTab === "items" && <ItemsPanel />}
+      </div>
+    </main>
+  );
 }
 
-// ---------- GM Questions Panel ----------
-
-function GMQuestionsPanel() {
-  const [list, setList] = useState<{ id: string; title?: string; tags?: string[] }[]>([]);
-  const [loadingList, setLoadingList] = useState(false);
-
+// =========================================================
+// 1. ORIGINAL QUESTIONS PANEL (RESTORED FULL LOGIC)
+// =========================================================
+function QuestionsPanelOriginal() {
+  const [msg, setMsg] = useState("");
+  const [questions, setQuestions] = useState<QuestionDoc[]>([]);
+  
+  // State for Editing
   const [editingId, setEditingId] = useState("");
+
+  // Form Fields
   const [title, setTitle] = useState("");
   const [promptType, setPromptType] = useState<"text" | "latex" | "image">("text");
   const [promptText, setPromptText] = useState("");
   const [promptLatex, setPromptLatex] = useState("");
   const [promptImageUrl, setPromptImageUrl] = useState("");
-  const [choicesText, setChoicesText] = useState("1,2,3,4");
-  const [choiceType, setChoiceType] = useState<"text" | "latex">("text");
-  const [correctIndex, setCorrectIndex] = useState("0");
-  const [rewardXp, setRewardXp] = useState("5");
-  const [rewardGold, setRewardGold] = useState("1");
-  const [difficulty, setDifficulty] = useState("1");
+  const [choices, setChoices] = useState(["", "", "", ""]);
+  const [correctIndex, setCorrectIndex] = useState(0);
+  
+  // Stats
+  const [rewardXp, setRewardXp] = useState(10);
+  const [rewardGold, setRewardGold] = useState(5);
+  const [difficulty, setDifficulty] = useState(1);
   const [tagsText, setTagsText] = useState("level1");
   const [order, setOrder] = useState("");
 
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
+  useEffect(() => { loadRecent(); }, []);
 
-  // Load some questions for convenience
-  useEffect(() => {
-    async function loadList() {
-      setLoadingList(true);
-      try {
-        const q = query(collection(db, "questions"), limit(20));
-        const snap = await getDocs(q);
-        const items = snap.docs.map((d) => {
-          const data = d.data() as any;
-          return {
-            id: d.id,
-            title: data.title,
-            tags: data.tags,
-          };
-        });
-        setList(items);
-      } catch (e: any) {
-        console.error(e);
-      } finally {
-        setLoadingList(false);
-      }
-    }
-    loadList();
-  }, []);
+  async function loadRecent() {
+    try {
+      // Order by created/ID isn't perfect without a timestamp, but this works for now
+      const q = query(collection(db, "questions"), limit(25));
+      const snap = await getDocs(q);
+      setQuestions(snap.docs.map(d => ({ ...d.data(), id: d.id } as QuestionDoc)));
+    } catch (e) { console.error(e); }
+  }
 
-  function newQuestion() {
+  // 🔄 RESTORED: Load data into form for editing
+  function loadQuestionToEdit(q: QuestionDoc) {
+    if (!q.id) return;
+    setEditingId(q.id);
+    setTitle(q.title || "");
+    setPromptType(q.promptType || "text");
+    setPromptText(q.promptText || "");
+    setPromptLatex(q.promptLatex || "");
+    setPromptImageUrl(q.promptImageUrl || "");
+    setChoices(q.choices && q.choices.length === 4 ? q.choices : ["","","",""]);
+    setCorrectIndex(q.correctIndex || 0);
+    setRewardXp(q.rewardXp || 10);
+    setRewardGold(q.rewardGold || 5);
+    setDifficulty(q.difficulty || 1);
+    setTagsText(q.tags ? q.tags.join(",") : "level1");
+    setOrder(q.order ? String(q.order) : "");
+    setMsg(`✏️ Editing: ${q.title || "Untitled"}`);
+  }
+
+  function resetForm() {
     setEditingId("");
     setTitle("");
     setPromptType("text");
     setPromptText("");
     setPromptLatex("");
     setPromptImageUrl("");
-    setChoicesText("1,2,3,4");
-    setChoiceType("text");
-    setCorrectIndex("0");
-    setRewardXp("5");
-    setRewardGold("1");
-    setDifficulty("1");
+    setChoices(["", "", "", ""]);
+    setCorrectIndex(0);
+    setRewardXp(10);
+    setRewardGold(5);
+    setDifficulty(1);
     setTagsText("level1");
     setOrder("");
     setMsg("");
   }
 
-  async function loadQuestion(id: string) {
-    setMsg("");
-    setEditingId(id);
-    try {
-      const ref = doc(db, "questions", id);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) {
-        setMsg(`No question found with id "${id}". You can create it.`);
-        return;
-      }
-      const data = snap.data() as QuestionDoc;
-      setTitle(data.title ?? "");
-      setPromptType(data.promptType ?? "text");
-      setPromptText(data.promptText ?? "");
-      setPromptLatex(data.promptLatex ?? "");
-      setPromptImageUrl(data.promptImageUrl ?? "");
-      setChoicesText((data.choices ?? []).join(","));
-      setChoiceType(data.choiceType ?? "text");
-      setCorrectIndex(String(data.correctIndex ?? 0));
-      setRewardXp(String(data.rewardXp ?? 0));
-      setRewardGold(String(data.rewardGold ?? 0));
-      setDifficulty(data.difficulty != null ? String(data.difficulty) : "");
-      setTagsText((data.tags ?? []).join(","));
-      setOrder(data.order != null ? String(data.order) : "");
-    } catch (e: any) {
-      setMsg(`Error loading question: ${e?.message ?? e}`);
-    }
-  }
-
   async function saveQuestion() {
-    if (!editingId) {
-      setMsg("Please enter a Question ID (for example: q1, q2...).");
-      return;
-    }
+    setMsg("Saving...");
+    const tagsArray = tagsText.split(",").map((s) => s.trim()).filter(Boolean);
 
-    setSaving(true);
-    setMsg("");
+    const docData: QuestionDoc = {
+      title: title || "Untitled",
+      promptType,
+      promptText: promptText || undefined,
+      promptLatex: promptLatex || undefined,
+      promptImageUrl: promptImageUrl || undefined,
+      choices,
+      correctIndex,
+      rewardXp: Number(rewardXp),
+      rewardGold: Number(rewardGold),
+      difficulty: Number(difficulty), // Ensures number type
+      tags: tagsArray,
+      order: order ? Number(order) : undefined,
+    };
 
     try {
-      const choicesArray = choicesText
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      const tagsArray = tagsText
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      const docData: QuestionDoc = {
-        title: title || "Untitled question",
-        promptType,
-        promptText: promptType === "text" ? promptText || undefined : undefined,
-        promptLatex: promptType === "latex" ? promptLatex || undefined : undefined,
-        promptImageUrl: promptType === "image" ? promptImageUrl || undefined : undefined,
-        choices: choicesArray.length > 0 ? choicesArray : ["A", "B", "C", "D"],
-        choiceType,
-        correctIndex: Number(correctIndex) || 0,
-        rewardXp: Number(rewardXp) || 0,
-        rewardGold: Number(rewardGold) || 0,
-        difficulty: difficulty ? Number(difficulty) : undefined,
-        tags: tagsArray.length > 0 ? tagsArray : ["level1"],
-        order: order ? parseInt(order) : undefined,
-      };
-
-      await setDoc(doc(db, "questions", editingId), cleanUndefined(docData), { merge: true });
-      setMsg("✅ Question saved!");
-
-      // refresh list (simple way)
-      const q = query(collection(db, "questions"), limit(20));
-      const snap = await getDocs(q);
-      const items = snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          title: data.title,
-          tags: data.tags,
-        };
-      });
-      setList(items);
-    } catch (e: any) {
-      setMsg(`❌ Error saving question: ${e?.message ?? e}`);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <section className="rounded-2xl border p-4 shadow-sm space-y-4">
-      <header className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Questions</h2>
-        <button
-          className="text-sm rounded-xl border px-3 py-1"
-          type="button"
-          onClick={newQuestion}
-        >
-          New question
-        </button>
-      </header>
-
-      <div className="grid gap-4 md:grid-cols-[1.5fr,2fr]">
-        {/* Left: list + choose ID */}
-        <div className="space-y-3">
-          <div>
-            <label className="text-sm font-medium">Question ID</label>
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              placeholder="e.g. q1, q2..."
-              value={editingId}
-              onChange={(e) => setEditingId(e.target.value)}
-            />
-            <button
-              className="mt-2 text-sm rounded-xl border px-3 py-1"
-              type="button"
-              onClick={() => editingId && loadQuestion(editingId)}
-            >
-              Load by ID
-            </button>
-          </div>
-
-          <div>
-            <div className="text-sm font-medium mb-1">First questions (up to 20)</div>
-            {loadingList ? (
-              <p className="text-sm opacity-70">Loading list...</p>
-            ) : list.length === 0 ? (
-              <p className="text-sm opacity-70">No questions yet.</p>
-            ) : (
-              <ul className="space-y-1 max-h-64 overflow-auto text-sm">
-                {list.map((q) => (
-                  <li key={q.id}>
-                    <button
-                      type="button"
-                      className="w-full text-left rounded-lg border px-2 py-1 hover:bg-gray-50"
-                      onClick={() => loadQuestion(q.id)}
-                    >
-                      <span className="font-mono text-xs">{q.id}</span>{" "}
-                      <span className="font-medium">{q.title ?? "(no title)"}</span>{" "}
-                      <span className="opacity-60">
-                        {(q.tags ?? []).join(", ")}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-
-        {/* Right: form */}
-        <div className="space-y-3 text-sm">
-          <div>
-            <label className="font-medium">Title (for lists)</label>
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Additions 1"
-            />
-          </div>
-
-          <div>
-            <label className="font-medium">Prompt type</label>
-            <select
-              className="mt-1 w-full rounded-xl border px-3 py-2"
-              value={promptType}
-              onChange={(e) => setPromptType(e.target.value as any)}
-            >
-              <option value="text">Text</option>
-              <option value="latex">LaTeX</option>
-              <option value="image">Image URL</option>
-            </select>
-          </div>
-
-          {promptType === "text" && (
-            <div>
-              <label className="font-medium">Prompt text</label>
-              <textarea
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                rows={3}
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-              />
-            </div>
-          )}
-
-          {promptType === "latex" && (
-            <div>
-              <label className="font-medium">Prompt LaTeX</label>
-              <textarea
-                className="mt-1 w-full rounded-xl border px-3 py-2 font-mono text-xs"
-                rows={3}
-                placeholder="e.g. \int_0^1 x^2\,dx"
-                value={promptLatex}
-                onChange={(e) => setPromptLatex(e.target.value)}
-              />
-            </div>
-          )}
-
-          {promptType === "image" && (
-            <div>
-              <label className="font-medium">Prompt image URL</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-xs"
-                placeholder="https://..."
-                value={promptImageUrl}
-                onChange={(e) => setPromptImageUrl(e.target.value)}
-              />
-            </div>
-          )}
-
-          <div>
-            <label className="font-medium">Choices (comma-separated)</label>
-            <textarea
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-xs"
-              rows={2}
-              value={choicesText}
-              onChange={(e) => setChoicesText(e.target.value)}
-            />
-            <div className="mt-1 flex items-center gap-2">
-              <span>Choice type:</span>
-              <select
-                className="rounded-xl border px-2 py-1"
-                value={choiceType}
-                onChange={(e) => setChoiceType(e.target.value as any)}
-              >
-                <option value="text">Text</option>
-                <option value="latex">LaTeX</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-medium">Correct index (0-based)</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                type="number"
-                value={correctIndex}
-                onChange={(e) => setCorrectIndex(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="font-medium">Difficulty</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                type="number"
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-medium">Reward XP</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                type="number"
-                value={rewardXp}
-                onChange={(e) => setRewardXp(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="font-medium">Reward gold</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                type="number"
-                value={rewardGold}
-                onChange={(e) => setRewardGold(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-medium">Tags (comma-separated)</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                value={tagsText}
-                onChange={(e) => setTagsText(e.target.value)}
-                placeholder="e.g. level1, addition"
-              />
-            </div>
-            <div>
-              <label className="font-medium">Order (Optional)</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                type="number"
-                placeholder="e.g. 1, 2, 3..."
-                value={order}
-                onChange={(e) => setOrder(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <button
-            className="mt-2 w-full rounded-xl bg-black text-white py-2 font-medium disabled:opacity-50"
-            disabled={saving}
-            type="button"
-            onClick={saveQuestion}
-          >
-            {saving ? "Saving..." : "Save question"}
-          </button>
-
-          {msg && <p className="mt-2 text-sm">{msg}</p>}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ---------- GM Foes Panel ----------
-
-function GMFoesPanel() {
-  const [foeId, setFoeId] = useState("");
-  const [name, setName] = useState("");
-  const [maxHp, setMaxHp] = useState("10");
-  const [attackDamage, setAttackDamage] = useState("3");
-  const [msg, setMsg] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function loadFoe() {
-    if (!foeId) return;
-    setMsg("");
-    try {
-      const ref = doc(db, "foes", foeId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) {
-        setMsg(`No foe with id "${foeId}". You can create it.`);
-        return;
+      if (editingId) {
+        // UPDATE Existing
+        await setDoc(doc(db, "questions", editingId), docData, { merge: true });
+        setMsg("✅ Updated Question!");
+      } else {
+        // CREATE New
+        await addDoc(collection(db, "questions"), docData);
+        setMsg("✅ Created New Question!");
       }
-      const data = snap.data() as FoeDoc;
-      setName(data.name);
-      setMaxHp(String(data.maxHp ?? 10));
-      setAttackDamage(String(data.attackDamage ?? 1));
-    } catch (e: any) {
-      setMsg(`Error loading foe: ${e?.message ?? e}`);
-    }
-  }
-
-  async function saveFoe() {
-    if (!foeId) {
-      setMsg("Please enter a foe ID (e.g. goblin).");
-      return;
-    }
-    setSaving(true);
-    setMsg("");
-    try {
-      const data: FoeDoc = {
-        name: name || foeId,
-        maxHp: Number(maxHp) || 10,
-        attackDamage: Number(attackDamage) || 1,
-      };
-      await setDoc(doc(db, "foes", foeId), data, { merge: true });
-      setMsg("✅ Foe saved!");
-    } catch (e: any) {
-      setMsg(`❌ Error saving foe: ${e?.message ?? e}`);
-    } finally {
-      setSaving(false);
-    }
+      loadRecent();
+      if (!editingId) resetForm(); // Only clear if we were creating new
+    } catch (e: any) { setMsg("Error: " + e.message); }
   }
 
   return (
-    <section className="rounded-2xl border p-4 shadow-sm space-y-3">
-      <h2 className="text-lg font-semibold">Foes</h2>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 rounded-xl border shadow-sm">
+      {/* LEFT: FORM */}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-bold">{editingId ? "✏️ Edit Mode" : "📝 New Question"}</h2>
+          <button onClick={resetForm} className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">Reset Form</button>
+        </div>
+        
+        {msg && <div className="text-center bg-blue-50 p-2 rounded text-blue-800 font-bold text-sm">{msg}</div>}
 
-      <div className="grid gap-3 md:grid-cols-2 text-sm">
-        <div>
-          <label className="font-medium">Foe ID</label>
-          <input
-            className="mt-1 w-full rounded-xl border px-3 py-2"
-            placeholder="e.g. goblin"
-            value={foeId}
-            onChange={(e) => setFoeId(e.target.value)}
-          />
-          <button
-            className="mt-2 text-sm rounded-xl border px-3 py-1"
-            type="button"
-            onClick={loadFoe}
-          >
-            Load foe
-          </button>
+        <Input label="Internal Title" value={title} onChange={(e:any) => setTitle(e.target.value)} />
+
+        {/* Prompt Type Toggle */}
+        <div className="flex gap-2 mb-2">
+          {(["text", "latex", "image"] as const).map(t => (
+            <button key={t} onClick={() => setPromptType(t)} 
+              className={`px-3 py-1 text-xs font-bold uppercase rounded border transition-colors ${promptType === t ? 'bg-black text-white' : 'bg-gray-100'}`}>
+              {t}
+            </button>
+          ))}
         </div>
 
-        <div className="space-y-2">
-          <div>
-            <label className="font-medium">Name</label>
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Goblin"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="font-medium">Max HP</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                type="number"
-                value={maxHp}
-                onChange={(e) => setMaxHp(e.target.value)}
+        {promptType === "text" && <Input label="Prompt Text" value={promptText} onChange={(e:any) => setPromptText(e.target.value)} />}
+        {promptType === "latex" && <Input label="LaTeX Formula (e.g. \sqrt{x})" value={promptLatex} onChange={(e:any) => setPromptLatex(e.target.value)} />}
+        {promptType === "image" && <Input label="Image URL" value={promptImageUrl} onChange={(e:any) => setPromptImageUrl(e.target.value)} />}
+
+        {/* Choices */}
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-xl border">
+          {choices.map((c, i) => (
+            <div key={i}>
+              <label className="text-[10px] font-bold uppercase flex justify-between px-1 mb-1 cursor-pointer">
+                <span>Option {i + 1}</span>
+                <input type="radio" checked={correctIndex === i} onChange={() => setCorrectIndex(i)} />
+              </label>
+              <input 
+                className={`w-full border px-2 py-1 rounded text-sm transition-all ${correctIndex === i ? 'border-green-500 bg-green-50 ring-1 ring-green-500' : ''}`}
+                value={c}
+                onChange={(e) => {
+                  const copy = [...choices]; copy[i] = e.target.value; setChoices(copy);
+                }}
+                placeholder={`Answer ${i+1}`}
               />
             </div>
-            <div>
-              <label className="font-medium">Attack damage</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                type="number"
-                value={attackDamage}
-                onChange={(e) => setAttackDamage(e.target.value)}
-              />
-            </div>
-          </div>
-          <button
-            className="mt-2 w-full rounded-xl bg-black text-white py-2 font-medium disabled:opacity-50"
-            disabled={saving}
-            type="button"
-            onClick={saveFoe}
-          >
-            {saving ? "Saving..." : "Save foe"}
-          </button>
+          ))}
         </div>
+
+        {/* Meta Data */}
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="Tags (comma sep)" value={tagsText} onChange={(e:any) => setTagsText(e.target.value)} />
+          <Input type="number" label="Order (Optional)" value={order} onChange={(e:any) => setOrder(e.target.value)} placeholder="1" />
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+           <Input type="number" label="XP Reward" value={rewardXp} onChange={(e:any) => setRewardXp(Number(e.target.value))} />
+           <Input type="number" label="Gold Reward" value={rewardGold} onChange={(e:any) => setRewardGold(Number(e.target.value))} />
+           {/* Fixed Type Error: Using Number() */}
+           <Input type="number" label="Difficulty (1-3)" value={difficulty} onChange={(e:any) => setDifficulty(Number(e.target.value))} />
+        </div>
+
+        <button onClick={saveQuestion} className="btn-primary">
+          {editingId ? "Update Question" : "Create Question"}
+        </button>
       </div>
 
-      {msg && <p className="text-sm">{msg}</p>}
-    </section>
+      {/* RIGHT: LIST */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold">Recent Questions</h2>
+        <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+          {questions.map((q) => (
+            <div key={q.id} 
+              onClick={() => loadQuestionToEdit(q)} // 👈 RESTORED CLICK TO EDIT
+              className={`p-3 border rounded cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-300 ${editingId === q.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : ''}`}
+            >
+              <div className="font-bold text-sm truncate">{q.promptText || q.promptLatex || "Image Question"}</div>
+              <div className="text-xs text-gray-400 flex justify-between mt-1">
+                <span>{q.tags?.join(", ")}</span>
+                <span className="flex gap-2">
+                    {q.difficulty && <span className="text-orange-400">★{q.difficulty}</span>}
+                    {q.order && <span className="bg-gray-200 px-1 rounded text-gray-600">#{q.order}</span>}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
-// ---------- GM Encounters Panel ----------
+// =========================================================
+// 2. ITEMS PANEL (NEW FACTORY)
+// =========================================================
+function ItemsPanel() {
+  const [msg, setMsg] = useState("");
+  // Basic Info
+  const [id, setId] = useState("");
+  const [name, setName] = useState("");
+  const [desc, setDesc] = useState(""); 
+  const [price, setPrice] = useState(10);
+  const [type, setType] = useState<ItemType>("weapon");
+  const [slot, setSlot] = useState<EquipmentSlot>("mainHand");
+  
+  // Stats
+  const [dmgFlat, setDmgFlat] = useState<number | "">("");
+  const [dmgMult, setDmgMult] = useState<number | "">("");
+  const [defFlat, setDefFlat] = useState<number | "">("");
+  const [defMult, setDefMult] = useState<number | "">("");
+  const [timeFactor, setTimeFactor] = useState<number | "">("");
 
-function GMEncountersPanel() {
-  const [encounterId, setEncounterId] = useState("");
+  const handleSave = async () => {
+    if (!id || !name) { setMsg("❌ ID & Name required"); return; }
+    
+    // Construct the generic GameItem object
+    const newItem: GameItem = {
+      id, name, description: desc, price: Number(price), type,
+      slot: (type === 'potion' || type === 'misc') ? undefined : slot,
+      imageUrl: "https://placehold.co/100?text=" + name.charAt(0), 
+      stats: {
+        ...( (dmgFlat || dmgMult) && { damage: { ...(dmgFlat && { flat: Number(dmgFlat) }), ...(dmgMult && { mult: Number(dmgMult) }) } }),
+        ...( (defFlat || defMult) && { defense: { ...(defFlat && { flat: Number(defFlat) }), ...(defMult && { mult: Number(defMult) }) } }),
+        ...( timeFactor && { timeFactor: Number(timeFactor) })
+      }
+    };
+    try {
+      await setDoc(doc(db, "items", id), newItem);
+      setMsg(`✅ Saved Item: ${name}`); 
+      setId(""); // Clear ID to prevent accidental overwrite
+    } catch (e: any) { setMsg("Error: " + e.message); }
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
+      <div className="flex justify-between items-center"><h2 className="text-xl font-bold">Create Item</h2>{msg && <span className="text-sm font-bold text-green-600">{msg}</span>}</div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <Input label="ID (Unique, e.g. sword-fire)" value={id} onChange={(e:any) => setId(e.target.value)} />
+        <Input label="Name" value={name} onChange={(e:any) => setName(e.target.value)} />
+      </div>
+      
+      <Input label="Lore Description" value={desc} onChange={(e:any) => setDesc(e.target.value)} />
+      
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+            <label className="label">Type</label>
+            <select className="input" value={type} onChange={e => setType(e.target.value as any)}>
+                <option value="weapon">Weapon</option><option value="armor">Armor</option><option value="potion">Potion</option><option value="misc">Misc</option>
+            </select>
+        </div>
+        <div>
+            <label className="label">Slot</label>
+            <select className="input disabled:bg-gray-100" disabled={type==='potion'||type==='misc'} value={slot} onChange={e => setSlot(e.target.value as any)}>
+                <option value="mainHand">Main Hand</option><option value="offHand">Off Hand</option><option value="armor">Armor</option><option value="head">Head</option>
+            </select>
+        </div>
+        <Input type="number" label="Price (Gold)" value={price} onChange={(e:any) => setPrice(Number(e.target.value))} />
+      </div>
+      
+      <hr className="border-gray-200" />
+      
+      <div className="grid grid-cols-3 gap-4">
+        <div className="p-3 bg-red-50 rounded border border-red-100">
+            <div className="text-xs font-bold text-red-800 uppercase mb-2">Damage</div>
+            <div className="flex gap-2"><input className="input text-xs" placeholder="Flat (+)" value={dmgFlat} onChange={(e:any)=>setDmgFlat(Number(e.target.value))}/><input className="input text-xs" placeholder="Mult (x)" value={dmgMult} onChange={(e:any)=>setDmgMult(Number(e.target.value))}/></div>
+        </div>
+        <div className="p-3 bg-blue-50 rounded border border-blue-100">
+            <div className="text-xs font-bold text-blue-800 uppercase mb-2">Defense</div>
+            <div className="flex gap-2"><input className="input text-xs" placeholder="Flat (+)" value={defFlat} onChange={(e:any)=>setDefFlat(Number(e.target.value))}/><input className="input text-xs" placeholder="Mult (x)" value={defMult} onChange={(e:any)=>setDefMult(Number(e.target.value))}/></div>
+        </div>
+        <div className="p-3 bg-purple-50 rounded border border-purple-100">
+            <div className="text-xs font-bold text-purple-800 uppercase mb-2">Time Manipulation</div>
+            <input className="input text-xs" placeholder="Factor (e.g. 1.5)" value={timeFactor} onChange={(e:any)=>setTimeFactor(Number(e.target.value))}/>
+        </div>
+      </div>
+      <button onClick={handleSave} className="btn-primary">Save Item</button>
+    </div>
+  );
+}
+
+// =========================================================
+// 3. FOES PANEL
+// =========================================================
+function FoesPanel() {
+  const [foes, setFoes] = useState<Monster[]>([]);
+  const [msg, setMsg] = useState("");
+  const [name, setName] = useState("");
+  const [hp, setHp] = useState(20);
+  const [damage, setDamage] = useState(2);
+  
+  useEffect(() => { loadFoes(); }, []);
+  async function loadFoes() {
+    const s = await getDocs(collection(db, "foes"));
+    setFoes(s.docs.map(d => ({ ...d.data(), id: d.id } as Monster)));
+  }
+  async function saveFoe() {
+    if (!name) return;
+    try {
+      await addDoc(collection(db, "foes"), { name, maxHp: Number(hp), attackDamage: Number(damage) });
+      setMsg(`✅ Saved ${name}`); setName(""); loadFoes();
+    } catch (e: any) { setMsg(e.message); }
+  }
+  async function deleteFoe(id: string) {
+    if(!confirm("Delete this foe?")) return;
+    await deleteDoc(doc(db, "foes", id)); loadFoes();
+  }
+
+  return (
+    <div className="grid md:grid-cols-2 gap-6 bg-white p-6 rounded-xl border shadow-sm">
+      <div className="space-y-4">
+        <h2 className="font-bold text-xl">New Foe</h2>
+        {msg && <div className="text-green-600 text-sm">{msg}</div>}
+        <Input label="Name" value={name} onChange={(e:any) => setName(e.target.value)} placeholder="Goblin" />
+        <div className="grid grid-cols-2 gap-4"><Input type="number" label="HP" value={hp} onChange={(e:any)=>setHp(Number(e.target.value))}/><Input type="number" label="Attack Dmg" value={damage} onChange={(e:any)=>setDamage(Number(e.target.value))}/></div>
+        <button onClick={saveFoe} className="btn-primary">Save Foe</button>
+      </div>
+      <div className="space-y-2 max-h-96 overflow-y-auto">
+        <h2 className="font-bold text-xl">Existing Foes</h2>
+        {foes.map(f => (
+          <div key={f.id} className="p-3 border rounded flex justify-between items-center hover:bg-gray-50">
+            <div><div className="font-bold text-sm">{f.name}</div><div className="text-xs text-red-500">HP:{f.maxHp} ATK:{f.damage||(f as any).attackDamage}</div></div>
+            <button onClick={() => deleteFoe(f.id)} className="text-red-400 hover:text-red-600 text-xs font-bold px-2">Delete</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// =========================================================
+// 4. ENCOUNTERS PANEL
+// =========================================================
+function EncountersPanel() {
+  const [encounters, setEncounters] = useState<EncounterDoc[]>([]);
+  const [foes, setFoes] = useState<Monster[]>([]);
+  const [msg, setMsg] = useState("");
+  
+  // Form
   const [title, setTitle] = useState("");
   const [foeId, setFoeId] = useState("");
-  const [questionTag, setQuestionTag] = useState("");
-  const [damagePerCorrect, setDamagePerCorrect] = useState("3");
-  const [winRewardXp, setWinRewardXp] = useState("20");
-  const [winRewardGold, setWinRewardGold] = useState("5");
-  const [timeLimitSeconds, setTimeLimitSeconds] = useState("15");
-  const [msg, setMsg] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [tag, setTag] = useState("level1");
+  const [dmg, setDmg] = useState(5);
+  const [xp, setXp] = useState(20);
+  const [gold, setGold] = useState(10);
+  const [time, setTime] = useState(20);
 
-  async function loadEncounter() {
-    if (!encounterId) return;
-    setMsg("");
-    try {
-      const ref = doc(db, "encounters", encounterId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) {
-        setMsg(`No encounter with id "${encounterId}". You can create it.`);
-        return;
-      }
-      const data = snap.data() as EncounterDoc;
-      setTitle(data.title);
-      setFoeId(data.foeId);
-      setQuestionTag(data.questionTag);
-      setDamagePerCorrect(String(data.damagePerCorrect ?? 1));
-      setWinRewardXp(String(data.winRewardXp ?? 0));
-      setWinRewardGold(String(data.winRewardGold ?? 0));
-      setTimeLimitSeconds(
-        data.timeLimitSeconds != null ? String(data.timeLimitSeconds) : ""
-      );
-    } catch (e: any) {
-      setMsg(`Error loading encounter: ${e?.message ?? e}`);
-    }
+  useEffect(() => { loadEncounters(); loadFoes(); }, []);
+  async function loadEncounters() {
+    const s = await getDocs(collection(db, "encounters"));
+    setEncounters(s.docs.map(d => ({ ...d.data(), id: d.id } as EncounterDoc)));
   }
-
+  async function loadFoes() {
+    const s = await getDocs(collection(db, "foes"));
+    setFoes(s.docs.map(d => ({ ...d.data(), id: d.id } as Monster)));
+  }
   async function saveEncounter() {
-    if (!encounterId) {
-      setMsg("Please enter an encounter ID (e.g. enc1).");
-      return;
-    }
-    setSaving(true);
-    setMsg("");
+    if (!title || !foeId) { setMsg("❌ Title & Foe req"); return; }
     try {
-      const data: EncounterDoc = {
-        title: title || encounterId,
-        foeId,
-        questionTag,
-        damagePerCorrect: Number(damagePerCorrect) || 1,
-        winRewardXp: Number(winRewardXp) || 0,
-        winRewardGold: Number(winRewardGold) || 0,
-        timeLimitSeconds: timeLimitSeconds
-          ? Number(timeLimitSeconds)
-          : undefined,
-      };
-      await setDoc(doc(db, "encounters", encounterId), data, { merge: true });
-      setMsg("✅ Encounter saved!");
-    } catch (e: any) {
-      setMsg(`❌ Error saving encounter: ${e?.message ?? e}`);
-    } finally {
-      setSaving(false);
-    }
+      await addDoc(collection(db, "encounters"), {
+        title, foeId, questionTag: tag, damagePerCorrect: Number(dmg),
+        winRewardXp: Number(xp), winRewardGold: Number(gold), timeLimitSeconds: Number(time)
+      });
+      setMsg(`✅ Saved ${title}`); loadEncounters();
+    } catch (e: any) { setMsg(e.message); }
+  }
+  async function deleteEnc(id: string) {
+    if(!confirm("Delete?")) return;
+    await deleteDoc(doc(db, "encounters", id)); loadEncounters();
   }
 
   return (
-    <section className="rounded-2xl border p-4 shadow-sm space-y-3">
-      <h2 className="text-lg font-semibold">Encounters</h2>
-
-      <div className="grid gap-3 md:grid-cols-2 text-sm">
+    <div className="grid md:grid-cols-2 gap-6 bg-white p-6 rounded-xl border shadow-sm">
+      <div className="space-y-4">
+        <h2 className="font-bold text-xl">New Battle</h2>
+        {msg && <div className="text-green-600 text-sm">{msg}</div>}
+        <Input label="Title" value={title} onChange={(e:any)=>setTitle(e.target.value)} />
         <div>
-          <label className="font-medium">Encounter ID</label>
-          <input
-            className="mt-1 w-full rounded-xl border px-3 py-2"
-            placeholder="e.g. enc1"
-            value={encounterId}
-            onChange={(e) => setEncounterId(e.target.value)}
-          />
-          <button
-            className="mt-2 text-sm rounded-xl border px-3 py-1"
-            type="button"
-            onClick={loadEncounter}
-          >
-            Load encounter
-          </button>
+            <label className="label">Foe</label>
+            <select className="input" value={foeId} onChange={e=>setFoeId(e.target.value)}>
+                <option value="">Select Foe</option>{foes.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
         </div>
-
-        <div className="space-y-2">
-          <div>
-            <label className="font-medium">Title</label>
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Goblin in the Woods"
-            />
-          </div>
-          <div>
-            <label className="font-medium">Foe ID</label>
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2"
-              value={foeId}
-              onChange={(e) => setFoeId(e.target.value)}
-              placeholder="goblin"
-            />
-          </div>
-          <div>
-            <label className="font-medium">Question tag</label>
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2"
-              value={questionTag}
-              onChange={(e) => setQuestionTag(e.target.value)}
-              placeholder="level1"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="font-medium">Damage per correct</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                type="number"
-                value={damagePerCorrect}
-                onChange={(e) => setDamagePerCorrect(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="font-medium">Time limit (seconds, empty = none)</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                type="number"
-                value={timeLimitSeconds}
-                onChange={(e) => setTimeLimitSeconds(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="font-medium">Win reward XP</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                type="number"
-                value={winRewardXp}
-                onChange={(e) => setWinRewardXp(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="font-medium">Win reward gold</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                type="number"
-                value={winRewardGold}
-                onChange={(e) => setWinRewardGold(e.target.value)}
-              />
-            </div>
-          </div>
-          <button
-            className="mt-2 w-full rounded-xl bg-black text-white py-2 font-medium disabled:opacity-50"
-            disabled={saving}
-            type="button"
-            onClick={saveEncounter}
-          >
-            {saving ? "Saving..." : "Save encounter"}
-          </button>
-        </div>
+        <div className="grid grid-cols-2 gap-4"><Input label="Q Tag" value={tag} onChange={(e:any)=>setTag(e.target.value)} /><Input type="number" label="Player Dmg" value={dmg} onChange={(e:any)=>setDmg(Number(e.target.value))} /></div>
+        <div className="grid grid-cols-3 gap-2"><Input type="number" label="XP" value={xp} onChange={(e:any)=>setXp(Number(e.target.value))} /><Input type="number" label="Gold" value={gold} onChange={(e:any)=>setGold(Number(e.target.value))} /><Input type="number" label="Time(s)" value={time} onChange={(e:any)=>setTime(Number(e.target.value))} /></div>
+        <button onClick={saveEncounter} className="btn-primary">Save Battle</button>
       </div>
-
-      {msg && <p className="text-sm">{msg}</p>}
-    </section>
+      <div className="space-y-2 max-h-96 overflow-y-auto">
+        <h2 className="font-bold text-xl">Existing Battles</h2>
+        {encounters.map(e => (
+          <div key={e.id} className="p-3 border rounded flex justify-between items-center hover:bg-gray-50">
+            <div><div className="font-bold text-sm">{e.title}</div><div className="text-xs text-gray-400">{e.questionTag} | {e.timeLimitSeconds}s</div></div>
+            <button onClick={() => deleteEnc(e.id!)} className="text-red-400 hover:text-red-600 text-xs font-bold px-2">Delete</button>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
-// ---------- Main GM Page ----------
-
-export default function GMPage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loadingUser, setLoadingUser] = useState(true);
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoadingUser(false);
-    });
-    return () => unsub();
-  }, []);
-
-  if (loadingUser) {
-    return (
-      <main className="p-8">
-        <p>Loading...</p>
-      </main>
-    );
-  }
-
-  if (!user) {
-    return (
-      <main className="p-8">
-        <h1 className="text-2xl font-bold">GM Area</h1>
-        <p className="mt-2 opacity-70">Please sign in as GM.</p>
-        <a className="underline" href="/login">
-          Go to login
-        </a>
-      </main>
-    );
-  }
-
-  if (user.email !== GM_EMAIL) {
-    return (
-      <main className="p-8">
-        <h1 className="text-2xl font-bold">GM Area</h1>
-        <p className="mt-2 opacity-70">
-          You are signed in as <span className="font-mono">{user.email}</span>, but this is
-          not the GM account.
-        </p>
-      </main>
-    );
-  }
-
-  return (
-    <main className="min-h-screen p-6 flex flex-col gap-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">GM Tools</h1>
-          <p className="text-sm opacity-70">
-            Create and edit questions, foes, and encounters without opening Firebase.
-          </p>
-        </div>
-        <div className="text-xs rounded-xl border px-3 py-2">
-          <div className="opacity-70">Signed in as GM</div>
-          <div className="font-mono">{user.email}</div>
-        </div>
-      </header>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <GMQuestionsPanel />
-        <div className="space-y-6">
-          <GMFoesPanel />
-          <GMEncountersPanel />
-        </div>
-      </div>
-    </main>
-  );
+// =========================================================
+// UI HELPERS
+// =========================================================
+function TabButton({ label, active, onClick }: any) {
+  return <button onClick={onClick} className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${active ? 'bg-black text-white shadow-md' : 'text-gray-500 hover:bg-white hover:shadow'}`}>{label}</button>;
 }
+function Input({ label, ...props }: any) {
+  return <div><label className="label">{label}</label><input className="input" {...props} /></div>;
+}
+
+// STYLES (Add to globals.css if preferred, but referencing here for structure)
+// .input { w-full border border-gray-300 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black transition-all }
+// .label { block text-xs font-bold uppercase text-gray-500 mb-1 }
+// .btn-primary { w-full bg-black text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md active:scale-95 }

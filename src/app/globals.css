@@ -24,3 +24,15 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@layer components {
+  .input {
+    @apply w-full border border-gray-300 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black;
+  }
+  .label {
+    @apply block text-xs font-bold uppercase text-gray-500 mb-1;
+  }
+  .btn-primary {
+    @apply w-full bg-black text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md active:scale-95;
+  }
+}
