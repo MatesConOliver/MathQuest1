@@ -363,17 +363,47 @@ function FoesPanel() {
   const [name, setName] = useState("");
   const [hp, setHp] = useState(20);
   const [damage, setDamage] = useState(2);
+  const [editingId, setEditingId] = useState("");
   
   useEffect(() => { loadFoes(); }, []);
   async function loadFoes() {
     const s = await getDocs(collection(db, "foes"));
     setFoes(s.docs.map(d => ({ ...d.data(), id: d.id } as Monster)));
   }
+  // 1. New Function: Load data into form
+  function loadFoeToEdit(f: Monster) {
+    setEditingId(f.id);
+    setName(f.name);
+    setHp(f.maxHp);
+    // Handle both 'damage' and 'attackDamage' depending on your DB version
+    setDamage(f.damage || (f as any).attackDamage || 2); 
+    setMsg(`✏️ Editing: ${f.name}`);
+  }
+
+  // 2. Updated Function: Handle Create OR Update
   async function saveFoe() {
     if (!name) return;
+    
+    const foeData = { 
+      name, 
+      maxHp: Number(hp), 
+      attackDamage: Number(damage) 
+    };
+
     try {
-      await addDoc(collection(db, "foes"), { name, maxHp: Number(hp), attackDamage: Number(damage) });
-      setMsg(`✅ Saved ${name}`); setName(""); loadFoes();
+      if (editingId) {
+         // UPDATE existing Foe
+         await setDoc(doc(db, "foes", editingId), foeData, { merge: true });
+         setMsg(`✅ Updated ${name}`);
+      } else {
+         // CREATE new Foe
+         await addDoc(collection(db, "foes"), foeData);
+         setMsg(`✅ Created ${name}`);
+      }
+      
+      // Reset Form
+      setName(""); setHp(20); setDamage(2); setEditingId("");
+      loadFoes();
     } catch (e: any) { setMsg(e.message); }
   }
   async function deleteFoe(id: string) {
@@ -393,7 +423,7 @@ function FoesPanel() {
       <div className="space-y-2 max-h-96 overflow-y-auto">
         <h2 className="font-bold text-xl">Existing Foes</h2>
         {foes.map(f => (
-          <div key={f.id} className="p-3 border rounded flex justify-between items-center hover:bg-gray-50">
+          <div key={f.id} onClick={() => loadFoeToEdit(f)} className="p-3 border rounded flex justify-between items-center hover:bg-gray-50">
             <div><div className="font-bold text-sm">{f.name}</div><div className="text-xs text-red-500">HP:{f.maxHp} ATK:{f.damage||(f as any).attackDamage}</div></div>
             <button onClick={() => deleteFoe(f.id)} className="text-red-400 hover:text-red-600 text-xs font-bold px-2">Delete</button>
           </div>
@@ -410,6 +440,7 @@ function EncountersPanel() {
   const [encounters, setEncounters] = useState<EncounterDoc[]>([]);
   const [foes, setFoes] = useState<Monster[]>([]);
   const [msg, setMsg] = useState("");
+  const [editingId, setEditingId] = useState("");
   
   // Form
   const [title, setTitle] = useState("");
@@ -430,18 +461,54 @@ function EncountersPanel() {
     setFoes(s.docs.map(d => ({ ...d.data(), id: d.id } as Monster)));
   }
   async function saveEncounter() {
-    if (!title || !foeId) { setMsg("❌ Title & Foe req"); return; }
+    if (!title || !foeId) { setMsg("❌ Title & Foe required"); return; }
+    
+    const data: EncounterDoc = {
+      title,
+      foeId,
+      questionTag: tag,
+      damagePerCorrect: Number(dmg),
+      winRewardXp: Number(xp),
+      winRewardGold: Number(gold),
+      timeLimitSeconds: Number(time)
+    };
+
     try {
-      await addDoc(collection(db, "encounters"), {
-        title, foeId, questionTag: tag, damagePerCorrect: Number(dmg),
-        winRewardXp: Number(xp), winRewardGold: Number(gold), timeLimitSeconds: Number(time)
-      });
-      setMsg(`✅ Saved ${title}`); loadEncounters();
-    } catch (e: any) { setMsg(e.message); }
+      if (editingId) {
+        // 🔄 UPDATE EXISTING
+        await setDoc(doc(db, "encounters", editingId), data, { merge: true });
+        setMsg(`✅ Updated ${title}`);
+      } else {
+        // 🆕 CREATE NEW
+        await addDoc(collection(db, "encounters"), data);
+        setMsg(`✅ Created ${title}`);
+      }
+      
+      // Clear form and reload
+      loadEncounters();
+      setEditingId(""); // Stop editing mode
+      setTitle(""); 
+      // (Optional: reset other fields to defaults if you like)
+    } catch (e: any) { 
+      setMsg(e.message); 
+    }
   }
   async function deleteEnc(id: string) {
     if(!confirm("Delete?")) return;
     await deleteDoc(doc(db, "encounters", id)); loadEncounters();
+  }
+
+  function loadEncounterToEdit(enc: EncounterDoc) {
+    if (!enc.id) return;
+    setEditingId(enc.id);
+    setTitle(enc.title);
+    setFoeId(enc.foeId);
+    setTag(enc.questionTag);
+    setDmg(enc.damagePerCorrect);
+    setXp(enc.winRewardXp);
+    setGold(enc.winRewardGold);
+    setTime(enc.timeLimitSeconds || 20);
+    setMsg(`✏️ Loaded: ${enc.title} )`);
   }
 
   return (
@@ -463,7 +530,7 @@ function EncountersPanel() {
       <div className="space-y-2 max-h-96 overflow-y-auto">
         <h2 className="font-bold text-xl">Existing Battles</h2>
         {encounters.map(e => (
-          <div key={e.id} className="p-3 border rounded flex justify-between items-center hover:bg-gray-50">
+          <div key={e.id} onClick={() => loadEncounterToEdit(e)} className={`p-3 border rounded flex justify-between items-center cursor-pointer hover:bg-green-50 ${editingId === e.id ? 'border-green-500 bg-green-50 ring-1 ring-green-500' : ''}`}>
             <div><div className="font-bold text-sm">{e.title}</div><div className="text-xs text-gray-400">{e.questionTag} | {e.timeLimitSeconds}s</div></div>
             <button onClick={() => deleteEnc(e.id!)} className="text-red-400 hover:text-red-600 text-xs font-bold px-2">Delete</button>
           </div>
