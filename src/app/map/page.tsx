@@ -142,9 +142,14 @@ export default function MapPage() {
                         <h3 className="font-bold text-gray-900 truncate">
                           {enc.title || "Unknown Encounter"}
                         </h3>
-                        <p className="text-xs text-gray-500 font-medium">
-                          Win Reward: {enc.winRewardXp} XP
-                        </p>
+                        <div className="text-xs text-gray-500 font-medium flex items-center gap-3">
+                          <span>
+                            XP: <span className="text-purple-600 font-bold">+{enc.winRewardXp || 0}</span>
+                          </span>
+                          <span>
+                            Gold: <span className="text-yellow-600 font-bold">+{enc.winRewardGold || 0}</span>
+                          </span>
+                        </div>
                       </div>
                     </div>
 
