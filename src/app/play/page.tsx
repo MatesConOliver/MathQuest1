@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, query, where, updateDoc, increment, setDoc } from "firebase/firestore";
@@ -9,7 +9,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import 'katex/dist/katex.min.css'; 
 import { InlineMath, BlockMath } from 'react-katex';
 
-export default function PlayPage() {
+function PlayContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const encounterId = searchParams.get("id");
@@ -1281,5 +1281,13 @@ function TimeBar({ current, max }: { current: number; max: number }) {
         />
       </div>
     </div>
+  );
+}
+
+export default function PlayPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-xl text-white">Loading Battle...</div>}>
+      <PlayContent />
+    </Suspense>
   );
 }
