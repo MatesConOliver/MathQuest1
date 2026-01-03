@@ -236,7 +236,7 @@ export default function CharacterPage() {
         
         {/* LEFT COL: STATS & GEAR */}
         <div className="space-y-6">
-          <section className="bg-white p-6 rounded-2xl shadow-sm border space-y-4">
+          <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border space-y-4">
             <h2 className="text-xl font-bold">Stats</h2>
             <div className="grid grid-cols-2 gap-4">
                <StatBox 
@@ -254,7 +254,7 @@ export default function CharacterPage() {
             </div>
           </section>
 
-          <section className="bg-white p-6 rounded-2xl shadow-sm border space-y-4">
+          <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border space-y-4">
             <h2 className="text-xl font-bold">Equipped Gear</h2>
             <div className="space-y-2">
                 <EquipRow slotName="Main Hand" slotKey="mainHand" equippedId={char.equipment.mainHand} gameItems={gameItems} inventory={char.inventory} onUnequip={() => handleUnequip('mainHand')} />
@@ -266,7 +266,7 @@ export default function CharacterPage() {
         </div>
 
         {/* RIGHT COL: INVENTORY */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border h-fit">
+        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border h-fit">
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold">Backpack ({char.inventory.length})</h2>
                 <Link href="/shop" className="text-xs bg-black text-white px-3 py-1 rounded-lg hover:opacity-80">Visit Shop</Link>

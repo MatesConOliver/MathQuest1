@@ -680,7 +680,7 @@ function PlayContent() {
           <div 
             key={enc.id} 
             // 👇 FLEXBOX MAGIC: Stacks vertically on mobile (flex-col), side-by-side on desktop (sm:flex-row)
-            className="bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+            className="bg-white dark:bg-gray-800 dark:text-gray-100 border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
           >
             {/* 1. INFO SECTION (Grows to fill space) */}
             <div className="flex-1 space-y-1">
@@ -729,7 +729,7 @@ function PlayContent() {
 
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-yellow-50">
-        <div className="bg-white p-8 rounded-3xl shadow-xl border-4 border-yellow-400 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
+        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-yellow-400 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
           
           <div className="text-6xl animate-bounce">🎉</div>
           
@@ -796,7 +796,7 @@ function PlayContent() {
   if (mode === "lost") {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-red-50">
-        <div className="bg-white p-8 rounded-3xl shadow-xl border-4 border-red-500 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
+        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-red-500 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
           
           <div className="text-6xl animate-pulse">💀</div>
           
@@ -833,7 +833,7 @@ function PlayContent() {
 
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
-        <div className="bg-white p-8 rounded-3xl shadow-xl border-4 border-gray-400 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
+        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-gray-400 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
           
           <div className="text-6xl">💨</div>
           
@@ -881,7 +881,7 @@ function PlayContent() {
       <main className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
         
         {/* Card Container */}
-        <div className="max-w-lg w-full bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-800">
+        <div className="max-w-lg w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-800">
           
           {/* --- HEADER (Image OR Emoji) --- */}
           <div className="relative h-64 w-full bg-gray-900">
@@ -919,7 +919,7 @@ function PlayContent() {
           </div>
 
           {/* --- BODY (Story & Stats) --- */}
-          <div className="p-8 space-y-6 bg-white">
+          <div className="p-8 space-y-6 bg-white dark:bg-gray-800 dark:text-gray-100">
             
             {/* Description / Story */}
             <div className="relative pl-4 border-l-4 border-slate-300">
@@ -1014,7 +1014,7 @@ function PlayContent() {
       </div>
 
       {/* TIMER BAR */}
-      <div className="bg-white px-6 py-4 rounded-3xl shadow-sm border border-gray-200 mb-6 w-full">
+      <div className="bg-white dark:bg-gray-800 dark:text-gray-100 px-6 py-4 rounded-3xl shadow-sm border border-gray-200 mb-6 w-full">
         <TimeBar 
             current={timeLeft} 
             max={totalTime} 
@@ -1022,7 +1022,7 @@ function PlayContent() {
       </div>
 
       {/* --- QUESTION CARD --- */}
-      <div className="w-full bg-white rounded-3xl shadow-lg border p-8 space-y-6 relative">
+      <div className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-lg border p-8 space-y-6 relative">
         {msg && <div className="text-center text-red-500 font-bold animate-bounce">{msg}</div>}
         <div className="absolute top-4 right-6 bg-gray-100 px-3 py-1 rounded-full text-[10px] font-black text-gray-400 tracking-widest border border-gray-200">
            TURN {currentQIndex + 1} / {questions.length}
@@ -1074,7 +1074,7 @@ function PlayContent() {
           {/* A. IF PAUSE (Next Button) - Shows at top if paused */}
           {isPaused && (
             <div className="flex flex-col items-center justify-center space-y-4 animate-in fade-in zoom-in mb-4">
-              <div className="text-xl font-bold bg-white p-4 rounded-xl border-2 border-black w-full text-center shadow-md">
+              <div className="text-xl font-bold bg-white dark:bg-gray-800 dark:text-gray-100 p-4 rounded-xl border-2 border-black w-full text-center shadow-md">
                  {msg || "Round Over"}
               </div>
               <button 
@@ -1149,7 +1149,7 @@ function PlayContent() {
       {/* 🎒 INVENTORY MODAL */}
       {showInventory && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 rounded-3xl">
-           <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold">🎒 Backpack</h3>
                 <button onClick={() => setShowInventory(false)} className="text-gray-400 hover:text-black">✕</button>
@@ -1191,7 +1191,7 @@ function PlayContent() {
       {/* 🛑 ESCAPE CONFIRMATION MODAL (Does not pause timer!) */}
       {showEscapeConfirm && (
         <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 rounded-3xl animate-in fade-in duration-200">
-           <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl border-4 border-red-100 text-center space-y-4">
+           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl border-4 border-red-100 text-center space-y-4">
               
               <div className="text-4xl">🏃💨</div>
               

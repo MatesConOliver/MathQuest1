@@ -70,7 +70,7 @@ export default function MapPage() {
             <h1 className="text-3xl md:text-4xl font-black text-gray-900">World Map</h1>
             <p className="text-gray-500 font-medium">Select a region to explore</p>
           </div>
-          <Link href="/" className="px-4 py-2 bg-white text-gray-700 font-bold rounded-xl border-2 border-gray-200 hover:bg-gray-50 text-sm transition-all">
+          <Link href="/" className="px-4 py-2 bg-white dark:bg-gray-800 dark:text-gray-100 text-gray-700 font-bold rounded-xl border-2 border-gray-200 hover:bg-gray-50 text-sm transition-all">
             🏠 Home
           </Link>
         </header>
@@ -81,7 +81,7 @@ export default function MapPage() {
             <button
               key={loc.id}
               onClick={() => setSelectedLocation(loc)}
-              className="group relative text-left bg-white p-6 rounded-3xl border-2 border-transparent hover:border-blue-500 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden"
+              className="group relative text-left bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-3xl border-2 border-transparent hover:border-blue-500 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden"
             >
               <div className="absolute inset-0 bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="relative z-10 flex items-start gap-4">
@@ -105,7 +105,7 @@ export default function MapPage() {
       {selectedLocation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           
-          <div className="bg-white w-full max-w-lg max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-lg max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             
             {/* Popup Header */}
             <div className="p-6 bg-gray-50 border-b border-gray-100 flex justify-between items-start shrink-0">
@@ -132,7 +132,7 @@ export default function MapPage() {
                   <div 
                     key={enc.id} 
                     title={enc.description}
-                    className="flex items-center justify-between p-4 bg-white border-2 border-gray-100 rounded-2xl hover:border-blue-400 hover:shadow-md transition-all group"
+                    className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-100 rounded-2xl hover:border-blue-400 hover:shadow-md transition-all group"
                   >
                     <div className="flex items-center gap-3 min-w-0 mr-3">
                       <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-lg shrink-0">

@@ -179,7 +179,7 @@ export default function ShopPage() {
               key={item.id} 
               className={`
                 relative flex flex-col justify-between
-                p-5 bg-white rounded-2xl border shadow-sm transition-all duration-200
+                p-5 bg-white dark:bg-gray-800 dark:text-gray-100 rounded-2xl border shadow-sm transition-all duration-200
                 hover:shadow-lg hover:-translate-y-1
                 ${isRare ? 'border-yellow-200' : 'border-gray-200'}
               `}

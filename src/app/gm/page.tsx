@@ -229,7 +229,7 @@ function QuestionsPanelOriginal() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 rounded-xl border shadow-sm">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border shadow-sm">
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-bold">{editingId ? "✏️ Edit Mode" : "📝 New Question"}</h2>
@@ -453,7 +453,7 @@ function ItemsPanel() {
   const isEditing = id && items.some(i => i.id === id);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-6 rounded-xl border shadow-sm">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border shadow-sm">
       <div className="md:col-span-2 space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold">{isEditing ? "Item Factory (Editing)" : "Item Factory (New)"}</h2>
@@ -470,7 +470,7 @@ function ItemsPanel() {
             <label className="label mb-2">Item Image URL</label>
             <div className="flex gap-4 items-center">
                 <input className="input flex-1" placeholder="https://..." value={imageUrl} onChange={(e: any) => setImageUrl(e.target.value)} />
-                <div className="w-16 h-16 bg-white border rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                <div className="w-16 h-16 bg-white dark:bg-gray-800 dark:text-gray-100 border rounded-lg flex items-center justify-center overflow-hidden shrink-0">
                     {imageUrl ? <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" /> : <span className="text-xs text-gray-300">No Img</span>}
                 </div>
             </div>
@@ -668,7 +668,7 @@ function FoesPanel() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 rounded-xl border shadow-sm">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border shadow-sm">
       {/* FORM SIDE */}
       <div className="space-y-4">
         <h2 className="text-xl font-bold">{id ? "✏️ Edit Foe" : "👾 New Foe"}</h2>
@@ -795,7 +795,7 @@ function LocationsPanel() {
   }
 
   return (
-    <div className="grid md:grid-cols-2 gap-6 bg-white p-6 rounded-xl border shadow-sm">
+    <div className="grid md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border shadow-sm">
       <div className="space-y-4">
         <h2 className="font-bold text-xl">{editingId ? "Edit Location" : "Create Map Location"}</h2>
         {msg && <div className="text-green-600 text-sm">{msg}</div>}
@@ -978,7 +978,7 @@ function EncountersPanel() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 rounded-xl border shadow-sm">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border shadow-sm">
       {/* FORM SIDE */}
       <div className="space-y-4">
         <h2 className="text-xl font-bold">{editingId ? "✏️ Edit Encounter" : "⚔️ New Encounter"}</h2>
@@ -1009,7 +1009,7 @@ function EncountersPanel() {
               <div className="flex-1">
                  <Input label="Custom Emoji" value={emoji} onChange={(e:any) => setEmoji(e.target.value)} placeholder="👹" />
               </div>
-              <label className="flex items-center gap-2 cursor-pointer bg-white border px-3 py-3 rounded-lg h-[42px] mb-[2px]">
+              <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-gray-800 dark:text-gray-100 border px-3 py-3 rounded-lg h-[42px] mb-[2px]">
                 <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-bold text-gray-700">Shuffle Qs?</span>
               </label>
@@ -1067,7 +1067,7 @@ function EncountersPanel() {
 // UI HELPERS
 // =========================================================
 function TabButton({ label, active, onClick }: any) {
-  return <button onClick={onClick} className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${active ? 'bg-black text-white shadow-md' : 'text-gray-500 hover:bg-white hover:shadow'}`}>{label}</button>;
+  return <button onClick={onClick} className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${active ? 'bg-black text-white shadow-md' : 'text-gray-500 hover:bg-white dark:bg-gray-800 dark:text-gray-100 hover:shadow'}`}>{label}</button>;
 }
 function Input({ label, ...props }: any) {
   return <div><label className="label">{label}</label><input className="input" {...props} /></div>;

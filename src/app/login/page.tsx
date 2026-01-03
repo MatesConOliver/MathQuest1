@@ -85,7 +85,7 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-      <div className="w-full max-w-md bg-white p-6 rounded-2xl shadow-md border">
+      <div className="w-full max-w-md bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-md border">
         <h1 className="text-2xl font-bold mb-2">
           {isRegistering ? "Create Hero" : "Welcome Back"}
         </h1>
