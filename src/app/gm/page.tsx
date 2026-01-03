@@ -122,8 +122,13 @@ function QuestionsPanelOriginal() {
 
   const visibleQuestions = questions
   .filter(q => {
-    const text = (q.promptText || q.title || "").toLowerCase();
-    return text.includes(localFilter.toLowerCase());
+    const searchString = `
+      ${q.title || ""} 
+      ${q.promptText || ""} 
+      ${q.tags ? q.tags.join(" ") : ""}
+    `.toLowerCase();
+    
+    return searchString.includes(localFilter.toLowerCase());
   })
   .sort((a, b) => {
     const ta = (a.title || "").toLowerCase();
