@@ -690,9 +690,14 @@ function PlayContent() {
                     {enc.questionTag}
                   </span>
               </div>
-              <p className="text-sm text-gray-500">
-                 Win: <span className="text-purple-600 font-bold">+{enc.winRewardXp} XP</span>
-              </p>
+              <div className="text-sm text-gray-500 flex items-center gap-3">
+                <span>
+                    XP: <span className="text-purple-600 font-bold">+{enc.winRewardXp || 0}</span>
+                </span>
+                <span>
+                    Gold: <span className="text-yellow-600 font-bold">+{enc.winRewardGold || 0}</span>
+                </span>
+              </div>
             </div>
 
             {/* 2. ACTION BUTTON (Never shrinks) */}
