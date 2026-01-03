@@ -104,7 +104,7 @@ function QuestionsPanelOriginal() {
 
   async function loadRecent() {
     try {
-      const q = query(collection(db, "questions"), limit(50));
+      const q = query(collection(db, "questions"), limit(1000));
       const snap = await getDocs(q);
       setQuestions(snap.docs.map(d => ({ ...d.data(), id: d.id } as QuestionDoc)));
     } catch (e) { console.error(e); }
