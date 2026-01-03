@@ -942,11 +942,15 @@ function PlayContent() {
 
                 {/* 2. REWARD */}
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col items-center justify-center text-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reward</span>
-                    <span className="text-xl font-bold text-slate-700">
-                      {/* @ts-ignore */}
-                      {activeEncounter?.winRewardXp || 100} XP
-                    </span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rewards</span>
+                    <div className="flex flex-col items-center">
+                        <span className="text-xl font-bold text-purple-600">
+                          +{activeEncounter?.winRewardXp || 0} XP
+                        </span>
+                        <span className="text-sm font-bold text-yellow-600">
+                          +{activeEncounter?.winRewardGold || 0} Gold
+                        </span>
+                    </div>
                 </div>
             </div>
 
