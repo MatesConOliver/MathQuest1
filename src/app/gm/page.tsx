@@ -46,14 +46,15 @@ export default function GMPage() {
   if (!user || user.email !== GM_EMAIL) return <div className="p-8 text-red-600 font-bold">Access Denied</div>;
 
   return (
-    <main className="min-h-screen p-6 max-w-6xl mx-auto space-y-6">
+    <main className="min-h-screen p-6 max-w-6xl mx-auto space-y-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
       {/* HEADER */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-700 pb-4">
         <div>
           <h1 className="text-3xl font-bold">🛠️ GM Dashboard</h1>
           <p className="text-sm text-gray-400">Master Control Panel</p>
         </div>
-        <div className="flex flex-wrap gap-2 bg-gray-100 p-1 rounded-xl">
+
+        <div className="flex flex-wrap gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl transition-colors">
           <TabButton label="Questions" active={activeTab === "questions"} onClick={() => setActiveTab("questions")} />
           <TabButton label="Foes" active={activeTab === "foes"} onClick={() => setActiveTab("foes")} />
           <TabButton label="Locations" active={activeTab === "locations"} onClick={() => setActiveTab("locations")} />
@@ -63,7 +64,7 @@ export default function GMPage() {
       </header>
 
       {/* ACTIVE PANEL RENDERING */}
-      <div className="bg-gray-50 p-1 rounded-2xl min-h-[600px]">
+      <div className="bg-gray-50 dark:bg-gray-800/50 p-1 rounded-2xl min-h-[600px] border dark:border-gray-700">
         {activeTab === "questions" && <QuestionsPanelOriginal />}
         {activeTab === "foes" && <FoesPanel />}
         {activeTab === "locations" && <LocationsPanel />}
@@ -172,7 +173,7 @@ function QuestionsPanelOriginal() {
         {text.split('$').map((part, index) => {
           // Odd indices (1, 3, 5) are inside $$ -> Render as Math
           if (index % 2 === 1) {
-             return <span key={index} className="inline-block mx-1 text-blue-600"><InlineMath math={part} /></span>;
+            return <span key={index} className="inline-block mx-1 text-blue-600 dark:text-blue-400"><InlineMath math={part} /></span>;
           }
           // Even indices are text
           return <span key={index}>{part}</span>;
@@ -223,24 +224,29 @@ function QuestionsPanelOriginal() {
       await deleteDoc(doc(db, "questions", qId));
       setMsg("🗑️ Question deleted.");
       if (editingId === qId) resetForm();
-      // Reload based on current view
       if (dbTagSearch) loadByTag(); else loadRecent();
     } catch (e: any) { setMsg("Error: " + e.message); }
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border shadow-sm">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border dark:border-gray-700 shadow-sm transition-colors">
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-bold">{editingId ? "✏️ Edit Mode" : "📝 New Question"}</h2>
         </div>
-        {msg && <div className="text-center bg-blue-50 p-2 rounded text-blue-800 font-bold text-sm">{msg}</div>}
+
+        {msg && <div className="text-center bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-blue-800 dark:text-blue-200 font-bold text-sm">{msg}</div>}
         
         <Input label="Internal Title" value={title} onChange={(e:any) => setTitle(e.target.value)} />
+        
         <div className="flex gap-2 mb-2">
           {(["text", "latex", "image"] as const).map(t => (
             <button key={t} onClick={() => setPromptType(t)} 
-              className={`px-3 py-1 text-xs font-bold uppercase rounded border transition-colors ${promptType === t ? 'bg-black text-white' : 'bg-gray-100'}`}>
+              className={`px-3 py-1 text-xs font-bold uppercase rounded border dark:border-gray-600 transition-colors ${
+                promptType === t 
+                ? 'bg-black text-white dark:bg-white dark:text-black' 
+                : 'bg-gray-100 dark:bg-gray-700 dark:text-gray-300'
+              }`}>
               {t}
             </button>
           ))}
@@ -252,7 +258,7 @@ function QuestionsPanelOriginal() {
         
         {/* 👇 NEW: LIVE PREVIEW BOX */}
         {promptType === "text" && promptText && (
-           <div className="mt-2 p-3 bg-gray-50 border rounded text-sm text-gray-700">
+           <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700 border dark:border-gray-600 rounded text-sm text-gray-700 dark:text-gray-200">
              <span className="font-bold text-[10px] uppercase text-gray-400 block mb-1">Preview:</span>
              <div className="leading-relaxed">
                {renderMixedText(promptText)}
@@ -260,21 +266,21 @@ function QuestionsPanelOriginal() {
            </div>
         )}
         
-        <div className="flex gap-2 bg-blue-50 p-3 rounded-xl border border-blue-100">
+        <div className="flex gap-2 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800">
            <div className="flex-1">
-              <label className="text-[10px] font-bold uppercase text-blue-800">Min</label>
+              <label className="text-[10px] font-bold uppercase text-blue-800 dark:text-blue-300">Min</label>
               <input type="number" min="0" value={qMinutes} onChange={(e)=>setQMinutes(Number(e.target.value))} className="input w-full" />
            </div>
            <div className="flex-1">
-              <label className="text-[10px] font-bold uppercase text-blue-800">Sec</label>
+              <label className="text-[10px] font-bold uppercase text-blue-800 dark:text-blue-300">Sec</label>
               <input type="number" min="0" max="59" value={qSeconds} onChange={(e)=>setQSeconds(Number(e.target.value))} className="input w-full" />
            </div>
-           <div className="flex items-end pb-2 text-xs font-bold text-blue-600">
+           <div className="flex items-end pb-2 text-xs font-bold text-blue-600 dark:text-blue-400">
               Total: {(Number(qMinutes)*60) + Number(qSeconds)}s
            </div>
         </div>
         
-        <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-xl border">
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border dark:border-gray-700">
           {choices.map((c, i) => (
             <div key={i}>
               <label className="text-[10px] font-bold uppercase flex justify-between px-1 mb-1 cursor-pointer">
@@ -289,9 +295,9 @@ function QuestionsPanelOriginal() {
               />
               {/* 👇 NEW: CHOICE PREVIEW */}
               {c && c.includes('$') && (
-                 <div className="text-xs text-blue-600 mt-1 pl-1">
-                    {renderMixedText(c)}
-                 </div>
+                <div className="text-xs text-blue-600 mt-1 pl-1">
+                  {renderMixedText(c)}
+                </div>
               )}
             </div>
           ))}
@@ -301,48 +307,53 @@ function QuestionsPanelOriginal() {
           <Input type="number" label="Order" value={order} onChange={(e:any) => setOrder(e.target.value)} placeholder="1" />
         </div>
         <div className="grid grid-cols-1 gap-2">
-           <Input type="number" label="Difficulty (1-5)" value={difficulty} onChange={(e:any) => setDifficulty(Number(e.target.value))} />
+          <Input type="number" label="Difficulty (1-5)" value={difficulty} onChange={(e:any) => setDifficulty(Number(e.target.value))} />
         </div>
         
-        {/* 👇 UPDATED BUTTONS */}
         <div className="flex gap-2">
-            <button onClick={saveQuestion} className="btn-primary flex-1">
-                {editingId ? "Update Question" : "Create Question"}
+            <button onClick={saveQuestion} className="btn-primary flex-1 bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 py-2 rounded-lg font-bold">
+              {editingId ? "Update Question" : "Create Question"}
             </button>
             {editingId && (
-                <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded font-bold hover:bg-gray-300">
-                    Cancel
-                </button>
+              <button onClick={resetForm} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-600 dark:text-white">
+                Cancel
+              </button>
             )}
         </div>
       </div>
 
       {/* LIST SIDE */}
-      <div className="space-y-4 border-l pl-4">
-        <div className="bg-gray-100 p-3 rounded-xl space-y-2">
-            <h3 className="font-bold text-xs uppercase text-gray-500">Database Search</h3>
-            <div className="flex gap-2">
-                <input className="input flex-1 text-xs" placeholder="Load by Tag..." value={dbTagSearch} onChange={(e) => setDbTagSearch(e.target.value)}/>
-                <button onClick={loadByTag} className="bg-black text-white px-3 rounded text-xs font-bold">Fetch</button>
-            </div>
-            <hr className="border-gray-200" />
-            <input className="input w-full text-xs" placeholder="Filter loaded list..." value={localFilter} onChange={(e) => setLocalFilter(e.target.value)}/>
+      <div className="space-y-4 border-l dark:border-gray-700 pl-4">
+        <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-xl space-y-2">
+          <h3 className="font-bold text-xs uppercase text-gray-500 dark:text-gray-300">Database Search</h3>
+          <div className="flex gap-2">
+            <input className="input flex-1 text-xs" placeholder="Load by Tag..." value={dbTagSearch} onChange={(e) => setDbTagSearch(e.target.value)}/>
+            <button onClick={loadByTag} className="bg-black text-white dark:bg-white dark:text-black px-3 rounded text-xs font-bold">Fetch</button>
+          </div>
+          <hr className="border-gray-200 dark:border-gray-600" />
+          <input className="input w-full text-xs" placeholder="Filter loaded list..." value={localFilter} onChange={(e) => setLocalFilter(e.target.value)}/>
         </div>
 
         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
           {visibleQuestions.map((q) => (
-            <div key={q.id} onClick={() => loadQuestionToEdit(q)} className={`p-3 border rounded cursor-pointer transition-all hover:bg-blue-50 flex justify-between items-start ${editingId === q.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : ''}`}>
+            <div key={q.id} onClick={() => loadQuestionToEdit(q)} 
+              className={`p-3 border rounded cursor-pointer transition-all flex justify-between items-start 
+                      ${editingId === q.id 
+                          ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/30 dark:border-blue-400' 
+                          : 'dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`
+              }
+            >
               <div className="overflow-hidden">
-                <div className="font-bold text-sm truncate">{q.title ? q.title : "⚠️ Untitled Question"}</div>
-                <div className="text-xs text-gray-500 truncate">{q.promptText || q.promptLatex || "Image Question"}</div>
+                <div className="font-bold text-sm truncate dark:text-gray-100">{q.title ? q.title : "⚠️ Untitled Question"}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{q.promptText || q.promptLatex || "Image Question"}</div>
                 <div className="text-xs text-gray-400 flex gap-2 mt-1">
-                  <span className="bg-gray-100 px-1 rounded">{q.tags?.join(", ")}</span>
+                  <span className="bg-gray-100 dark:bg-gray-700 dark:text-gray-300 px-1 rounded">{q.tags?.join(", ")}</span>
                   <span className="text-orange-400">★{q.difficulty}</span>
                 </div>
               </div>
               <button 
                 onClick={(e) => { e.stopPropagation(); if(q.id) deleteQuestion(q.id); }}
-                className="text-red-300 hover:text-red-600 font-bold px-2"
+                className="text-red-300 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-bold px-2"
               >✕</button>
             </div>
           ))}
@@ -453,11 +464,11 @@ function ItemsPanel() {
   const isEditing = id && items.some(i => i.id === id);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border shadow-sm">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border dark:border-gray-700 shadow-sm transition-colors">
       <div className="md:col-span-2 space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold">{isEditing ? "Item Factory (Editing)" : "Item Factory (New)"}</h2>
-            {msg && <span className={`text-sm font-bold ${msg.startsWith("❌") ? "text-red-600" : "text-green-600"}`}>{msg}</span>}
+            {msg && <span className={`text-sm font-bold ${msg.startsWith("❌") ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>{msg}</span>}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="ID (Unique)" value={id} onChange={(e: any) => setId(e.target.value)} />
@@ -466,12 +477,12 @@ function ItemsPanel() {
           <Input label="Lore Description" value={desc} onChange={(e: any) => setDesc(e.target.value)} />
           
            {/* IMAGE INPUT */}
-           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
             <label className="label mb-2">Item Image URL</label>
             <div className="flex gap-4 items-center">
-                <input className="input flex-1" placeholder="https://..." value={imageUrl} onChange={(e: any) => setImageUrl(e.target.value)} />
-                <div className="w-16 h-16 bg-white dark:bg-gray-800 dark:text-gray-100 border rounded-lg flex items-center justify-center overflow-hidden shrink-0">
-                    {imageUrl ? <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" /> : <span className="text-xs text-gray-300">No Img</span>}
+                <input className="input flex-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" placeholder="https://..." value={imageUrl} onChange={(e: any) => setImageUrl(e.target.value)} />
+                <div className="w-16 h-16 bg-white dark:bg-gray-800 dark:border-gray-600 border rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                    {imageUrl ? <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" /> : <span className="text-xs text-gray-300 dark:text-gray-600">No Img</span>}
                 </div>
             </div>
           </div>
@@ -479,100 +490,94 @@ function ItemsPanel() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="label">Type</label>
-              <select className="input" value={type} onChange={e => setType(e.target.value as any)}>
+              <select className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white" value={type} onChange={e => setType(e.target.value as any)}>
                 <option value="weapon">Weapon</option><option value="armor">Armor</option><option value="potion">Potion</option><option value="misc">Misc</option>
               </select>
             </div>
             <div>
               <label className="label">Slot</label>
-              <select className="input disabled:bg-gray-100 disabled:text-gray-400" disabled={type === 'potion' || type === 'misc'} value={slot} onChange={e => setSlot(e.target.value as any)}>
+              <select className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-50" disabled={type === 'potion' || type === 'misc'} value={slot} onChange={e => setSlot(e.target.value as any)}>
                 <option value="mainHand">Main Hand</option><option value="offHand">Off Hand</option><option value="armor">Armor</option><option value="head">Head</option>
               </select>
             </div>
             <Input type="number" label="Price" value={price} onChange={(e: any) => setPrice(Number(e.target.value))} />
             <Input type="number" label="Durability" value={maxDurability} onChange={(e: any) => setMaxDurability(Number(e.target.value))} placeholder="Opt." />
           </div>
+
           <hr className="border-gray-200" />
+
           <div className="grid grid-cols-3 gap-4">
-            <div className="p-3 bg-red-50 rounded border border-red-100">
-              <div className="text-xs font-bold text-red-800 uppercase mb-2">Damage</div>
+            {/* DAMAGE BOX (RED) */}
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded border border-red-100 dark:border-red-900/50">
+              <div className="text-xs font-bold text-red-800 dark:text-red-300 uppercase mb-2">Damage</div>
               <div className="flex gap-2">
-                <input type="number" className="input text-xs" placeholder="Flat" value={dmgFlat} onChange={(e: any) => setDmgFlat(e.target.value === "" ? "" : Number(e.target.value))} />
-                <input type="number" step="0.01" className="input text-xs" placeholder="Mult" value={dmgMult} onChange={(e: any) => setDmgMult(e.target.value === "" ? "" : Number(e.target.value))} />
+                <input type="number" className="input text-xs dark:bg-gray-800 dark:border-red-900/50" placeholder="Flat" value={dmgFlat} onChange={(e: any) => setDmgFlat(e.target.value === "" ? "" : Number(e.target.value))} />
+                <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-red-900/50" placeholder="Mult" value={dmgMult} onChange={(e: any) => setDmgMult(e.target.value === "" ? "" : Number(e.target.value))} />
               </div>
             </div>
-            <div className="p-3 bg-blue-50 rounded border border-blue-100">
-              <div className="text-xs font-bold text-blue-800 uppercase mb-2">Defense</div>
+
+            {/* DEFENSE BOX (BLUE) */}
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-900/50">
+              <div className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-2">Defense</div>
               <div className="flex gap-2">
-                <input type="number" className="input text-xs" placeholder="Flat" value={defFlat} onChange={(e: any) => setDefFlat(e.target.value === "" ? "" : Number(e.target.value))} />
-                <input type="number" step="0.01" className="input text-xs" placeholder="Mult" value={defMult} onChange={(e: any) => setDefMult(e.target.value === "" ? "" : Number(e.target.value))} />
+                <input type="number" className="input text-xs dark:bg-gray-800 dark:border-blue-900/50" placeholder="Flat" value={defFlat} onChange={(e: any) => setDefFlat(e.target.value === "" ? "" : Number(e.target.value))} />
+                <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-blue-900/50" placeholder="Mult" value={defMult} onChange={(e: any) => setDefMult(e.target.value === "" ? "" : Number(e.target.value))} />
               </div>
             </div>
-            <div className="mt-2">
-              <label className="block text-xs font-bold text-gray-700 mb-1">Max HP Stats</label>
+
+            {/* MAX HP BOX (GREEN) */}
+             <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded border border-green-100 dark:border-green-900/50">
+              <div className="text-xs font-bold text-green-800 dark:text-green-300 uppercase mb-2">Max HP</div>
               <div className="flex gap-2">
-                <div className="flex-1">
-                  <input 
-                    type="number" 
-                    placeholder="Flat (e.g. 50)" 
-                    value={maxHpFlat} 
-                    onChange={e => setMaxHpFlat(Number(e.target.value))} 
-                    className="w-full p-2 border rounded text-sm" 
-                  />
-                  <div className="text-[10px] text-gray-400 mt-1">Flat HP</div>
-                </div>
-                <div className="flex-1">
-                  <input 
-                    type="number" 
-                    step="0.1" 
-                    placeholder="Mult (e.g. 1.2)" 
-                    value={maxHpMult} 
-                    onChange={e => setMaxHpMult(Number(e.target.value))} 
-                    className="w-full p-2 border rounded text-sm" 
-                  />
-                  <div className="text-[10px] text-gray-400 mt-1">Multiplier</div>
-                </div>
+                <input type="number" className="input text-xs dark:bg-gray-800 dark:border-green-900/50" placeholder="Flat" value={maxHpFlat} onChange={(e: any) => setMaxHpFlat(e.target.value === "" ? "" : Number(e.target.value))} />
+                <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-green-900/50" placeholder="Mult" value={maxHpMult} onChange={(e: any) => setMaxHpMult(e.target.value === "" ? "" : Number(e.target.value))} />
               </div>
             </div>
-            <div className="p-3 bg-purple-50 rounded border border-purple-100">
-              <div className="text-xs font-bold text-purple-800 uppercase mb-2">Time</div>
-              <input type="number" step="0.01" className="input text-xs" placeholder="Factor" value={timeFactor} onChange={(e: any) => setTimeFactor(e.target.value === "" ? "" : Number(e.target.value))} />
+
+            {/* TIME BOX (PURPLE) */}
+            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-100 dark:border-purple-900/50 col-span-3 md:col-span-1">
+              <div className="text-xs font-bold text-purple-800 dark:text-purple-300 uppercase mb-2">Time</div>
+              <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-purple-900/50" placeholder="Factor" value={timeFactor} onChange={(e: any) => setTimeFactor(e.target.value === "" ? "" : Number(e.target.value))} />
             </div>
           </div>
           
           {/* 👇 UPDATED BUTTONS */}
           <div className="flex gap-2 mt-4">
-              <button onClick={handleSave} className="btn-primary w-full py-3">
+              <button onClick={handleSave} className="btn-primary w-full py-3 bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 rounded-lg font-bold">
                   {isEditing ? "Update Item" : "Save Item"}
               </button>
-              <button onClick={resetForm} className="px-6 py-3 bg-gray-200 rounded-lg font-bold hover:bg-gray-300">
+              <button onClick={resetForm} className="px-6 py-3 bg-gray-200 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 rounded-lg font-bold hover:bg-gray-300">
                   {isEditing ? "Cancel" : "Clear"}
               </button>
           </div>
       </div>
 
-      <div className="space-y-4 border-l pl-4">
-        <input className="input w-full text-sm" placeholder="🔍 Filter Items..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+      <div className="space-y-4 border-l dark:border-gray-700 pl-4">
+        <input className="input w-full text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="🔍 Filter Items..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         <div className="space-y-2 max-h-[800px] overflow-y-auto">
-            <h3 className="font-bold text-gray-500 uppercase text-xs">Library ({visibleItems.length})</h3>
+            <h3 className="font-bold text-gray-500 dark:text-gray-400 uppercase text-xs">Library ({visibleItems.length})</h3>
             {visibleItems.map(item => (
                 <div 
                 key={item.id} 
                 onClick={() => loadItemToEdit(item)}
-                className={`p-3 border rounded cursor-pointer hover:bg-blue-50 transition-colors flex justify-between items-center ${id === item.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : ''}`}
+                className={`p-3 border rounded cursor-pointer transition-colors flex justify-between items-center 
+                    ${id === item.id 
+                        ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/30 dark:border-blue-400' 
+                        : 'dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`
+                }
                 >
                     <div>
-                        <div className="font-bold text-sm">{item.name}</div>
+                        <div className="font-bold text-sm dark:text-gray-100">{item.name}</div>
                         <div className="text-xs text-gray-400 font-mono">{item.id}</div>
-                        <div className="mt-1 flex gap-2 text-[10px] font-bold uppercase text-gray-500">
-                            <span className="bg-gray-100 px-1 rounded">{item.type}</span>
+                        <div className="mt-1 flex gap-2 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400">
+                            <span className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{item.type}</span>
                             <span>💰 {item.price}</span>
                         </div>
                     </div>
-                    {/* 👇 DELETE BUTTON ADDED HERE */}
+                    
                     <button 
                         onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} 
-                        className="text-xs text-red-400 font-bold hover:text-red-600 ml-2 px-2 py-1"
+                        className="text-xs text-red-400 font-bold hover:text-red-600 dark:hover:text-red-300 ml-2 px-2 py-1"
                     >Delete</button>
                 </div>
             ))}
@@ -593,7 +598,7 @@ function FoesPanel() {
     f.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
   
-  // Form State - Initialized with stats to avoid "undefined" errors
+  // Form State
   const [id, setId] = useState("");
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
@@ -625,11 +630,8 @@ function FoesPanel() {
     setDesc(f.description || "");
     setEmoji(f.emoji || "👾");
     setMaxHp(f.maxHp || "");
-    
-    // 🟢 Load new stats (or default to empty if missing)
     setAttack(f.attackDamage ?? ""); 
     setDefense(f.defense ?? "");
-    
     setMsg(`✏️ Editing: ${f.name}`);
   }
 
@@ -642,10 +644,8 @@ function FoesPanel() {
       description: desc,
       emoji,
       maxHp: Number(maxHp) || 20,
-      
-      // 🟢 SAVE NEW STATS
-      attackDamage: Number(attack) || 5, // Default to 5 if empty
-      defense: Number(defense) || 0,     // Default to 0 if empty
+      attackDamage: Number(attack) || 5, 
+      defense: Number(defense) || 0,
     };
 
     try {
@@ -668,11 +668,12 @@ function FoesPanel() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border shadow-sm">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border dark:border-gray-700 shadow-sm transition-colors">
       {/* FORM SIDE */}
       <div className="space-y-4">
         <h2 className="text-xl font-bold">{id ? "✏️ Edit Foe" : "👾 New Foe"}</h2>
-        {msg && <div className="text-center bg-blue-50 p-2 rounded text-blue-800 font-bold text-sm">{msg}</div>}
+        
+        {msg && <div className="text-center bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-blue-800 dark:text-blue-200 font-bold text-sm">{msg}</div>}
 
         <Input label="Name" value={name} onChange={(e: any) => setName(e.target.value)} />
         <Input label="Description" value={desc} onChange={(e: any) => setDesc(e.target.value)} />
@@ -683,17 +684,17 @@ function FoesPanel() {
         </div>
 
         {/* 🟢 NEW STAT INPUTS */}
-        <div className="grid grid-cols-2 gap-4 bg-red-50 p-3 rounded-xl border border-red-100">
+        <div className="grid grid-cols-2 gap-4 bg-red-50 dark:bg-red-900/20 p-3 rounded-xl border border-red-100 dark:border-red-900/50">
            <Input type="number" label="Attack Dmg" value={attack} onChange={(e: any) => setAttack(Number(e.target.value))} placeholder="5" />
            <Input type="number" label="Defense" value={defense} onChange={(e: any) => setDefense(Number(e.target.value))} placeholder="0" />
         </div>
 
         <div className="flex gap-2 pt-2">
-            <button onClick={saveFoe} className="btn-primary flex-1">
+            <button onClick={saveFoe} className="btn-primary flex-1 bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 py-2 rounded-lg font-bold">
                 {id ? "Update Foe" : "Create Foe"}
             </button>
             {id && (
-                <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded font-bold hover:bg-gray-300">
+                <button onClick={resetForm} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 dark:text-white rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-600">
                     Cancel
                 </button>
             )}
@@ -701,33 +702,37 @@ function FoesPanel() {
       </div>
 
       {/* LIST SIDE */}
-      <div className="space-y-4 border-l pl-4">
+      <div className="space-y-4 border-l dark:border-gray-700 pl-4">
         <input 
-            className="input w-full text-sm" 
+            className="input w-full text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
             placeholder="🔍 Filter Foes..." 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)} 
         />
-        <h3 className="font-bold text-gray-500 text-xs uppercase">Existing Foes</h3>
+        <h3 className="font-bold text-gray-500 dark:text-gray-400 text-xs uppercase">Existing Foes</h3>
         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
             {visibleFoes.map(f => (
             <div 
                 key={f.id} 
                 onClick={() => loadFoeToEdit(f)} 
-                className={`p-3 border rounded flex justify-between items-center cursor-pointer hover:bg-purple-50 ${id === f.id ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-500' : ''}`}
+                className={`p-3 border rounded flex justify-between items-center cursor-pointer transition-colors 
+                    ${id === f.id 
+                        ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-500 dark:bg-purple-900/30 dark:border-purple-400' 
+                        : 'dark:border-gray-600 hover:bg-purple-50 dark:hover:bg-purple-900/20'}`
+                }
             >
                 <div className="min-w-0 flex items-center gap-3">
                     <div className="text-2xl">{f.emoji || "👾"}</div>
                     <div>
-                        <div className="font-bold text-sm">{f.name}</div>
+                        <div className="font-bold text-sm dark:text-gray-100">{f.name}</div>
                         {/* 🟢 SHOW STATS IN LIST */}
-                        <div className="text-xs text-gray-500 font-mono">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                            ❤️{f.maxHp} ⚔️{f.attackDamage ?? "?"} 🛡️{f.defense ?? "?"}
                         </div>
                     </div>
                 </div>
                 
-                <button onClick={(e) => { e.stopPropagation(); if (f.id) deleteFoe(f.id); }} className="text-red-400 hover:text-red-600 text-xs font-bold px-2 ml-2">
+                <button onClick={(e) => { e.stopPropagation(); if (f.id) deleteFoe(f.id); }} className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs font-bold px-2 ml-2">
                     Delete
                 </button>
             </div>
@@ -795,49 +800,56 @@ function LocationsPanel() {
   }
 
   return (
-    <div className="grid md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border shadow-sm">
+    <div className="grid md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border dark:border-gray-700 shadow-sm transition-colors">
       <div className="space-y-4">
         <h2 className="font-bold text-xl">{editingId ? "Edit Location" : "Create Map Location"}</h2>
-        {msg && <div className="text-green-600 text-sm">{msg}</div>}
+        
+        {msg && <div className="text-green-600 dark:text-green-400 text-sm font-bold">{msg}</div>}
         
         <Input label="Location Name" value={name} onChange={(e:any)=>setName(e.target.value)} />
         <Input label="Description" value={desc} onChange={(e:any)=>setDesc(e.target.value)} />
         <Input type="number" label="Order (1, 2, 3...)" value={order} onChange={(e:any)=>setOrder(e.target.value)} />
         
         <div className="flex gap-2">
-            <button onClick={saveLocation} className="btn-primary flex-1">
+            <button onClick={saveLocation} className="btn-primary flex-1 bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 py-2 rounded-lg font-bold">
                 {editingId ? "Update" : "Save"}
             </button>
             {editingId && (
-                <button onClick={() => { setEditingId(""); setName(""); setDesc(""); }} className="px-4 py-2 bg-gray-200 rounded font-bold">Cancel</button>
+                <button onClick={() => { setEditingId(""); setName(""); setDesc(""); }} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 dark:text-white rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-600">
+                    Cancel
+                </button>
             )}
         </div>
       </div>
       
-      <div className="space-y-4 border-l pl-4">
+      <div className="space-y-4 border-l dark:border-gray-700 pl-4">
          {/* 🔍 SEARCH BAR */}
         <div>
             <input 
-                className="input w-full text-sm" 
+                className="input w-full text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
                 placeholder="🔍 Search Locations..." 
                 value={searchTerm} 
                 onChange={(e) => setSearchTerm(e.target.value)}
             />
         </div>
 
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-            <h2 className="font-bold text-gray-500 text-xs uppercase">Library ({visibleLocs.length})</h2>
+        <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+            <h2 className="font-bold text-gray-500 dark:text-gray-400 text-xs uppercase">Library ({visibleLocs.length})</h2>
             {visibleLocs.map(l => (
                 <div 
                     key={l.id} 
                     onClick={() => loadLocationToEdit(l)}
-                    className={`p-3 border rounded flex justify-between cursor-pointer hover:bg-blue-50 transition-colors ${editingId === l.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'bg-gray-50'}`}
+                    className={`p-3 border rounded flex justify-between cursor-pointer transition-colors 
+                        ${editingId === l.id 
+                            ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/30 dark:border-blue-400' 
+                            : 'bg-white dark:bg-gray-800 dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`
+                    }
                 >
                     <div>
-                        <span className="font-bold mr-2">{l.order}. {l.name}</span>
-                        <div className="text-xs text-gray-500">{l.description}</div>
+                        <span className="font-bold mr-2 dark:text-gray-100">{l.order}. {l.name}</span>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{l.description}</div>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); deleteLoc(l.id!); }} className="text-xs text-red-400 font-bold hover:text-red-600">Delete</button>
+                    <button onClick={(e) => { e.stopPropagation(); deleteLoc(l.id!); }} className="text-xs text-red-400 font-bold hover:text-red-600 dark:hover:text-red-300">Delete</button>
                 </div>
             ))}
         </div>
@@ -978,11 +990,12 @@ function EncountersPanel() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border shadow-sm">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border dark:border-gray-700 shadow-sm transition-colors">
       {/* FORM SIDE */}
       <div className="space-y-4">
         <h2 className="text-xl font-bold">{editingId ? "✏️ Edit Encounter" : "⚔️ New Encounter"}</h2>
-        {msg && <div className="text-center bg-blue-50 p-2 rounded text-blue-800 font-bold text-sm">{msg}</div>}
+        
+        {msg && <div className="text-center bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-blue-800 dark:text-blue-200 font-bold text-sm">{msg}</div>}
 
         <Input label="Title" value={title} onChange={(e:any) => setTitle(e.target.value)} />
         <Input label="Description" value={desc} onChange={(e:any) => setDesc(e.target.value)} />
@@ -994,34 +1007,34 @@ function EncountersPanel() {
 
         <Input label="Foe IDs (comma sep)" value={foesText} onChange={(e:any) => setFoesText(e.target.value)} placeholder="goblin1, dragon2" />
 
-        <div className="grid grid-cols-3 gap-4 bg-gray-50 p-3 rounded-xl border">
+        <div className="grid grid-cols-3 gap-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border dark:border-gray-600">
            <Input type="number" label="XP Reward" value={xp} onChange={(e:any) => setXp(Number(e.target.value))} />
            <Input type="number" label="Gold Reward" value={gold} onChange={(e:any) => setGold(Number(e.target.value))} />
            <Input type="number" step="0.01" min="0.1" label="Time Speed (x)" value={timeMult} onChange={(e:any) => setTimeMult(Number(e.target.value))} />
         </div>
 
         {/* VISUALS SECTION */}
-        <div className="bg-gray-50 p-4 rounded-xl border space-y-3">
-            <h3 className="text-xs font-bold uppercase text-gray-500">Visuals & Logic</h3>
+        <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border dark:border-gray-600 space-y-3">
+            <h3 className="text-xs font-bold uppercase text-gray-500 dark:text-gray-300">Visuals & Logic</h3>
             <Input label="Intro Image URL" value={imageUrl} onChange={(e:any) => setImageUrl(e.target.value)} placeholder="https://..." />
             
             <div className="flex gap-4 items-end">
               <div className="flex-1">
                  <Input label="Custom Emoji" value={emoji} onChange={(e:any) => setEmoji(e.target.value)} placeholder="👹" />
               </div>
-              <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-gray-800 dark:text-gray-100 border px-3 py-3 rounded-lg h-[42px] mb-[2px]">
+              <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-gray-600 dark:border-gray-500 border px-3 py-3 rounded-lg h-[42px] mb-[2px]">
                 <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-bold text-gray-700">Shuffle Qs?</span>
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Shuffle Qs?</span>
               </label>
             </div>
         </div>
 
         <div className="flex gap-2 pt-2">
-            <button onClick={saveEncounter} className="btn-primary flex-1">
+            <button onClick={saveEncounter} className="btn-primary flex-1 bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 py-2 rounded-lg font-bold">
                 {editingId ? "Update Encounter" : "Create Encounter"}
             </button>
             {editingId && (
-                <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded font-bold hover:bg-gray-300">
+                <button onClick={resetForm} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 dark:text-white rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-600">
                     Cancel
                 </button>
             )}
@@ -1029,30 +1042,34 @@ function EncountersPanel() {
       </div>
 
       {/* LIST SIDE */}
-      <div className="space-y-4 border-l pl-4">
+      <div className="space-y-4 border-l dark:border-gray-700 pl-4">
         <input 
-            className="input w-full text-sm" 
+            className="input w-full text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
             placeholder="🔍 Filter Encounters..." 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)} 
         />
-        <h3 className="font-bold text-gray-500 text-xs uppercase">Existing Encounters</h3>
+        <h3 className="font-bold text-gray-500 dark:text-gray-400 text-xs uppercase">Existing Encounters</h3>
         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
             {visibleEncounters.map(enc => (
             <div 
                 key={enc.id} 
                 onClick={() => loadEncounterToEdit(enc)} 
-                className={`p-3 border rounded flex justify-between items-center cursor-pointer hover:bg-green-50 ${editingId === enc.id ? 'border-green-500 bg-green-50 ring-1 ring-green-500' : ''}`}
+                className={`p-3 border rounded flex justify-between items-center cursor-pointer transition-colors 
+                    ${editingId === enc.id 
+                        ? 'border-green-500 bg-green-50 ring-1 ring-green-500 dark:bg-green-900/30 dark:border-green-400' 
+                        : 'dark:border-gray-600 hover:bg-green-50 dark:hover:bg-green-900/20'}`
+                }
             >
                 <div className="min-w-0">
-                    <div className="font-bold text-sm flex items-center gap-2">
+                    <div className="font-bold text-sm flex items-center gap-2 dark:text-gray-100">
                       <span>{enc.emoji || "👹"}</span>
                       {enc.title}
                     </div>
-                    <div className="text-xs text-gray-500 italic truncate max-w-[150px]">{enc.description}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 italic truncate max-w-[150px]">{enc.description}</div>
                 </div>
                 
-                <button onClick={(e) => { e.stopPropagation(); if (enc.id) deleteEnc(enc.id); }} className="text-red-400 hover:text-red-600 text-xs font-bold px-2 ml-2">
+                <button onClick={(e) => { e.stopPropagation(); if (enc.id) deleteEnc(enc.id); }} className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs font-bold px-2 ml-2">
                     Delete
                 </button>
             </div>
@@ -1066,9 +1083,35 @@ function EncountersPanel() {
 // =========================================================
 // UI HELPERS
 // =========================================================
+
 function TabButton({ label, active, onClick }: any) {
-  return <button onClick={onClick} className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${active ? 'bg-black text-white shadow-md' : 'text-gray-500 hover:bg-white dark:bg-gray-800 dark:text-gray-100 hover:shadow'}`}>{label}</button>;
+  return (
+    <button 
+      onClick={onClick} 
+      className={`px-4 py-2 rounded-lg font-bold text-sm transition-all 
+        ${active 
+          ? 'bg-black text-white shadow-md dark:bg-white dark:text-black' 
+          : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
+        }`}
+    >
+      {label}
+    </button>
+  );
 }
-function Input({ label, ...props }: any) {
-  return <div><label className="label">{label}</label><input className="input" {...props} /></div>;
+
+function Input({ label, className, ...props }: any) {
+  return (
+    <div className="mb-2">
+      {label && (
+        <label className="block text-xs font-bold text-gray-500 uppercase mb-1 dark:text-gray-400">
+          {label}
+        </label>
+      )}
+      <input 
+        className={`w-full p-2 border rounded-lg text-sm bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 
+                   dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 transition-colors ${className || ""}`} 
+        {...props} 
+      />
+    </div>
+  );
 }

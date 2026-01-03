@@ -55,6 +55,7 @@ export default function ShopPage() {
     if (!user || !character) return;
     if (character.gold < item.price) {
       setMsg("❌ Not enough gold!");
+      setTimeout(() => setMsg(""), 2000);
       return;
     }
 
@@ -86,6 +87,7 @@ export default function ShopPage() {
       }) : null);
 
       setMsg(`✅ Bought ${item.name}!`);
+      setTimeout(() => setMsg(""), 2000);
     } catch (error) {
       console.error(error);
       setMsg("❌ Error buying item.");
@@ -105,7 +107,8 @@ export default function ShopPage() {
         slot: 'mainHand',
         price: 50,
         stats: { damage: { flat: 2 } },
-        maxDurability: 50
+        maxDurability: 50,
+        inShop: true
       },
       {
         id: 'armor-cloth',
@@ -115,7 +118,8 @@ export default function ShopPage() {
         slot: 'armor',
         price: 30,
         stats: { defense: { flat: 1 } },
-        maxDurability: 50
+        maxDurability: 50,
+        inShop: true
       },
       {
         id: 'potion-small',
@@ -123,7 +127,8 @@ export default function ShopPage() {
         description: 'Restores 10 HP.',
         type: 'potion',
         price: 15,
-        stats: { heal: { flat: 10 } }
+        stats: { heal: { flat: 10 } },
+        inShop: true
       },
       {
         id: 'shield-calc',
@@ -133,7 +138,8 @@ export default function ShopPage() {
         slot: 'offHand',
         price: 100,
         stats: { defense: { flat: 3 } },
-        maxDurability: 50
+        maxDurability: 50,
+        inShop: true
       }
     ];
 
@@ -148,20 +154,28 @@ export default function ShopPage() {
     }
   };
 
-  if (loading) return <div className="p-8">Loading Shop...</div>;
+  if (loading) return <div className="p-8 dark:text-white">Loading Shop...</div>;
 
   return (
-    <main className="min-h-screen p-6 max-w-6xl mx-auto">
-      <header className="flex justify-between items-center mb-8 border-b pb-4">
+    <main className="min-h-screen p-6 max-w-6xl mx-auto dark:text-gray-100">
+      
+      {/* Toast Message */}
+      {msg && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-black text-white px-6 py-3 rounded-full shadow-xl z-50 font-bold animate-pulse">
+            {msg}
+        </div>
+      )}
+
+      <header className="flex flex-col md:flex-row justify-between items-center mb-8 border-b dark:border-gray-700 pb-4 gap-4">
         <div>
           <h1 className="text-4xl font-bold">Item Shop</h1>
-          <p className="text-gray-500">Spend your hard-earned gold!</p>
+          <p className="text-gray-500 dark:text-gray-400">Spend your hard-earned gold!</p>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-yellow-600">
+        <div className="text-right flex flex-col items-end">
+          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
             🪙 {character ? character.gold : 0} G
           </div>
-          <button onClick={() => router.push("/")} className="text-sm underline text-gray-400 hover:text-gray-600">
+          <button onClick={() => router.push("/")} className="text-sm underline text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
             Back to Map
           </button>
         </div>
@@ -172,16 +186,17 @@ export default function ShopPage() {
         {items.map((item) => {
            // Calculate dynamic visual things
            const canAfford = (character?.gold || 0) >= item.price;
-           const isRare = item.price > 500; // Just an example logic for "shiny" items
+           const isRare = item.price > 500; 
 
            return (
             <div 
               key={item.id} 
               className={`
                 relative flex flex-col justify-between
-                p-5 bg-white dark:bg-gray-800 dark:text-gray-100 rounded-2xl border shadow-sm transition-all duration-200
+                p-5 rounded-2xl border shadow-sm transition-all duration-200
                 hover:shadow-lg hover:-translate-y-1
-                ${isRare ? 'border-yellow-200' : 'border-gray-200'}
+                bg-white dark:bg-gray-800 dark:border-gray-700
+                ${isRare ? 'border-yellow-400 dark:border-yellow-600 ring-1 ring-yellow-400/20' : 'border-gray-200'}
               `}
             >
               {/* CONTENT WRAPPER */}
@@ -190,7 +205,7 @@ export default function ShopPage() {
                 {/* 1. TOP ROW: Image + Name */}
                 <div className="flex gap-4 mb-4">
                     {/* Image Box */}
-                    <div className="w-12 h-12 bg-gray-50 rounded-xl border shrink-0 flex items-center justify-center overflow-hidden">
+                    <div className="w-12 h-12 bg-gray-50 dark:bg-gray-700 rounded-xl border dark:border-gray-600 shrink-0 flex items-center justify-center overflow-hidden">
                         {item.imageUrl ? (
                             <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
                         ) : (
@@ -200,18 +215,18 @@ export default function ShopPage() {
 
                     {/* Title & Type */}
                     <div>
-                        <h3 className="font-bold text-lg leading-tight">{item.name}</h3>
-                        <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-500 text-[10px] uppercase font-bold tracking-wider rounded">
+                        <h3 className="font-bold text-lg leading-tight dark:text-white">{item.name}</h3>
+                        <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 text-[10px] uppercase font-bold tracking-wider rounded">
                             {item.type} {item.slot ? `• ${item.slot}` : ''}
                         </span>
                     </div>
                 </div>
 
-                {/* 2. STATS BADGES (Now before Description!) */}
+                {/* 2. STATS BADGES */}
                 <div className="flex flex-wrap gap-2 mb-4">
                     {/* DAMAGE */}
                     {(item.stats?.damage?.flat || item.stats?.damage?.mult) && (
-                        <div className="px-2 py-1 bg-red-50 text-red-700 text-xs font-bold rounded flex items-center gap-1 border border-red-100">
+                        <div className="px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 text-xs font-bold rounded flex items-center gap-1 border border-red-100 dark:border-red-900/30">
                             <span>⚔️</span>
                             {item.stats.damage.flat ? `+${item.stats.damage.flat}` : ''}
                             {item.stats.damage.mult ? `x${item.stats.damage.mult}` : ''} Dmg
@@ -220,23 +235,23 @@ export default function ShopPage() {
 
                     {/* DEFENSE */}
                     {(item.stats?.defense?.flat || item.stats?.defense?.mult) && (
-                        <div className="px-2 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded flex items-center gap-1 border border-blue-100">
+                        <div className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 text-xs font-bold rounded flex items-center gap-1 border border-blue-100 dark:border-blue-900/30">
                             <span>🛡️</span>
                             {item.stats.defense.flat ? `+${item.stats.defense.flat}` : ''}
                             {item.stats.defense.mult ? `x${item.stats.defense.mult}` : ''} Def
                         </div>
                     )}
 
-                    {/* HEAL (Restored!) */}
+                    {/* HEAL */}
                     {item.stats?.heal?.flat && (
-                        <div className="px-2 py-1 bg-green-50 text-green-700 text-xs font-bold rounded flex items-center gap-1 border border-green-100">
+                        <div className="px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 text-xs font-bold rounded flex items-center gap-1 border border-green-100 dark:border-green-900/30">
                             <span>❤️</span> +{item.stats.heal.flat} HP
                         </div>
                     )}
 
-                    {/* TIME (Cleaner format) */}
+                    {/* TIME */}
                     {item.stats?.timeFactor && (
-                        <div className="px-2 py-1 bg-purple-50 text-purple-700 text-xs font-bold rounded flex items-center gap-1 border border-purple-100">
+                        <div className="px-2 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-200 text-xs font-bold rounded flex items-center gap-1 border border-purple-100 dark:border-purple-900/30">
                            <span>⏳</span> 
                            {item.stats.timeFactor > 1 ? "+" : ""}
                            {Math.round((item.stats.timeFactor - 1) * 100)}% Time
@@ -245,27 +260,27 @@ export default function ShopPage() {
 
                     {/* DURABILITY */}
                     {item.maxDurability && (
-                        <div className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded flex items-center gap-1 border border-gray-200">
+                        <div className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-bold rounded flex items-center gap-1 border border-gray-200 dark:border-gray-600">
                             <span>🔨</span> {item.maxDurability} Dur
                         </div>
                     )}
                 </div>
 
-                {/* 3. DESCRIPTION (Now at the bottom) */}
-                <p className="text-sm text-gray-500 italic mb-6 leading-relaxed border-t pt-3">
+                {/* 3. DESCRIPTION */}
+                <p className="text-sm text-gray-500 dark:text-gray-400 italic mb-6 leading-relaxed border-t dark:border-gray-700 pt-3">
                   "{item.description || "A mysterious item found in the void..."}"
                 </p>
 
               </div>
 
-              {/* 4. BUY BUTTON (Sticks to bottom) */}
+              {/* 4. BUY BUTTON */}
               <button
                 onClick={() => handleBuy(item)}
                 disabled={!canAfford}
                 className={`w-full py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 ${
                   canAfford
-                    ? "bg-black text-white hover:bg-gray-800 hover:shadow-md active:scale-95"
-                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    ? "bg-black text-white hover:bg-gray-800 hover:shadow-md dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                    : "bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500"
                 }`}
               >
                 <span>🪙 {item.price}</span>
@@ -281,9 +296,17 @@ export default function ShopPage() {
       {items.length === 0 && !loading && (
           <div className="text-center mt-20 opacity-50">
             <h2 className="text-2xl font-bold text-gray-400">Shop Closed</h2>
-            <p>No items available right now.</p>
+            <p className="dark:text-gray-500">No items available right now.</p>
           </div>
       )}
+
+      {/* DEV TOOLS (Hidden unless you scroll down) */}
+      <div className="mt-20 border-t dark:border-gray-700 pt-10 text-center">
+        <button onClick={restockShop} className="text-xs text-gray-400 hover:text-red-500 dark:text-gray-600">
+            [Dev] Restock Default Items
+        </button>
+      </div>
+
     </main>
   );
 }

@@ -257,7 +257,6 @@ function PlayContent() {
       }
 
       // 2. Fetch Questions
-      // 👇 NEW LOGIC: Check for list of tags first, otherwise use single tag
       let qQuery;
       
       if (enc.questionTags && enc.questionTags.length > 0) {
@@ -629,8 +628,8 @@ function PlayContent() {
     // 3. CALCULATE TOTAL DEFENSE
     const totalPlayerDefense = Math.floor((charBaseDef + totalFlatDef) * totalMultDef);
 
-    // 4. FINAL DAMAGE (Attack - Defense), minimum 0
-    return Math.max(0, rawFoeDamage - totalPlayerDefense);
+    // 4. FINAL DAMAGE (Attack - Defense), minimum 1
+    return Math.max(1, rawFoeDamage - totalPlayerDefense);
   };
 
   const degradation = async (slot: EquipmentSlot, amount: number) => {
@@ -671,39 +670,44 @@ function PlayContent() {
   
   if (mode === "lobby") return (
     <main className="p-6 max-w-2xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold text-center mb-8">Choose Your Battle ⚔️</h1>
+      <h1 className="text-3xl font-bold text-center mb-8 dark:text-white">Choose Your Battle ⚔️</h1>
       
-      {msg && <div className="p-4 bg-red-100 text-red-700 font-bold rounded-xl text-center animate-pulse">{msg}</div>}
+      {msg && (
+        <div className="p-4 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 font-bold rounded-xl text-center animate-pulse">
+            {msg}
+        </div>
+      )}
       
       <div className="grid gap-4">
         {encounters.map(enc => (
           <div 
             key={enc.id} 
-            // 👇 FLEXBOX MAGIC: Stacks vertically on mobile (flex-col), side-by-side on desktop (sm:flex-row)
-            className="bg-white dark:bg-gray-800 dark:text-gray-100 border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+            className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
           >
-            {/* 1. INFO SECTION (Grows to fill space) */}
+            {/* 1. INFO SECTION */}
             <div className="flex-1 space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-lg text-gray-800">{enc.title}</h3>
-                  <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500 font-bold uppercase tracking-wider">
+                  <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{enc.title}</h3>
+                  
+                  <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-gray-500 dark:text-gray-300 font-bold uppercase tracking-wider">
                     {enc.questionTag}
                   </span>
               </div>
-              <div className="text-sm text-gray-500 flex items-center gap-3">
+              
+              <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-3">
                 <span>
-                    XP: <span className="text-purple-600 font-bold">+{enc.winRewardXp || 0}</span>
+                    XP: <span className="text-purple-600 dark:text-purple-400 font-bold">+{enc.winRewardXp || 0}</span>
                 </span>
                 <span>
-                    Gold: <span className="text-yellow-600 font-bold">+{enc.winRewardGold || 0}</span>
+                    Gold: <span className="text-yellow-600 dark:text-yellow-400 font-bold">+{enc.winRewardGold || 0}</span>
                 </span>
               </div>
             </div>
 
-            {/* 2. ACTION BUTTON (Never shrinks) */}
+            {/* 2. ACTION BUTTON */}
             <button 
                onClick={() => startEncounter(enc)}
-               className="shrink-0 w-full sm:w-auto bg-black text-white font-bold py-3 px-8 rounded-xl hover:bg-gray-800 transition-transform active:scale-95 flex items-center justify-center gap-2"
+               className="shrink-0 w-full sm:w-auto bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 font-bold py-3 px-8 rounded-xl transition-transform active:scale-95 flex items-center justify-center gap-2"
             >
                <span>FIGHT</span>
                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -716,53 +720,53 @@ function PlayContent() {
     </main>
   );
 
-  if (mode === "loading") return <div className="p-10 text-center animate-pulse">⚔️ Entering the Arena...</div>;
+  if (mode === "loading") return <div className="p-10 text-center animate-pulse dark:text-white">⚔️ Entering the Arena...</div>;
   
   // --- 🏆 VICTORY SCREEN & LEVEL UP CARD ---
   if (mode === "won") {
     const data = levelUpData as any;
     
-    // Fallback defaults just in case, but data should exist if leveled up
+    // Fallback defaults
     const hpGain = data?.hpGain || 0;
     const atkGain = data?.atkGain || 0;
     const defGain = data?.defGain || 0;
 
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-yellow-50">
-        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-yellow-400 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
+      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-yellow-50 dark:bg-gray-900 transition-colors">
+        
+        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-yellow-400 dark:border-yellow-600 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
           
           <div className="text-6xl animate-bounce">🎉</div>
           
           <div>
-            <h1 className="text-4xl font-black text-yellow-600 uppercase tracking-widest">Victory!</h1>
+            <h1 className="text-4xl font-black text-yellow-600 dark:text-yellow-400 uppercase tracking-widest">Victory!</h1>
             <p className="text-gray-400 font-bold mt-2">Level {character?.level}</p>
           </div>
 
           {/* LEVEL UP CARD */}
           {data?.newLvl > data?.oldLvl && (
-            <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200 space-y-3">
-                <div className="font-bold text-yellow-800 uppercase text-xs tracking-wider mb-2">Level Up Bonuses</div>
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4 border border-yellow-200 dark:border-yellow-700/50 space-y-3">
+                <div className="font-bold text-yellow-800 dark:text-yellow-200 uppercase text-xs tracking-wider mb-2">Level Up Bonuses</div>
                 
                 {/* HP */}
                 <div className="flex justify-between items-center px-4">
-                  <span className="font-bold text-gray-600">Max Health</span>
-                  <span className="font-black text-green-600 text-xl">+{hpGain} 💚</span>
+                  <span className="font-bold text-gray-600 dark:text-gray-400">Max Health</span>
+                  <span className="font-black text-green-600 dark:text-green-400 text-xl">+{hpGain} 💚</span>
                 </div>
 
                 {/* ATTACK */}
                 <div className="flex justify-between items-center px-4">
-                  <span className="font-bold text-gray-600">Base Attack</span>
-                  <span className="font-black text-red-600 text-xl">+{atkGain} ⚔️</span>
+                  <span className="font-bold text-gray-600 dark:text-gray-400">Base Attack</span>
+                  <span className="font-black text-red-600 dark:text-red-400 text-xl">+{atkGain} ⚔️</span>
                 </div>
 
-                {/* DEFENSE - Only show if > 0 */}
+                {/* DEFENSE */}
                 {defGain > 0 ? (
                   <div className="flex justify-between items-center px-4">
-                    <span className="font-bold text-gray-600">Base Defense</span>
-                    <span className="font-black text-blue-600 text-xl">+{defGain} 🛡️</span>
+                    <span className="font-bold text-gray-600 dark:text-gray-400">Base Defense</span>
+                    <span className="font-black text-blue-600 dark:text-blue-400 text-xl">+{defGain} 🛡️</span>
                   </div>
                 ) : (
-                  // Optional: Show player that defense didn't go up this time
                   <div className="text-[10px] text-gray-400 italic">
                     (Extra rewards on Milestone levels)
                   </div>
@@ -771,7 +775,7 @@ function PlayContent() {
           )}
           
           {lootDrops.length > 0 && (
-             <div className="text-sm font-bold text-gray-500 bg-gray-100 p-2 rounded">
+             <div className="text-sm font-bold text-gray-500 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 p-2 rounded">
                 Found: {lootDrops.join(", ")}
              </div>
           )}
@@ -779,7 +783,7 @@ function PlayContent() {
           <div className="pt-4">
             <button 
               onClick={() => router.push("/map")}
-              className="w-full bg-black text-white py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
+              className="w-full bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
             >
               Collect Loot & Return ➡️
             </button>
@@ -795,25 +799,26 @@ function PlayContent() {
   // ==========================================
   if (mode === "lost") {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-red-50">
-        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-red-500 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
+      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-red-50 dark:bg-gray-900 transition-colors">
+        
+        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-red-500 dark:border-red-600 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
           
           <div className="text-6xl animate-pulse">💀</div>
           
           <div>
-            <h1 className="text-4xl font-black text-red-600 uppercase tracking-widest">Defeat</h1>
+            <h1 className="text-4xl font-black text-red-600 dark:text-red-500 uppercase tracking-widest">Defeat</h1>
             <p className="text-gray-400 font-bold mt-2">You have fallen...</p>
           </div>
 
-          <div className="bg-gray-100 p-4 rounded-xl border border-gray-200">
-             <p className="font-bold text-gray-500 text-xs uppercase mb-2">Outcome</p>
-             <p className="font-bold text-gray-700">{msg || "HP Critical. Retreating to camp."}</p>
+          <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-200 dark:border-gray-600">
+             <p className="font-bold text-gray-500 dark:text-gray-400 text-xs uppercase mb-2">Outcome</p>
+             <p className="font-bold text-gray-700 dark:text-gray-200">{msg || "HP Critical. Retreating to camp."}</p>
           </div>
 
           <div className="pt-4">
             <button 
               onClick={() => router.push("/map")}
-              className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
+              className="w-full bg-gray-900 text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-gray-200 py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
             >
               Return to Map 🗺️
             </button>
@@ -832,28 +837,29 @@ function PlayContent() {
     const penalty = Math.ceil((activeEncounter?.winRewardGold || 0) / 2);
 
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
-        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-gray-400 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
+      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900 transition-colors">
+        
+        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-gray-400 dark:border-gray-600 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
           
           <div className="text-6xl">💨</div>
           
           <div>
-            <h1 className="text-4xl font-black text-gray-600 uppercase tracking-widest">Escaped!</h1>
+            <h1 className="text-4xl font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest">Escaped!</h1>
             <p className="text-gray-400 font-bold mt-2">Ran away safely</p>
           </div>
 
           {/* PENALTY INFO */}
-          <div className="bg-red-50 p-4 rounded-xl border border-red-100 space-y-2">
+          <div className="bg-red-50 dark:bg-red-900/30 p-4 rounded-xl border border-red-100 dark:border-red-900/50 space-y-2">
              <div>
-                <p className="font-bold text-red-500 text-[10px] uppercase">Penalty Paid</p>
-                <p className="font-black text-red-600 text-3xl">-{penalty} Gold</p>
+                <p className="font-bold text-red-500 dark:text-red-300 text-[10px] uppercase">Penalty Paid</p>
+                <p className="font-black text-red-600 dark:text-red-400 text-3xl">-{penalty} Gold</p>
              </div>
           </div>
 
           <div className="pt-4">
             <button 
               onClick={() => router.push("/map")}
-              className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
+              className="w-full bg-gray-900 text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-gray-200 py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
             >
               Return to Map 🗺️
             </button>
@@ -869,19 +875,18 @@ function PlayContent() {
     
     // 1. CONFIG: Determine Image or Emoji
     // (We look for imageUrl on the encounter, then the foe, then fallback to null)
-    // @ts-ignore - Ignoring TS in case these fields aren't in your interface yet
+    // @ts-ignore 
     const heroImage = activeEncounter?.imageUrl || foe?.imageUrl;
     
     // 2. CONFIG: Your "Default Emoji" Choice
-    // If specific emoji exists use it, otherwise use your default choice here (e.g., 👹, ⚔️, 🐉)
     // @ts-ignore
     const displayEmoji = activeEncounter?.emoji || "👹"; 
 
     return (
-      <main className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <main className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center p-4 transition-colors">
         
         {/* Card Container */}
-        <div className="max-w-lg w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-800">
+        <div className="max-w-lg w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-200 dark:border-gray-700">
           
           {/* --- HEADER (Image OR Emoji) --- */}
           <div className="relative h-64 w-full bg-gray-900">
@@ -922,8 +927,8 @@ function PlayContent() {
           <div className="p-8 space-y-6 bg-white dark:bg-gray-800 dark:text-gray-100">
             
             {/* Description / Story */}
-            <div className="relative pl-4 border-l-4 border-slate-300">
-              <p className="text-gray-600 text-lg leading-relaxed italic">
+            <div className="relative pl-4 border-l-4 border-slate-300 dark:border-slate-600">
+              <p className="text-gray-600 dark:text-gray-300 text-lg leading-relaxed italic">
                 "{activeEncounter?.description || "A shadow moves in the darkness. Prepare yourself..."}"
               </p>
             </div>
@@ -931,23 +936,23 @@ function PlayContent() {
             {/* Quick Stats Row (Grid) */}
             <div className="grid grid-cols-2 gap-4">
                 {/* 1. FOE STATS */}
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col items-center justify-center text-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Enemy Stats</span>
-                    <div className="text-sm font-bold text-slate-700 flex flex-wrap justify-center gap-x-2">
-                       <span className="text-green-600">❤ {foe?.maxHp || 50}</span>
-                       <span className="text-red-600">⚔️ {foe?.attackDamage || 5}</span>
-                       <span className="text-blue-600">🛡️ {foe?.defense || 0}</span>
+                <div className="bg-slate-50 dark:bg-gray-700/50 p-3 rounded-xl border border-slate-100 dark:border-gray-600 flex flex-col items-center justify-center text-center">
+                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">Enemy Stats</span>
+                    <div className="text-sm font-bold text-slate-700 dark:text-gray-200 flex flex-wrap justify-center gap-x-2">
+                       <span className="text-green-600 dark:text-green-400">❤ {foe?.maxHp || 50}</span>
+                       <span className="text-red-600 dark:text-red-400">⚔️ {foe?.attackDamage || 5}</span>
+                       <span className="text-blue-600 dark:text-blue-400">🛡️ {foe?.defense || 0}</span>
                     </div>
                 </div>
 
                 {/* 2. REWARD */}
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col items-center justify-center text-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rewards</span>
+                <div className="bg-slate-50 dark:bg-gray-700/50 p-3 rounded-xl border border-slate-100 dark:border-gray-600 flex flex-col items-center justify-center text-center">
+                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">Rewards</span>
                     <div className="flex flex-col items-center">
-                        <span className="text-xl font-bold text-purple-600">
+                        <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
                           +{activeEncounter?.winRewardXp || 0} XP
                         </span>
-                        <span className="text-sm font-bold text-yellow-600">
+                        <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">
                           +{activeEncounter?.winRewardGold || 0} Gold
                         </span>
                     </div>
@@ -955,14 +960,14 @@ function PlayContent() {
             </div>
 
             {/* Turns Warning */}
-            <p className="text-center text-xs font-bold text-gray-500 uppercase tracking-wider">
-               You have <span className="text-red-600 text-sm">{questions.length} Turns</span> to defeat this enemy!
+            <p className="text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+               You have <span className="text-red-600 dark:text-red-400 text-sm">{questions.length} Turns</span> to defeat this enemy!
             </p>
 
             {/* Action Button */}
             <button
               onClick={() => setMode("battle")}
-              className="group relative w-full overflow-hidden rounded-2xl bg-slate-900 px-8 py-4 text-white shadow-xl transition-all hover:bg-slate-800 hover:shadow-2xl active:scale-95"
+              className="group relative w-full overflow-hidden rounded-2xl bg-black text-white dark:bg-white dark:text-black px-8 py-4 shadow-xl transition-all hover:bg-gray-800 dark:hover:bg-gray-200 hover:shadow-2xl active:scale-95"
             >
               <div className="relative z-10 flex items-center justify-center gap-2">
                 <span className="text-xl font-black tracking-widest">FIGHT!</span>
@@ -978,43 +983,47 @@ function PlayContent() {
 
   const currentQ = questions[currentQIndex];
 
-  if (!currentQ) return <div className="p-10 text-center font-bold text-gray-500">Loading Battle...</div>;
+  if (!currentQ) return (
+    <div className="p-10 text-center font-bold text-gray-500 dark:text-gray-400 animate-pulse">
+      Loading Battle...
+    </div>
+  );
 
   return (
-    <main className="min-h-screen p-4 flex flex-col items-center max-w-2xl mx-auto relative">
+    <main className="min-h-screen p-4 flex flex-col items-center max-w-2xl mx-auto relative transition-colors">
       
       {/* HUD (HEALTH BARS) */}
       <div className="w-full grid grid-cols-2 gap-4 mb-4">
         
         {/* PLAYER CARD */}
-        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-center space-y-2">
-            <h3 className="font-bold text-blue-900">{character?.name}</h3>
+        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800 text-center space-y-2 transition-colors">
+            <h3 className="font-bold text-blue-900 dark:text-blue-200">{character?.name}</h3>
             <HealthBar 
               label="YOU" 
               current={playerHp} 
-              max={character?.maxHp || 100} // 👈 MUST HAVE THIS
+              max={character?.maxHp || 100} 
             />
           <button 
             onClick={() => setShowInventory(true)}
-            className="mt-4 text-xs bg-gray-100 hover:bg-gray-200 py-2 rounded-lg font-bold flex items-center justify-center gap-2 border"
+            className="mt-4 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 py-2 rounded-lg font-bold flex items-center justify-center gap-2 border dark:border-gray-600 w-full transition-colors"
           >
             🎒 Items ({character?.inventory.filter(i => gameItems[i.itemId]?.type === 'potion').length || 0})
           </button>
         </div>
         
         {/* ENEMY CARD */}
-        <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center space-y-2">
-            <h3 className="font-bold text-red-900">{foe?.name || "Enemy"}</h3>
+        <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-2xl border border-red-100 dark:border-red-800 text-center space-y-2 transition-colors">
+            <h3 className="font-bold text-red-900 dark:text-red-200">{foe?.name || "Enemy"}</h3>
             <HealthBar 
               label="ENEMY" 
               current={foeHp} 
-              max={foe?.maxHp || 50} // 👈 MUST HAVE THIS
+              max={foe?.maxHp || 50} 
             />
         </div>
       </div>
 
       {/* TIMER BAR */}
-      <div className="bg-white dark:bg-gray-800 dark:text-gray-100 px-6 py-4 rounded-3xl shadow-sm border border-gray-200 mb-6 w-full">
+      <div className="bg-white dark:bg-gray-800 dark:text-gray-100 px-6 py-4 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-700 mb-6 w-full transition-colors">
         <TimeBar 
             current={timeLeft} 
             max={totalTime} 
@@ -1022,33 +1031,34 @@ function PlayContent() {
       </div>
 
       {/* --- QUESTION CARD --- */}
-      <div className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-lg border p-8 space-y-6 relative">
+      <div className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-lg border dark:border-gray-700 p-8 space-y-6 relative transition-colors">
+        
         {msg && <div className="text-center text-red-500 font-bold animate-bounce">{msg}</div>}
-        <div className="absolute top-4 right-6 bg-gray-100 px-3 py-1 rounded-full text-[10px] font-black text-gray-400 tracking-widest border border-gray-200">
+        
+        <div className="absolute top-4 right-6 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full text-[10px] font-black text-gray-400 dark:text-gray-300 tracking-widest border border-gray-200 dark:border-gray-600">
            TURN {currentQIndex + 1} / {questions.length}
         </div>
         
-        {/* 1. IMAGEN DE LA PREGUNTA (Si existe) */}
-        {/* Asegúrate de que tu interfaz QuestionDoc tenga el campo optional 'imageUrl' */}
+        {/* 1. IMAGE (Context) */}
         {currentQ.imageUrl && (
           <div className="flex justify-center mb-4">
             <img 
               src={currentQ.imageUrl} 
               alt="Question Context" 
-              className="rounded-xl max-h-60 object-contain shadow-sm"
+              className="rounded-xl max-h-60 object-contain shadow-sm bg-white"
             />
           </div>
         )}
 
-        {/* 2. QUESTION TEXT, LATEX OR IMAGE*/}
-        <div className="text-2xl font-bold text-gray-800 text-center my-4">
-          {/* Priority 1: IMAGE */}
+        {/* 2. QUESTION CONTENT */}
+        <div className="text-2xl font-bold text-gray-800 dark:text-gray-100 text-center my-4">
+          {/* Priority 1: IMAGE PROMPT */}
           {currentQ.promptImageUrl && (
             <div className="flex justify-center mb-4">
                 <img 
                     src={currentQ.promptImageUrl} 
                     alt="Question Image" 
-                    className="max-h-48 rounded-lg shadow-md border" 
+                    className="max-h-48 rounded-lg shadow-md border bg-white" 
                 />
             </div>
           )}
@@ -1060,9 +1070,9 @@ function PlayContent() {
             </div>
           )}
 
-          {/* Priority 3: TEXT (Supports mixed math) */}
+          {/* Priority 3: TEXT */}
           {currentQ.promptText && (
-            <div className="whitespace-pre-wrap leading-relaxed">
+            <div className="whitespace-pre-wrap leading-relaxed dark:text-gray-100">
                {renderMixedText(currentQ.promptText || "")}
             </div>
           )}
@@ -1071,10 +1081,10 @@ function PlayContent() {
         {/* 3. ANSWERS (GRID) */}
         <div className="grid grid-cols-1 gap-3 min-h-[200px]">
           
-          {/* A. IF PAUSE (Next Button) - Shows at top if paused */}
+          {/* A. ROUND OVER / NEXT BUTTON */}
           {isPaused && (
             <div className="flex flex-col items-center justify-center space-y-4 animate-in fade-in zoom-in mb-4">
-              <div className="text-xl font-bold bg-white dark:bg-gray-800 dark:text-gray-100 p-4 rounded-xl border-2 border-black w-full text-center shadow-md">
+              <div className="text-xl font-bold bg-white dark:bg-gray-700 dark:text-white p-4 rounded-xl border-2 border-black dark:border-gray-500 w-full text-center shadow-md">
                  {msg || "Round Over"}
               </div>
               <button 
@@ -1099,19 +1109,17 @@ function PlayContent() {
             </div>
           )}
 
-          {/* B. ANSWERS (Always visible below) */}
+          {/* B. ANSWER BUTTONS */}
           {currentQ.choices.map((choice, idx) => {
             return (
               <button 
                 key={idx} 
-                // 👇 This makes it unclickable when paused
                 disabled={isPaused} 
                 onClick={() => handleAnswer(idx)} 
-                // 👇 This changes the look (grayed out) when paused
                 className={`p-4 border-2 rounded-xl text-lg font-medium transition-all group relative
                   ${isPaused 
-                    ? "opacity-50 cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400" 
-                    : "hover:bg-black hover:text-white hover:border-black"
+                    ? "opacity-50 cursor-not-allowed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-400" 
+                    : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-black hover:text-white hover:border-black dark:hover:bg-white dark:hover:text-black dark:hover:border-white"
                   }
                 `}
               >
@@ -1125,12 +1133,12 @@ function PlayContent() {
 
         {/* --- SKIP & ESCAPE BUTTONS --- */}
         {!isPaused && (
-            <div className="mt-6 flex flex-col gap-3 pt-6 border-t border-gray-100">
+            <div className="mt-6 flex flex-col gap-3 pt-6 border-t border-gray-100 dark:border-gray-700">
                 
                 {/* Skip Button */}
                 <button 
                     onClick={skipQuestion}
-                    className="w-full py-3 rounded-xl border-2 border-red-100 bg-red-50 text-red-500 font-bold hover:bg-red-100 hover:border-red-200 transition-colors text-sm"
+                    className="w-full py-3 rounded-xl border-2 border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 text-red-500 dark:text-red-400 font-bold hover:bg-red-100 dark:hover:bg-red-900/30 hover:border-red-200 transition-colors text-sm"
                 >
                     ⏭️ SKIP QUESTION
                 </button>
@@ -1138,7 +1146,7 @@ function PlayContent() {
                 {/* Escape Button */}
                 <button 
                     onClick={() => setShowEscapeConfirm(true)} 
-                    className="w-full py-3 rounded-xl border-2 border-gray-200 text-gray-400 font-bold hover:bg-gray-100 hover:text-gray-600 transition-colors text-xs uppercase tracking-widest"
+                    className="w-full py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-xs uppercase tracking-widest"
                 >
                     🏃 Escape Battle
                 </button>
@@ -1149,10 +1157,10 @@ function PlayContent() {
       {/* 🎒 INVENTORY MODAL */}
       {showInventory && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 rounded-3xl">
-           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border dark:border-gray-700">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold">🎒 Backpack</h3>
-                <button onClick={() => setShowInventory(false)} className="text-gray-400 hover:text-black">✕</button>
+                <button onClick={() => setShowInventory(false)} className="text-gray-400 hover:text-black dark:hover:text-white">✕</button>
               </div>
               
               <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -1165,12 +1173,12 @@ function PlayContent() {
                    if (!def || def.type !== 'potion') return null;
                    
                    return (
-                     <div key={invItem.instanceId} className="flex justify-between items-center p-3 border rounded-xl hover:bg-green-50">
+                     <div key={invItem.instanceId} className="flex justify-between items-center p-3 border dark:border-gray-600 rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">
                         <div className="flex items-center gap-3">
-                           {def.imageUrl ? <img src={def.imageUrl} className="w-8 h-8 rounded bg-gray-200" /> : <div className="w-8 h-8 rounded bg-pink-100 flex items-center justify-center text-xs">🧪</div>}
+                           {def.imageUrl ? <img src={def.imageUrl} className="w-8 h-8 rounded bg-gray-200" /> : <div className="w-8 h-8 rounded bg-pink-100 dark:bg-pink-900 flex items-center justify-center text-xs">🧪</div>}
                            <div>
-                             <div className="font-bold text-sm">{def.name}</div>
-                             <div className="text-xs text-green-600 font-bold">Heals {def.stats?.heal?.flat || 20} HP</div>
+                             <div className="font-bold text-sm dark:text-gray-200">{def.name}</div>
+                             <div className="text-xs text-green-600 dark:text-green-400 font-bold">Heals {def.stats?.heal?.flat || 20} HP</div>
                            </div>
                         </div>
                         <button 
@@ -1188,29 +1196,29 @@ function PlayContent() {
         </div>
       )}
 
-      {/* 🛑 ESCAPE CONFIRMATION MODAL (Does not pause timer!) */}
+      {/* 🛑 ESCAPE CONFIRMATION MODAL */}
       {showEscapeConfirm && (
         <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 rounded-3xl animate-in fade-in duration-200">
-           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl border-4 border-red-100 text-center space-y-4">
+           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl border-4 border-red-100 dark:border-red-900/50 text-center space-y-4">
               
               <div className="text-4xl">🏃💨</div>
               
               <div>
-                 <h3 className="text-xl font-black text-gray-800 uppercase">Run Away?</h3>
-                 <p className="text-sm text-gray-500 font-medium mt-1">
+                 <h3 className="text-xl font-black text-gray-800 dark:text-gray-100 uppercase">Run Away?</h3>
+                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1">
                     You will keep your Backpack and Gold.
                  </p>
               </div>
 
               {/* Timer Warning */}
-              <div className="bg-red-50 text-red-600 text-[10px] font-bold py-2 rounded animate-pulse">
+              <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 text-[10px] font-bold py-2 rounded animate-pulse">
                  ⚠️ HURRY! THE BATTLE IS STILL ACTIVE!
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-2">
                  <button 
                     onClick={() => setShowEscapeConfirm(false)}
-                    className="py-3 rounded-xl font-bold bg-gray-200 hover:bg-gray-300 text-gray-700"
+                    className="py-3 rounded-xl font-bold bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
                  >
                     Cancel
                  </button>
@@ -1249,10 +1257,11 @@ function HealthBar({ current, max, label }: { current: number; max: number; labe
   return (
     <div className="w-full space-y-2">
       <div className="flex justify-between items-center">
-        <span className="text-xs font-bold uppercase text-gray-400">{label}</span>
-        <span className="text-sm font-bold">{current}/{max} HP</span>
+        <span className="text-xs font-bold uppercase text-gray-400 dark:text-gray-400">{label}</span>
+        <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{current}/{max} HP</span>
       </div>
-      <div className="h-4 w-full bg-gray-200 rounded-full overflow-hidden border border-gray-300 relative shadow-inner">
+      
+      <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 relative shadow-inner">
         <div 
           className={`h-full ${colorClass} transition-all duration-500 ease-out`} 
           style={{ width: `${pct}%` }} 
@@ -1278,12 +1287,13 @@ function TimeBar({ current, max }: { current: number; max: number }) {
   return (
     <div className="w-full flex flex-col gap-1">
       <div className="flex justify-between items-end px-1">
-        <span className="text-xs font-bold uppercase text-gray-400 tracking-wider">Time Remaining</span>
-        <span className={`text-2xl font-black ${current <= 5 ? 'text-red-600' : 'text-gray-700'}`}>
+        <span className="text-xs font-bold uppercase text-gray-400 dark:text-gray-400 tracking-wider">Time Remaining</span>
+        <span className={`text-2xl font-black ${current <= 5 ? 'text-red-600 dark:text-red-500' : 'text-gray-700 dark:text-gray-100'}`}>
            {timeString}
         </span>
       </div>
-      <div className="h-4 w-full bg-gray-200 rounded-full overflow-hidden border border-gray-300 relative shadow-inner">
+      
+      <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 relative shadow-inner">
         <div 
           className={`h-full ${colorClass} transition-all duration-500 ease-out`} 
           style={{ width: `${pct}%` }} 
@@ -1295,7 +1305,11 @@ function TimeBar({ current, max }: { current: number; max: number }) {
 
 export default function PlayPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-xl text-white">Loading Battle...</div>}>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center font-bold text-xl bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 animate-pulse">
+        Loading Battle...
+      </div>
+    }>
       <PlayContent />
     </Suspense>
   );

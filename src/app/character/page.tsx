@@ -376,11 +376,11 @@ export default function CharacterPage() {
 // COMPONENTS
 function StatBox({ label, value, icon }: { label: string, value: string | number, icon: string }) {
   return (
-    <div className="flex items-center gap-3 p-3 border rounded-xl bg-gray-50">
+    <div className="flex items-center gap-3 p-3 border rounded-xl bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
       <div className="text-xl">{icon}</div>
       <div>
-        <div className="text-[10px] uppercase text-gray-500 font-bold">{label}</div>
-        <div className="text-lg font-bold">{value}</div>
+        <div className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-bold">{label}</div>
+        <div className="text-lg font-bold dark:text-gray-100">{value}</div>
       </div>
     </div>
   );
@@ -400,33 +400,37 @@ function EquipRow({ slotName, equippedId, gameItems, inventory, onUnequip }: any
   const isBroken = instance && (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
   const fmt = (val: number) => (val > 0 ? `+${val}` : `${val}`);
 
+  const bgClass = isBroken 
+    ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' 
+    : 'bg-gray-50 dark:bg-gray-700 dark:border-gray-600';
+
   return (
     <div className={`flex justify-between items-center p-3 border rounded-xl ${isBroken ? 'bg-red-50 border-red-200' : 'bg-gray-50'}`}>
       <div className="flex items-center gap-3">
-        <div className="text-[10px] font-bold bg-gray-200 px-2 py-1 rounded uppercase w-20 text-center text-gray-600">
+        <div className="text-[10px] font-bold bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded uppercase w-20 text-center text-gray-600 dark:text-gray-200">
           {slotName}
         </div>
         
         <div>
-            <div className={`text-sm flex items-center gap-2 ${def ? "font-bold" : "text-gray-400 italic"}`}>
+            <div className={`text-sm flex items-center gap-2 ${def ? "font-bold dark:text-gray-100" : "text-gray-400 dark:text-gray-500 italic"}`}>
                {def ? def.name : "Empty"}
                
                {def && !isBroken && (
                  <div className="flex gap-1 text-[10px] font-extrabold uppercase tracking-wide">
                     {/* Using 'as any' to fix your red lines */}
-                    {(stats as any).damage?.flat && <span className="text-blue-600">{fmt((stats as any).damage.flat)} ⚔️</span>}
-                    {(stats as any).defense?.flat && <span className="text-purple-600">{fmt((stats as any).defense.flat)} 🛡️</span>}
-                    {(stats as any).maxHp?.flat && <span className="text-green-600">{fmt((stats as any).maxHp.flat)} ❤️</span>}
-                    {(stats as any).time?.flat && <span className="text-yellow-600">{fmt((stats as any).time.flat)}s ⏳</span>}
+                    {(stats as any).damage?.flat && <span className="text-blue-600 dark:text-blue-400">{fmt((stats as any).damage.flat)} ⚔️</span>}
+                    {(stats as any).defense?.flat && <span className="text-purple-600 dark:text-purple-400">{fmt((stats as any).defense.flat)} 🛡️</span>}
+                    {(stats as any).maxHp?.flat && <span className="text-green-600 dark:text-green-400">{fmt((stats as any).maxHp.flat)} ❤️</span>}
+                    {(stats as any).time?.flat && <span className="text-yellow-600 dark:text-yellow-400">{fmt((stats as any).time.flat)}s ⏳</span>}
                  </div>
                )}
             </div>
-            {isBroken && <div className="text-[10px] text-red-600 font-bold uppercase">⚠️ Broken (Stats Ignored)</div>}
+            {isBroken && <div className="text-[10px] text-red-600 dark:text-red-400 font-bold uppercase">⚠️ Broken (Stats Ignored)</div>}
         </div>
       </div>
       
       {def && (
-        <button onClick={onUnequip} className="text-xs text-red-400 hover:text-red-600 font-bold px-2">
+        <button onClick={onUnequip} className="text-xs text-red-400 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-bold px-2">
             Unequip
         </button>
       )}

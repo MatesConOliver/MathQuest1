@@ -97,7 +97,7 @@ export default function LoginPage() {
                 <input
                 type="text"
                 required={isRegistering} 
-                className="mt-1 block w-full rounded-xl border p-2 bg-yellow-50 border-yellow-200"
+                className="mt-1 block w-full rounded-xl border p-2 bg-yellow-50 border-yellow-200 text-yellow-900 placeholder:text-yellow-700/50 dark:bg-yellow-900/30 dark:text-yellow-100 dark:border-yellow-700"
                 placeholder="e.g. Sir Lancelot"
                 value={characterName}
                 onChange={(e) => setCharacterName(e.target.value)}
@@ -110,8 +110,7 @@ export default function LoginPage() {
             <input
               type="email"
               required
-              className="mt-1 block w-full rounded-xl border p-2"
-              value={email}
+              className="mt-1 block w-full rounded-xl border p-2 bg-white text-gray-900 border-gray-300 placeholder:text-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"              value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
@@ -121,7 +120,7 @@ export default function LoginPage() {
             <input
               type="password"
               required
-              className="mt-1 block w-full rounded-xl border p-2"
+              className="mt-1 block w-full rounded-xl border p-2 bg-white text-gray-900 border-gray-300 placeholder:text-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -131,7 +130,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full bg-black text-white py-2 rounded-xl font-semibold hover:opacity-80 transition"
+            className="w-full bg-black text-white py-2 rounded-xl font-semibold hover:opacity-80 transition dark:bg-white dark:text-black"
           >
             {isRegistering ? "Start Adventure" : "Enter World"}
           </button>
@@ -141,7 +140,7 @@ export default function LoginPage() {
           <button
             type="button" // (Added type=button to prevent accidental form submit)
             onClick={() => setIsRegistering(!isRegistering)}
-            className="text-blue-600 underline"
+            className="text-blue-600 dark:text-blue-400 underline"
           >
             {isRegistering
               ? "Already have an account? Login"
