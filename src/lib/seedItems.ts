@@ -12,7 +12,7 @@ export const seedInitialItems = async () => {
       type: 'weapon',
       slot: 'mainHand',
       price: 50,
-      stats: { damage: 2 }
+      stats: { damage: { flat: 2 } }
     },
     {
       id: 'armor-cloth',
@@ -21,7 +21,7 @@ export const seedInitialItems = async () => {
       type: 'armor',
       slot: 'armor',
       price: 30,
-      stats: { defense: 1 }
+      stats: { defense: { flat: 1 } }
     },
     {
       id: 'potion-small',
@@ -29,7 +29,7 @@ export const seedInitialItems = async () => {
       description: 'Restaura 10 HP.',
       type: 'potion',
       price: 15,
-      stats: { heal: 10 }
+      stats: { heal: { flat: 10 } }
     },
     {
       id: 'calculator-shield',
@@ -38,7 +38,7 @@ export const seedInitialItems = async () => {
       type: 'armor',
       slot: 'offHand', // Escudo en mano secundaria
       price: 100,
-      stats: { defense: 3 }
+      stats: { defense: { flat: 3 } }
     }
   ];
 
