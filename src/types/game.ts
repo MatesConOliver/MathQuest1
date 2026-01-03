@@ -20,11 +20,14 @@ export interface GameItem {
     damage?: StatModifier;  // replacing number
     defense?: StatModifier; // replacing number
     heal?: StatModifier;    // replacing number
-    
+    maxHp?: StatModifier; 
+    time?: StatModifier;
     // New: Time Multiplier for Wands
     timeFactor?: number;    // e.g., 1.2 for +20% time
   };
   slot?: EquipmentSlot;
+  maxDurability?: number;
+  inShop?: boolean;
 }
 
 // An item inside the player's inventory
@@ -45,6 +48,8 @@ export interface Character {
   xp: number;
   gold: number;
   maxHp: number;
+  baseDamage: number;
+  baseDefense: number;
   inventory: InventoryItem[]; 
   equipment: {
     mainHand: string | null;
@@ -56,16 +61,22 @@ export interface Character {
   updatedAt?: any;
 }
 
-// ... (Rest of the file: Monster, Question, QuestionDoc, FoeDoc, EncounterDoc) ...
-// (You can leave the rest exactly as you have it)
 export interface Monster {
-  id: string;
+  id?: string;
   name: string;
-  level: number;
+  description?: string; 
+  emoji?: string;
+  attackDamage?: number; 
+  defense?: number;     
+  level?: number;
   maxHp: number;
-  damage: number;
-  xpReward: number;
-  goldReward: number;
+  hp: number;        // Current HP (Starting HP)
+  
+  //Legacy fields
+  imageUrl?: string;
+  damage?: number;
+  xpReward?: number;
+  goldReward?: number;
 }
 
 export interface Question {
@@ -75,6 +86,7 @@ export interface Question {
   difficulty: number;
   packId?: string;
   order?: number;
+  timeLimit?: number;
 }
 
 export type QuestionDoc = {
@@ -93,6 +105,8 @@ export type QuestionDoc = {
   tags: string[];
   packId?: string; 
   order?: number; 
+  timeLimit: number;
+  imageUrl?: string;
 };
 
 export type FoeDoc = {
@@ -100,15 +114,32 @@ export type FoeDoc = {
   name: string;
   maxHp: number;
   attackDamage: number;
+  defense: number;
+  imageUrl?: string;
+};
+
+export type GameLocation = {
+  id?: string;
+  name: string;
+  description: string;
+  order: number; // To sort them (1. Forest, 2. Caves...)
 };
 
 export type EncounterDoc = {
   id?: string;
   title: string;
+  description?: string;
+  locationId: string;
   foeId: string;
-  questionTag: string;
-  damagePerCorrect: number;
-  winRewardXp: number;
-  winRewardGold: number;
-  timeLimitSeconds?: number;
+  foes?: string[];
+  questionTag: string; //legacy
+  questionTags?: string[];
+  damagePerCorrect?: number;
+  winRewardXp?: number;
+  winRewardGold?: number;
+  timeMultiplier?: number;
+  winRewardItems?: string[];
+  shuffleQuestions?: boolean; 
+  imageUrl?: string;         
+  emoji?: string;            
 };

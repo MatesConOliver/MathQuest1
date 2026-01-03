@@ -1,4 +1,3 @@
-// ARCHIVO: src/app/login/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -10,34 +9,19 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-
-// Tipo para el personaje inicial
-type Character = {
-  ownerUid: string;
-  name: string;
-  className: string;
-  level: number;
-  xp: number;
-  gold: number;
-  maxHp: number;
-  inventory: any[];
-  equipment: {
-    mainHand: string | null;
-    armor: string | null;
-    head: string | null;
-  };
-  createdAt: any;
-  updatedAt: any;
-};
+import { Character } from "@/types/game";
 
 export default function LoginPage() {
   const router = useRouter();
+  
+  // State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [characterName, setCharacterName] = useState("");
+  
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState("");
 
-  // Si el usuario ya está logueado, lo sacamos de aquí
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -48,27 +32,39 @@ export default function LoginPage() {
   }, [router]);
 
   const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault(); // Evita que la página se recargue
+    e.preventDefault(); 
     setError("");
 
     try {
       if (isRegistering) {
-        // --- REGISTRO ---
+        // --- VALIDATION ---
+        if (!characterName.trim()) {
+            setError("Please enter a character name.");
+            return;
+        }
+
+        // --- REGISTER ---
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         const uid = cred.user.uid;
 
-        // Crear personaje con inventario vacío
+        // --- CREATE CHARACTER ---
         const starter: Character = {
           ownerUid: uid,
-          name: "New Adventurer",
+          name: characterName.trim(), // 👈 Uses the input name
           className: "Apprentice",
           level: 1,
           xp: 0,
           gold: 0,
           maxHp: 15,
-          inventory: [], // Importante: Array vacío
+          
+          // Stats
+          baseDamage: 1,  
+          baseDefense: 0,
+          
+          inventory: [],
           equipment: {
             mainHand: null,
+            offHand: null, 
             armor: null,
             head: null,
           },
@@ -77,13 +73,13 @@ export default function LoginPage() {
         };
 
         await setDoc(doc(db, "characters", uid), starter);
-        // La redirección ocurre en el useEffect
+        
       } else {
         // --- LOGIN ---
         await signInWithEmailAndPassword(auth, email, password);
       }
     } catch (err: any) {
-      setError(err.message || "Error al iniciar sesión");
+      setError(err.message || "Authentication Error");
     }
   };
 
@@ -91,10 +87,24 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
       <div className="w-full max-w-md bg-white p-6 rounded-2xl shadow-md border">
         <h1 className="text-2xl font-bold mb-2">
-          {isRegistering ? "Crear Cuenta" : "Iniciar Sesión"}
+          {isRegistering ? "Create Hero" : "Welcome Back"}
         </h1>
 
         <form onSubmit={handleAuth} className="space-y-4">
+          {isRegistering && (
+            <label className="block animate-in fade-in slide-in-from-top-2 duration-300">
+                <span className="text-sm font-medium">Character Name</span>
+                <input
+                type="text"
+                required={isRegistering} 
+                className="mt-1 block w-full rounded-xl border p-2 bg-yellow-50 border-yellow-200"
+                placeholder="e.g. Sir Lancelot"
+                value={characterName}
+                onChange={(e) => setCharacterName(e.target.value)}
+                />
+            </label>
+          )}
+
           <label className="block">
             <span className="text-sm font-medium">Email</span>
             <input
@@ -107,7 +117,7 @@ export default function LoginPage() {
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium">Contraseña</span>
+            <span className="text-sm font-medium">Password</span>
             <input
               type="password"
               required
@@ -117,24 +127,25 @@ export default function LoginPage() {
             />
           </label>
 
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
 
           <button
             type="submit"
             className="w-full bg-black text-white py-2 rounded-xl font-semibold hover:opacity-80 transition"
           >
-            {isRegistering ? "Registrarse" : "Entrar"}
+            {isRegistering ? "Start Adventure" : "Enter World"}
           </button>
         </form>
 
         <div className="mt-4 text-center text-sm">
           <button
+            type="button" // (Added type=button to prevent accidental form submit)
             onClick={() => setIsRegistering(!isRegistering)}
             className="text-blue-600 underline"
           >
             {isRegistering
-              ? "¿Ya tienes cuenta? Inicia sesión"
-              : "¿No tienes cuenta? Regístrate"}
+              ? "Already have an account? Login"
+              : "No account? Register"}
           </button>
         </div>
       </div>
