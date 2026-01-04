@@ -990,30 +990,36 @@ function PlayContent() {
   );
 
   return (
-    <main className="min-h-screen p-4 flex flex-col items-center max-w-2xl mx-auto relative transition-colors">
+    // 👇 CHANGED: Reduced padding (p-2) and ensured min-height handles content better
+    <main className="min-h-screen p-2 md:p-4 flex flex-col items-center max-w-2xl mx-auto relative transition-colors font-sans">
       
       {/* HUD (HEALTH BARS) */}
-      <div className="w-full grid grid-cols-2 gap-4 mb-4">
+      {/* 👇 CHANGED: Reduced gap and margin */}
+      <div className="w-full grid grid-cols-2 gap-2 md:gap-4 mb-2">
         
         {/* PLAYER CARD */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800 text-center space-y-2 transition-colors">
-            <h3 className="font-bold text-blue-900 dark:text-blue-200">{character?.name}</h3>
-            <HealthBar 
-              label="YOU" 
-              current={playerHp} 
-              max={character?.maxHp || 100} 
-            />
+        {/* 👇 CHANGED: p-4 -> p-3 to save space */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl border border-blue-100 dark:border-blue-800 text-center space-y-1 transition-colors flex flex-col justify-between">
+            <div>
+                <h3 className="font-bold text-sm text-blue-900 dark:text-blue-200 truncate">{character?.name}</h3>
+                <HealthBar 
+                label="YOU" 
+                current={playerHp} 
+                max={character?.maxHp || 100} 
+                />
+            </div>
+          {/* 👇 CHANGED: Made button more compact (py-1) */}
           <button 
             onClick={() => setShowInventory(true)}
-            className="mt-4 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 py-2 rounded-lg font-bold flex items-center justify-center gap-2 border dark:border-gray-600 w-full transition-colors"
+            className="mt-2 text-[10px] md:text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 py-1.5 rounded-lg font-bold flex items-center justify-center gap-2 border dark:border-gray-600 w-full transition-colors"
           >
             🎒 Items ({character?.inventory.filter(i => gameItems[i.itemId]?.type === 'potion').length || 0})
           </button>
         </div>
         
         {/* ENEMY CARD */}
-        <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-2xl border border-red-100 dark:border-red-800 text-center space-y-2 transition-colors">
-            <h3 className="font-bold text-red-900 dark:text-red-200">{foe?.name || "Enemy"}</h3>
+        <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-2xl border border-red-100 dark:border-red-800 text-center space-y-1 transition-colors">
+            <h3 className="font-bold text-sm text-red-900 dark:text-red-200 truncate">{foe?.name || "Enemy"}</h3>
             <HealthBar 
               label="ENEMY" 
               current={foeHp} 
@@ -1023,7 +1029,8 @@ function PlayContent() {
       </div>
 
       {/* TIMER BAR */}
-      <div className="bg-white dark:bg-gray-800 dark:text-gray-100 px-6 py-4 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-700 mb-6 w-full transition-colors">
+      {/* 👇 CHANGED: Reduced vertical padding (py-4 -> py-2) and margin */}
+      <div className="bg-white dark:bg-gray-800 dark:text-gray-100 px-4 py-2 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 mb-2 w-full transition-colors">
         <TimeBar 
             current={timeLeft} 
             max={totalTime} 
@@ -1031,60 +1038,62 @@ function PlayContent() {
       </div>
 
       {/* --- QUESTION CARD --- */}
-      <div className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-lg border dark:border-gray-700 p-8 space-y-6 relative transition-colors">
+      {/* 👇 CHANGED: Reduced padding (p-8 -> p-4) and vertical spacing */}
+      <div className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-lg border dark:border-gray-700 p-4 md:p-6 space-y-3 relative transition-colors flex-1 flex flex-col justify-center">
         
-        {msg && <div className="text-center text-red-500 font-bold animate-bounce">{msg}</div>}
+        {msg && <div className="text-center text-red-500 font-bold animate-bounce text-sm absolute top-2 left-0 w-full">{msg}</div>}
         
-        <div className="absolute top-4 right-6 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full text-[10px] font-black text-gray-400 dark:text-gray-300 tracking-widest border border-gray-200 dark:border-gray-600">
+        <div className="absolute top-3 right-4 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full text-[9px] font-black text-gray-400 dark:text-gray-300 tracking-widest border border-gray-200 dark:border-gray-600">
            TURN {currentQIndex + 1} / {questions.length}
         </div>
         
-        {/* 1. IMAGE (Context) */}
+        {/* 1. IMAGE (Context) - 👇 CHANGED: Restricted height heavily for mobile */}
         {currentQ.imageUrl && (
-          <div className="flex justify-center mb-4">
+          <div className="flex justify-center mb-1">
             <img 
               src={currentQ.imageUrl} 
               alt="Question Context" 
-              className="rounded-xl max-h-60 object-contain shadow-sm bg-white"
+              className="rounded-xl max-h-32 md:max-h-60 object-contain shadow-sm bg-white"
             />
           </div>
         )}
 
         {/* 2. QUESTION CONTENT */}
-        <div className="text-2xl font-bold text-gray-800 dark:text-gray-100 text-center my-4">
-          {/* Priority 1: IMAGE PROMPT */}
+        <div className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100 text-center my-2">
+          {/* Priority 1: IMAGE PROMPT - 👇 CHANGED: Restricted height */}
           {currentQ.promptImageUrl && (
-            <div className="flex justify-center mb-4">
+            <div className="flex justify-center mb-2">
                 <img 
                     src={currentQ.promptImageUrl} 
                     alt="Question Image" 
-                    className="max-h-48 rounded-lg shadow-md border bg-white" 
+                    className="max-h-32 md:max-h-48 rounded-lg shadow-md border bg-white" 
                 />
             </div>
           )}
 
           {/* Priority 2: LATEX BLOCK */}
           {currentQ.promptLatex && (
-            <div className="py-4 overflow-x-auto">
+            <div className="py-2 overflow-x-auto">
                <BlockMath math={currentQ.promptLatex} />
             </div>
           )}
 
           {/* Priority 3: TEXT */}
           {currentQ.promptText && (
-            <div className="whitespace-pre-wrap leading-relaxed dark:text-gray-100">
+            <div className="whitespace-pre-wrap leading-relaxed dark:text-gray-100 text-sm md:text-base">
                {renderMixedText(currentQ.promptText || "")}
             </div>
           )}
         </div>
 
         {/* 3. ANSWERS (GRID) */}
-        <div className="grid grid-cols-1 gap-3 min-h-[200px]">
+        {/* 👇 CHANGED: md:grid-cols-2 allows side-by-side on tablets to save height */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
           
           {/* A. ROUND OVER / NEXT BUTTON */}
           {isPaused && (
-            <div className="flex flex-col items-center justify-center space-y-4 animate-in fade-in zoom-in mb-4">
-              <div className="text-xl font-bold bg-white dark:bg-gray-700 dark:text-white p-4 rounded-xl border-2 border-black dark:border-gray-500 w-full text-center shadow-md">
+            <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in mb-2">
+              <div className="text-lg font-bold bg-white dark:bg-gray-700 dark:text-white p-3 rounded-xl border-2 border-black dark:border-gray-500 w-full text-center shadow-md">
                  {msg || "Round Over"}
               </div>
               <button 
@@ -1102,21 +1111,22 @@ function PlayContent() {
                       handleWin();
                   }
                 }} 
-                className="w-full py-4 bg-blue-600 text-white text-xl font-black rounded-xl hover:bg-blue-800 shadow-lg transition-transform hover:scale-[1.02]"
+                className="w-full py-3 bg-blue-600 text-white text-lg font-black rounded-xl hover:bg-blue-800 shadow-lg transition-transform hover:scale-[1.02]"
               >
-                NEXT QUESTION ➡️
+                NEXT ➡️
               </button>
             </div>
           )}
 
           {/* B. ANSWER BUTTONS */}
+          {/* 👇 CHANGED: Reduced padding inside buttons (p-4 -> p-3) */}
           {currentQ.choices.map((choice, idx) => {
             return (
               <button 
                 key={idx} 
                 disabled={isPaused} 
                 onClick={() => handleAnswer(idx)} 
-                className={`p-4 border-2 rounded-xl text-lg font-medium transition-all group relative
+                className={`p-3 border-2 rounded-xl text-base md:text-lg font-medium transition-all group relative
                   ${isPaused 
                     ? "opacity-50 cursor-not-allowed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-400" 
                     : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-black hover:text-white hover:border-black dark:hover:bg-white dark:hover:text-black dark:hover:border-white"
@@ -1133,30 +1143,31 @@ function PlayContent() {
 
         {/* --- SKIP & ESCAPE BUTTONS --- */}
         {!isPaused && (
-            <div className="mt-6 flex flex-col gap-3 pt-6 border-t border-gray-100 dark:border-gray-700">
+            // 👇 CHANGED: flex-col -> flex-row. This puts them side-by-side to save huge vertical space.
+            <div className="mt-2 flex flex-row gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                 
                 {/* Skip Button */}
                 <button 
                     onClick={skipQuestion}
-                    className="w-full py-3 rounded-xl border-2 border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 text-red-500 dark:text-red-400 font-bold hover:bg-red-100 dark:hover:bg-red-900/30 hover:border-red-200 transition-colors text-sm"
+                    className="flex-1 py-2 md:py-3 rounded-xl border-2 border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 text-red-500 dark:text-red-400 font-bold hover:bg-red-100 dark:hover:bg-red-900/30 hover:border-red-200 transition-colors text-xs"
                 >
-                    ⏭️ SKIP QUESTION
+                    ⏭️ SKIP
                 </button>
 
                 {/* Escape Button */}
                 <button 
                     onClick={() => setShowEscapeConfirm(true)} 
-                    className="w-full py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-xs uppercase tracking-widest"
+                    className="flex-1 py-2 md:py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-[10px] uppercase tracking-widest"
                 >
-                    🏃 Escape Battle
+                    🏃 ESCAPE
                 </button>
             </div>
         )}
       </div>
 
-      {/* 🎒 INVENTORY MODAL */}
+      {/* 🎒 INVENTORY MODAL (Unchanged logic, just ensure z-index is high) */}
       {showInventory && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 rounded-3xl">
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 rounded-3xl">
            <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border dark:border-gray-700">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold">🎒 Backpack</h3>
@@ -1198,7 +1209,7 @@ function PlayContent() {
 
       {/* 🛑 ESCAPE CONFIRMATION MODAL */}
       {showEscapeConfirm && (
-        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 rounded-3xl animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 rounded-3xl animate-in fade-in duration-200">
            <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl border-4 border-red-100 dark:border-red-900/50 text-center space-y-4">
               
               <div className="text-4xl">🏃💨</div>
