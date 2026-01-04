@@ -9,7 +9,7 @@ import { useAudio } from "@/context/AudioContext";
 import Link from "next/link";
 
 export default function CharacterPage() {
-  const { playTrack } = useAudio()!; 
+  const { playTrack, playSfx } = useAudio()!; 
 
   useEffect(() => {
     playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); // 👈 Triggers the music
@@ -125,6 +125,8 @@ export default function CharacterPage() {
         inventory: newInventory,
         gold: newGold
     });
+
+    playSfx("/item-sold.mp3");
     setMsg(`💰 Sold ${def.name} for ${sellPrice} G`);
   };
 

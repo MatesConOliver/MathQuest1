@@ -1,31 +1,46 @@
-"use client"; // 👈 This makes it work with browsers
+"use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 type AudioContextType = {
-  playTrack: (trackUrl: string) => void;
+  playTrack: (url: string) => void; // For Background Music (loops)
+  playSfx: (url: string) => void;   // For Sound Effects (one-shot)
 };
 
 const AudioContext = createContext<AudioContextType | null>(null);
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // 1. The Background Music Player (Persistent)
+  const musicRef = useRef<HTMLAudioElement | null>(null);
   const [currentTrack, setCurrentTrack] = useState<string>("");
 
-  const playTrack = (trackUrl: string) => {
-    if (!audioRef.current) return;
-    if (currentTrack === trackUrl) return; // Already playing this song? Do nothing.
+  // Function A: Play Background Music (Loops, only one at a time)
+  const playTrack = (url: string) => {
+    if (!musicRef.current) return;
+    if (currentTrack === url) return; // Don't restart if already playing
 
-    setCurrentTrack(trackUrl);
-    audioRef.current.src = trackUrl;
-    audioRef.current.play().catch((err) => console.log("Audio waiting for interaction..."));
+    setCurrentTrack(url);
+    musicRef.current.src = url;
+    musicRef.current.volume = 0.3; // Background music at 30% volume
+    musicRef.current.play().catch(() => console.log("BGM waiting for interaction..."));
   };
 
-  // Global unlocker: The first click anywhere starts the music if it's paused
+  // Function B: Play Sound Effect (Fire-and-forget, allows overlap)
+  const playSfx = (url: string) => {
+    try {
+      const sfx = new Audio(url);
+      sfx.volume = 0.5; // SFX slightly louder (50%)
+      sfx.play().catch((e) => console.error("SFX blocked", e));
+    } catch (e) {
+      console.error("Audio error", e);
+    }
+  };
+
+  // Global unlocker for Background Music
   useEffect(() => {
     const unlockAudio = () => {
-      if (audioRef.current && audioRef.current.paused && currentTrack) {
-        audioRef.current.play().catch(() => {});
+      if (musicRef.current && musicRef.current.paused && currentTrack) {
+        musicRef.current.play().catch(() => {});
       }
     };
     window.addEventListener("click", unlockAudio);
@@ -37,8 +52,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [currentTrack]);
 
   return (
-    <AudioContext.Provider value={{ playTrack }}>
-      <audio ref={audioRef} loop hidden />
+    <AudioContext.Provider value={{ playTrack, playSfx }}>
+      {/* Hidden player for Background Music only */}
+      <audio ref={musicRef} loop hidden />
       {children}
     </AudioContext.Provider>
   );
