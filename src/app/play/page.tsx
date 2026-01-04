@@ -14,7 +14,7 @@ function PlayContent() {
   const { playTrack } = useAudio()!; 
 
   useEffect(() => {
-    playTrack("/public/the-tournament-280277.mp3");
+    playTrack("/the-tournament-280277.mp3");
   }, []);
 
   const router = useRouter();

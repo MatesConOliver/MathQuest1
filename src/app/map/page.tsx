@@ -12,7 +12,7 @@ export default function MapPage() {
   const { playTrack } = useAudio()!; 
 
   useEffect(() => {
-    playTrack("/public/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3");
+    playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3");
   }, []);
 
   const [user, setUser] = useState<User | null>(null);

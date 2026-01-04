@@ -12,7 +12,7 @@ export default function CharacterPage() {
   const { playTrack } = useAudio()!; 
 
   useEffect(() => {
-    playTrack("/public/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); // 👈 Triggers the music
+    playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); // 👈 Triggers the music
   }, []);
 
   const [user, setUser] = useState<User | null>(null);
