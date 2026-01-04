@@ -271,7 +271,6 @@ export default function CharacterPage() {
               <h2 className="text-xl font-bold">Backpack ({char.inventory.length})</h2>
               <Link 
                 href="/shop" 
-                // 👇 FIXED: Inverted button colors for Dark Mode
                 className="text-xs bg-black text-white dark:bg-white dark:text-black px-3 py-1 rounded-lg hover:opacity-80 transition-opacity"
               >
                 Visit Shop
@@ -281,7 +280,7 @@ export default function CharacterPage() {
           <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
             {char.inventory.length === 0 && <p className="text-gray-400 text-center py-8">Your bag is empty.</p>}
             
-            {char.inventory.map((item) => {
+            {char.inventory.map((item, index) => {
                 const def = gameItems[item.itemId];
                 if (!def) return null; 
 
@@ -295,26 +294,29 @@ export default function CharacterPage() {
 
                 // Type check helper
                 const isGear = def.slot || ["armor", "head", "mainHand", "offHand", "weapon", "shield"].includes(def.type as string);
-
+                const isFirst = index === 0; // Check if it's the top item
+                
                 return (
-                    // 👇 FIXED: Card background, border, and hover state
                     <div key={item.instanceId} className="group relative p-3 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 flex flex-col gap-2 transition-all">
                         
                         {/* HOVER TOOLTIP */}
-                        {/* 👇 FIXED: Darker background and border for visibility in Dark Mode */}
-                        <div className="hidden group-hover:block absolute z-50 bottom-full left-0 w-full mb-2 bg-gray-900 dark:bg-black text-white text-xs p-3 rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in duration-200 border border-transparent dark:border-gray-700">
-                            <div className="font-bold border-b border-gray-600 pb-1 mb-1 text-gray-300 uppercase tracking-widest text-[10px]">Item Stats</div>
-                            <div className="space-y-1">
-                              {def.stats?.damage?.flat && <div>⚔️ Attack Damage: <span className="text-blue-300 font-bold">+{def.stats.damage.flat}</span></div>}
-                              {def.stats?.defense?.flat && <div>🛡️ Defense: <span className="text-purple-300 font-bold">+{def.stats.defense.flat}</span></div>}
-                              {def.stats?.heal?.flat && <div>🧪 Restores: <span className="text-green-300 font-bold">{def.stats.heal.flat} HP</span></div>}
-                              {def.stats?.maxHp?.flat && <div>💚 Max HP: <span className="text-green-300 font-bold">+{def.stats.maxHp.flat}</span></div>}
-                              {def.stats?.time?.flat && <div>⏳ Time Bonus: <span className="text-yellow-300 font-bold">{def.stats.time.flat > 0 ? '+' : ''}{def.stats.time.flat}s</span></div>}
-                              
-                              {!def.stats && <div className="italic text-gray-500">No combat stats.</div>}
-                            </div>
-                            {/* Arrow */}
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900 dark:border-t-black"></div>
+                        <div className={`hidden group-hover:block absolute z-50 left-0 w-full p-3 rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in duration-200 border border-transparent dark:border-gray-700 bg-gray-900 dark:bg-black text-white text-xs 
+                            ${isFirst ? "top-full mt-2" : "bottom-full mb-2"} 
+                        `}>
+                          <div className="font-bold border-b border-gray-600 pb-1 mb-1 text-gray-300 uppercase tracking-widest text-[10px]">Item Stats</div>
+                          <div className="space-y-1">
+                            {def.stats?.damage?.flat && <div>⚔️ Attack Damage: <span className="text-blue-300 font-bold">+{def.stats.damage.flat}</span></div>}
+                            {def.stats?.defense?.flat && <div>🛡️ Defense: <span className="text-purple-300 font-bold">+{def.stats.defense.flat}</span></div>}
+                            {def.stats?.heal?.flat && <div>🧪 Restores: <span className="text-green-300 font-bold">{def.stats.heal.flat} HP</span></div>}
+                            {def.stats?.maxHp?.flat && <div>💚 Max HP: <span className="text-green-300 font-bold">+{def.stats.maxHp.flat}</span></div>}
+                            {def.stats?.time?.flat && <div>⏳ Time Bonus: <span className="text-yellow-300 font-bold">{def.stats.time.flat > 0 ? '+' : ''}{def.stats.time.flat}s</span></div>}
+                            
+                            {!def.stats && <div className="italic text-gray-500">No combat stats.</div>}
+                          </div>
+                          
+                          <div className={`absolute left-1/2 -translate-x-1/2 border-8 border-transparent 
+                              ${isFirst ? "bottom-full border-b-gray-900 dark:border-b-black" : "top-full border-t-gray-900 dark:border-t-black"}
+                          `}></div>
                         </div>
 
                         {/* EXISTING CARD CONTENT */}
@@ -325,19 +327,16 @@ export default function CharacterPage() {
                                     {isEquipped && <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1 rounded ml-1 border border-green-200 dark:border-green-800">EQUIPPED</span>}
                                     {isBroken && <span className="text-[10px] bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-1 rounded ml-1 font-bold border border-red-200 dark:border-red-800">BROKEN</span>}
                                 </div>
-                                {/* 👇 FIXED: Subtext color */}
                                 <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">{def.type}</div>
                                   
                                   {item.maxDurability && (
                                     <div className="mt-2">
                                       <div className="flex justify-between items-center w-24 mb-0.5">
                                         <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500">DURABILITY</span>
-                                        {/* 👇 FIXED: Durability text color */}
                                         <span className={`text-[9px] font-bold ${isBroken ? "text-red-500" : "text-gray-600 dark:text-gray-300"}`}>
                                           {item.durability}/{item.maxDurability}
                                         </span>
                                       </div>
-                                      {/* 👇 FIXED: Progress bar background */}
                                       <div className="w-24 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                         <div 
                                           className={isBroken ? "bg-red-500 h-full" : "bg-blue-500 h-full"} 
@@ -347,7 +346,6 @@ export default function CharacterPage() {
                                     </div>
                                   )}
                             </div>
-                            {/* 👇 FIXED: Image placeholder background */}
                             {def.imageUrl ? <img src={def.imageUrl} className="w-10 h-10 rounded bg-gray-200 dark:bg-gray-700 object-cover" /> : null}
                         </div>
 
@@ -357,7 +355,6 @@ export default function CharacterPage() {
                             <button 
                               onClick={isGear ? () => handleEquip(item) : () => handleUse(item)}
                               disabled={isEquipped || (isGear && isBroken)}
-                              // 👇 FIXED: Complex button states for Dark Mode
                               className={`flex-1 py-1 text-xs rounded font-bold transition-colors ${
                                 isEquipped || (isGear && isBroken)
                                   ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
@@ -371,7 +368,6 @@ export default function CharacterPage() {
                             <button 
                               onClick={() => handleSell(item)}
                               disabled={isEquipped}
-                              // 👇 FIXED: Complex button states for Dark Mode
                               className={`px-3 py-1 text-xs rounded font-bold border transition-colors ${
                                 isEquipped 
                                   ? "bg-gray-100 text-gray-300 border-gray-200 dark:bg-gray-700 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed"
