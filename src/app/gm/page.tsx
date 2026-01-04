@@ -364,7 +364,7 @@ function QuestionsPanelOriginal() {
 }
 
 // =========================================================
-// 2. ITEMS PANEL (With Search Filter)
+// 2. ITEMS PANEL
 // =========================================================
 function ItemsPanel() {
   const [items, setItems] = useState<GameItem[]>([]);
@@ -388,6 +388,8 @@ function ItemsPanel() {
   const [maxHpFlat, setMaxHpFlat] = useState<number | "">("");
   const [maxHpMult, setMaxHpMult] = useState<number | "">("");
   const [timeFactor, setTimeFactor] = useState<number | "">("");
+  const [healFlat, setHealFlat] = useState<number | "">("");
+  const [healPercent, setHealPercent] = useState<number | "">("");
   const [maxDurability, setMaxDurability] = useState<number | "">("");
   
   useEffect(() => { loadItems(); }, []);

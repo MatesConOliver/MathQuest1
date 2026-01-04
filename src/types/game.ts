@@ -22,7 +22,6 @@ export interface GameItem {
     heal?: StatModifier;    // replacing number
     maxHp?: StatModifier; 
     time?: StatModifier;
-    // New: Time Multiplier for Wands
     timeFactor?: number;    // e.g., 1.2 for +20% time
   };
   slot?: EquipmentSlot;
@@ -34,8 +33,7 @@ export interface GameItem {
 export interface InventoryItem {
   itemId: string;
   obtainedAt: number;
-  instanceId: string; // 👈 Kept as required string, as per your file
-  // 👇 New Durability Fields
+  instanceId: string;
   durability?: number;    
   maxDurability?: number; 
 }
