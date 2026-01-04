@@ -266,106 +266,125 @@ export default function CharacterPage() {
         </div>
 
         {/* RIGHT COL: INVENTORY */}
-        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border h-fit">
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold">Backpack ({char.inventory.length})</h2>
-                <Link href="/shop" className="text-xs bg-black text-white px-3 py-1 rounded-lg hover:opacity-80">Visit Shop</Link>
-            </div>
+        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 h-fit transition-colors">
+          <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Backpack ({char.inventory.length})</h2>
+              <Link 
+                href="/shop" 
+                // 👇 FIXED: Inverted button colors for Dark Mode
+                className="text-xs bg-black text-white dark:bg-white dark:text-black px-3 py-1 rounded-lg hover:opacity-80 transition-opacity"
+              >
+                Visit Shop
+              </Link>
+          </div>
+          
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+            {char.inventory.length === 0 && <p className="text-gray-400 text-center py-8">Your bag is empty.</p>}
             
-            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-               {char.inventory.length === 0 && <p className="text-gray-400 text-center py-8">Your bag is empty.</p>}
-               
-               {char.inventory.map((item) => {
-                   const def = gameItems[item.itemId];
-                   if (!def) return null; 
+            {char.inventory.map((item) => {
+                const def = gameItems[item.itemId];
+                if (!def) return null; 
 
-                   // 1. Calculate Status First
-                   const isEquipped = Object.values(char.equipment).includes(item.instanceId);
-                   const isBroken = (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
-                   
-                   // 2. Calculate Sell Price based on Status
-                   const multiplier = isBroken ? 0.1 : 0.5;
-                   const sellValue = Math.max(1, Math.ceil(def.price * multiplier));
+                // 1. Calculate Status First
+                const isEquipped = Object.values(char.equipment).includes(item.instanceId);
+                const isBroken = (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
+                
+                // 2. Calculate Sell Price based on Status
+                const multiplier = isBroken ? 0.1 : 0.5;
+                const sellValue = Math.max(1, Math.ceil(def.price * multiplier));
 
-                   // We treat def.type "as string" to stop TypeScript from complaining
-                   const isGear = def.slot || ["armor", "head", "mainHand", "offHand", "weapon", "shield"].includes(def.type as string);
+                // Type check helper
+                const isGear = def.slot || ["armor", "head", "mainHand", "offHand", "weapon", "shield"].includes(def.type as string);
 
-                   return (
-                       // Added 'group' and 'relative' to container for hover logic
-                       <div key={item.instanceId} className="group relative p-3 border rounded-xl hover:bg-gray-50 flex flex-col gap-2 transition-all">
-                           
-                           {/* 👇 NEW: HOVER TOOLTIP (Shows all stats) */}
-                           <div className="hidden group-hover:block absolute z-50 bottom-full left-0 w-full mb-2 bg-gray-900 text-white text-xs p-3 rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in duration-200">
-                              <div className="font-bold border-b border-gray-600 pb-1 mb-1 text-gray-300 uppercase tracking-widest text-[10px]">Item Stats</div>
-                              <div className="space-y-1">
-                                 {def.stats?.damage?.flat && <div>⚔️ Attack Damage: <span className="text-blue-300 font-bold">+{def.stats.damage.flat}</span></div>}
-                                 {def.stats?.defense?.flat && <div>🛡️ Defense: <span className="text-purple-300 font-bold">+{def.stats.defense.flat}</span></div>}
-                                 {def.stats?.heal?.flat && <div>🧪 Restores: <span className="text-green-300 font-bold">{def.stats.heal.flat} HP</span></div>}
-                                 {def.stats?.maxHp?.flat && <div>💚 Max HP: <span className="text-green-300 font-bold">+{def.stats.maxHp.flat}</span></div>}
-                                 {def.stats?.time?.flat && <div>⏳ Time Bonus: <span className="text-yellow-300 font-bold">{def.stats.time.flat > 0 ? '+' : ''}{def.stats.time.flat}s</span></div>}
-                                 
-                                 {/* Fallback if no stats found */}
-                                 {!def.stats && <div className="italic text-gray-500">No combat stats.</div>}
-                              </div>
-                              {/* Arrow pointing down */}
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900"></div>
-                           </div>
+                return (
+                    // 👇 FIXED: Card background, border, and hover state
+                    <div key={item.instanceId} className="group relative p-3 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 flex flex-col gap-2 transition-all">
+                        
+                        {/* HOVER TOOLTIP */}
+                        {/* 👇 FIXED: Darker background and border for visibility in Dark Mode */}
+                        <div className="hidden group-hover:block absolute z-50 bottom-full left-0 w-full mb-2 bg-gray-900 dark:bg-black text-white text-xs p-3 rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in duration-200 border border-transparent dark:border-gray-700">
+                            <div className="font-bold border-b border-gray-600 pb-1 mb-1 text-gray-300 uppercase tracking-widest text-[10px]">Item Stats</div>
+                            <div className="space-y-1">
+                              {def.stats?.damage?.flat && <div>⚔️ Attack Damage: <span className="text-blue-300 font-bold">+{def.stats.damage.flat}</span></div>}
+                              {def.stats?.defense?.flat && <div>🛡️ Defense: <span className="text-purple-300 font-bold">+{def.stats.defense.flat}</span></div>}
+                              {def.stats?.heal?.flat && <div>🧪 Restores: <span className="text-green-300 font-bold">{def.stats.heal.flat} HP</span></div>}
+                              {def.stats?.maxHp?.flat && <div>💚 Max HP: <span className="text-green-300 font-bold">+{def.stats.maxHp.flat}</span></div>}
+                              {def.stats?.time?.flat && <div>⏳ Time Bonus: <span className="text-yellow-300 font-bold">{def.stats.time.flat > 0 ? '+' : ''}{def.stats.time.flat}s</span></div>}
+                              
+                              {!def.stats && <div className="italic text-gray-500">No combat stats.</div>}
+                            </div>
+                            {/* Arrow */}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900 dark:border-t-black"></div>
+                        </div>
 
-                           {/* EXISTING CARD CONTENT */}
-                           <div className="flex justify-between items-start">
-                               <div>
-                                   <div className="font-bold text-sm">{def.name} {isEquipped && <span className="text-[10px] bg-green-100 text-green-700 px-1 rounded ml-1">EQUIPPED</span>}{isBroken && <span className="text-[10px] bg-red-100 text-red-600 px-1 rounded ml-1 font-bold">BROKEN</span>}</div>
-                                   <div className="text-[10px] text-gray-500 uppercase">{def.type}</div>
-                                    {item.maxDurability && (
-                                      <div className="mt-2">
-                                        <div className="flex justify-between items-center w-24 mb-0.5">
-                                          <span className="text-[9px] font-bold text-gray-400">DURABILITY</span>
-                                          <span className={`text-[9px] font-bold ${isBroken ? "text-red-500" : "text-gray-600"}`}>
-                                            {item.durability}/{item.maxDurability}
-                                          </span>
-                                        </div>
-                                        <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                          <div 
-                                            className={isBroken ? "bg-red-500 h-full" : "bg-blue-500 h-full"} 
-                                            style={{ width: `${((item.durability || 0) / item.maxDurability) * 100}%` }}
-                                          ></div>
-                                        </div>
+                        {/* EXISTING CARD CONTENT */}
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <div className="font-bold text-sm text-gray-900 dark:text-gray-100">
+                                    {def.name} 
+                                    {isEquipped && <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1 rounded ml-1 border border-green-200 dark:border-green-800">EQUIPPED</span>}
+                                    {isBroken && <span className="text-[10px] bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-1 rounded ml-1 font-bold border border-red-200 dark:border-red-800">BROKEN</span>}
+                                </div>
+                                {/* 👇 FIXED: Subtext color */}
+                                <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">{def.type}</div>
+                                  
+                                  {item.maxDurability && (
+                                    <div className="mt-2">
+                                      <div className="flex justify-between items-center w-24 mb-0.5">
+                                        <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500">DURABILITY</span>
+                                        {/* 👇 FIXED: Durability text color */}
+                                        <span className={`text-[9px] font-bold ${isBroken ? "text-red-500" : "text-gray-600 dark:text-gray-300"}`}>
+                                          {item.durability}/{item.maxDurability}
+                                        </span>
                                       </div>
-                                    )}
-                               </div>
-                               {def.imageUrl && <img src={def.imageUrl} className="w-10 h-10 rounded bg-gray-200 object-cover" />}
-                           </div>
+                                      {/* 👇 FIXED: Progress bar background */}
+                                      <div className="w-24 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                        <div 
+                                          className={isBroken ? "bg-red-500 h-full" : "bg-blue-500 h-full"} 
+                                          style={{ width: `${((item.durability || 0) / item.maxDurability) * 100}%` }}
+                                        ></div>
+                                      </div>
+                                    </div>
+                                  )}
+                            </div>
+                            {/* 👇 FIXED: Image placeholder background */}
+                            {def.imageUrl ? <img src={def.imageUrl} className="w-10 h-10 rounded bg-gray-200 dark:bg-gray-700 object-cover" /> : null}
+                        </div>
 
-                           {/* BUTTONS (Existing Code) */}
-                           <div className="flex gap-2 mt-1">
-                              <button 
-                                onClick={isGear ? () => handleEquip(item) : () => handleUse(item)}
-                                disabled={isEquipped || (isGear && isBroken)}
-                                className={`flex-1 py-1 text-xs rounded font-bold ${
-                                  isEquipped || (isGear && isBroken)
-                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                    : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                                }`}
-                              >
-                                {isEquipped ? "Equipped" : (isGear && isBroken ? "Needs Repair" : (isGear ? "Equip" : "Use"))}
-                              </button>
+                        {/* BUTTONS */}
+                        <div className="flex gap-2 mt-1">
+                            {/* EQUIP / USE BUTTON */}
+                            <button 
+                              onClick={isGear ? () => handleEquip(item) : () => handleUse(item)}
+                              disabled={isEquipped || (isGear && isBroken)}
+                              // 👇 FIXED: Complex button states for Dark Mode
+                              className={`flex-1 py-1 text-xs rounded font-bold transition-colors ${
+                                isEquipped || (isGear && isBroken)
+                                  ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
+                                  : "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                              }`}
+                            >
+                              {isEquipped ? "Equipped" : (isGear && isBroken ? "Needs Repair" : (isGear ? "Equip" : "Use"))}
+                            </button>
 
-                               <button 
-                                 onClick={() => handleSell(item)}
-                                 disabled={isEquipped}
-                                 className={`px-3 py-1 text-xs rounded font-bold border ${
-                                   isEquipped 
-                                     ? "bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed"
-                                     : "bg-red-50 text-red-600 border-red-100 hover:bg-red-100"
-                                 }`}
-                               >
-                                 {isEquipped ? "In Use" : `Sell ${sellValue}G`}
-                               </button>
-                           </div>
-                       </div>
-                   );
-               })}
-            </div>
+                            {/* SELL BUTTON */}
+                            <button 
+                              onClick={() => handleSell(item)}
+                              disabled={isEquipped}
+                              // 👇 FIXED: Complex button states for Dark Mode
+                              className={`px-3 py-1 text-xs rounded font-bold border transition-colors ${
+                                isEquipped 
+                                  ? "bg-gray-100 text-gray-300 border-gray-200 dark:bg-gray-700 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed"
+                                  : "bg-red-50 text-red-600 border-red-100 hover:bg-red-100 dark:bg-red-900/10 dark:text-red-300 dark:border-red-900/30 dark:hover:bg-red-900/30"
+                              }`}
+                            >
+                              {isEquipped ? "In Use" : `Sell ${sellValue}G`}
+                            </button>
+                        </div>
+                    </div>
+                );
+            })}
+          </div>
         </div>
 
       </div>
