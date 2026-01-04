@@ -16,8 +16,10 @@ export default function LoginPage() {
   const { playTrack } = useAudio()!; 
 
   useEffect(() => {
-    playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); // 👈 Triggers the music
+    // Make sure your file name is correct here!
+    playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); 
   }, []);
+
   const router = useRouter();
   
   // State
@@ -41,6 +43,9 @@ export default function LoginPage() {
     e.preventDefault(); 
     setError("");
 
+    // ✅ FIX: Trim spaces to prevent duplicate users
+    const cleanEmail = email.trim();
+
     try {
       if (isRegistering) {
         // --- VALIDATION ---
@@ -50,30 +55,22 @@ export default function LoginPage() {
         }
 
         // --- REGISTER ---
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
         const uid = cred.user.uid;
 
         // --- CREATE CHARACTER ---
         const starter: Character = {
           ownerUid: uid,
-          name: characterName.trim(), // 👈 Uses the input name
+          name: characterName.trim(), 
           className: "Apprentice",
           level: 1,
           xp: 0,
           gold: 0,
           maxHp: 15,
-          
-          // Stats
           baseDamage: 1,  
           baseDefense: 0,
-          
           inventory: [],
-          equipment: {
-            mainHand: null,
-            offHand: null, 
-            armor: null,
-            head: null,
-          },
+          equipment: { mainHand: null, offHand: null, armor: null, head: null },
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         };
@@ -82,17 +79,43 @@ export default function LoginPage() {
         
       } else {
         // --- LOGIN ---
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, cleanEmail, password);
       }
     } catch (err: any) {
-      setError(err.message || "Authentication Error");
+        // Helpful error handling
+        if (err.code === 'auth/email-already-in-use') {
+            setError("This email is already registered. Please log in.");
+        } else {
+            setError(err.message || "Authentication Error");
+        }
     }
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-      <div className="w-full max-w-md bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-md border">
-        <h1 className="text-2xl font-bold mb-2">
+    // 1. CONTAINER: Needs 'relative' so absolute children stay inside
+    <main className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
+      
+      {/* 2. VIDEO BACKGROUND */}
+      {/* 'object-cover' ensures it fills the screen without stretching */}
+      {/* '-z-20' puts it way in the back */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        poster="/login-background.png"
+        className="absolute top-0 left-0 w-full h-full object-cover -z-20"
+      >
+        <source src="/login-background.mp4" type="video/mp4" />
+      </video>
+
+      {/* 3. DARK OVERLAY */}
+      {/* Semi-transparent black layer so text is readable on top of video */}
+      <div className="absolute top-0 left-0 w-full h-full bg-black/50 -z-10" />
+
+      {/* 4. CONTENT (The Login Box) */}
+      <div className="relative z-10 w-full max-w-md bg-white/90 backdrop-blur-sm dark:bg-gray-900/90 dark:text-gray-100 p-6 rounded-2xl shadow-2xl border border-white/20">
+        <h1 className="text-2xl font-bold mb-2 text-center">
           {isRegistering ? "Create Hero" : "Welcome Back"}
         </h1>
 
@@ -103,7 +126,7 @@ export default function LoginPage() {
                 <input
                 type="text"
                 required={isRegistering} 
-                className="mt-1 block w-full rounded-xl border p-2 bg-yellow-50 border-yellow-200 text-yellow-900 placeholder:text-yellow-700/50 dark:bg-yellow-900/30 dark:text-yellow-100 dark:border-yellow-700"
+                className="mt-1 block w-full rounded-xl border p-2 bg-yellow-50/50 border-yellow-200 text-yellow-900 placeholder:text-yellow-700/50"
                 placeholder="e.g. Sir Lancelot"
                 value={characterName}
                 onChange={(e) => setCharacterName(e.target.value)}
@@ -116,7 +139,8 @@ export default function LoginPage() {
             <input
               type="email"
               required
-              className="mt-1 block w-full rounded-xl border p-2 bg-white text-gray-900 border-gray-300 placeholder:text-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"              value={email}
+              className="mt-1 block w-full rounded-xl border p-2 bg-white/80 border-gray-300 dark:bg-gray-800 dark:border-gray-600"
+              value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
@@ -126,17 +150,17 @@ export default function LoginPage() {
             <input
               type="password"
               required
-              className="mt-1 block w-full rounded-xl border p-2 bg-white text-gray-900 border-gray-300 placeholder:text-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
+              className="mt-1 block w-full rounded-xl border p-2 bg-white/80 border-gray-300 dark:bg-gray-800 dark:border-gray-600"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
 
-          {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
+          {error && <p className="text-red-500 text-sm font-medium text-center bg-red-100 p-2 rounded">{error}</p>}
 
           <button
             type="submit"
-            className="w-full bg-black text-white py-2 rounded-xl font-semibold hover:opacity-80 transition dark:bg-white dark:text-black"
+            className="w-full bg-black text-white py-3 rounded-xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all dark:bg-white dark:text-black shadow-lg"
           >
             {isRegistering ? "Start Adventure" : "Enter World"}
           </button>
@@ -144,9 +168,9 @@ export default function LoginPage() {
 
         <div className="mt-4 text-center text-sm">
           <button
-            type="button" // (Added type=button to prevent accidental form submit)
+            type="button" 
             onClick={() => setIsRegistering(!isRegistering)}
-            className="text-blue-600 dark:text-blue-400 underline"
+            className="text-blue-600 dark:text-blue-400 font-semibold hover:underline"
           >
             {isRegistering
               ? "Already have an account? Login"
