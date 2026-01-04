@@ -9,8 +9,15 @@ import {
 } from "firebase/firestore";
 import { Character, GameItem } from "@/types/game";
 import { useRouter } from "next/navigation";
+import { useAudio } from "@/context/AudioContext";
 
 export default function ShopPage() {
+  const { playTrack } = useAudio()!; 
+
+  useEffect(() => {
+    playTrack("/public/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); // 👈 Triggers the music
+  }, []);
+
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);

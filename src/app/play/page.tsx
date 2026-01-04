@@ -8,8 +8,15 @@ import { QuestionDoc, FoeDoc, EncounterDoc, Character, EquipmentSlot, GameItem, 
 import { useSearchParams, useRouter } from "next/navigation";
 import 'katex/dist/katex.min.css'; 
 import { InlineMath, BlockMath } from 'react-katex';
+import { useAudio } from "@/context/AudioContext";
 
 function PlayContent() {
+  const { playTrack } = useAudio()!; 
+
+  useEffect(() => {
+    playTrack("/public/the-tournament-280277.mp3");
+  }, []);
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const encounterId = searchParams.get("id");

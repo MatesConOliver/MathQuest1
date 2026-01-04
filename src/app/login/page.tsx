@@ -10,8 +10,14 @@ import {
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { Character } from "@/types/game";
+import { useAudio } from "@/context/AudioContext";
 
 export default function LoginPage() {
+  const { playTrack } = useAudio()!; 
+
+  useEffect(() => {
+    playTrack("/public/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); // 👈 Triggers the music
+  }, []);
   const router = useRouter();
   
   // State

@@ -5,9 +5,16 @@ import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc, updateDoc, collection, getDocs, increment } from "firebase/firestore";
 import { GameItem, InventoryItem, Character } from "@/types/game";
+import { useAudio } from "@/context/AudioContext";
 import Link from "next/link";
 
 export default function CharacterPage() {
+  const { playTrack } = useAudio()!; 
+
+  useEffect(() => {
+    playTrack("/public/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); // 👈 Triggers the music
+  }, []);
+
   const [user, setUser] = useState<User | null>(null);
   const [char, setChar] = useState<Character | null>(null);
   const [gameItems, setGameItems] = useState<Record<string, GameItem>>({});

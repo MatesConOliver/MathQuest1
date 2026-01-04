@@ -6,8 +6,15 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import Link from "next/link";
 import { GameLocation, EncounterDoc } from "@/types/game";
+import { useAudio } from "@/context/AudioContext";
 
 export default function MapPage() {
+  const { playTrack } = useAudio()!; 
+
+  useEffect(() => {
+    playTrack("/public/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3");
+  }, []);
+
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "katex/dist/katex.min.css";   // ⬅️ this is the important new line
+import "katex/dist/katex.min.css";
 import "./globals.css";
+import { AudioProvider } from "@/context/AudioContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +29,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <AudioProvider>
+          {children}
+        </AudioProvider>
       </body>
     </html>
   );
