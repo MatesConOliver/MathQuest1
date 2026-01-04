@@ -103,10 +103,10 @@ export default function LoginPage() {
         loop
         muted
         playsInline
-        poster="/login-background.png"
+        poster="/login.png"
         className="absolute top-0 left-0 w-full h-full object-cover -z-20"
       >
-        <source src="/login-background.mp4" type="video/mp4" />
+        <source src="/login.mp4" type="video/mp4" />
       </video>
 
       {/* 3. DARK OVERLAY */}
