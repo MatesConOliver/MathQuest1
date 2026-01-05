@@ -380,16 +380,14 @@ function ItemsPanel() {
   const [slot, setSlot] = useState<EquipmentSlot>("mainHand");
   const [imageUrl, setImageUrl] = useState("");
 
-  // Stats
   const [dmgFlat, setDmgFlat] = useState<number | "">("");
   const [dmgMult, setDmgMult] = useState<number | "">("");
-  const [defFlat, setDefFlat] = useState<number | "">("");
-  const [defMult, setDefMult] = useState<number | "">("");
   const [maxHpFlat, setMaxHpFlat] = useState<number | "">("");
   const [maxHpMult, setMaxHpMult] = useState<number | "">("");
+  const [timeFlat, setTimeFlat] = useState<number | "">("");
   const [timeFactor, setTimeFactor] = useState<number | "">("");
   const [healFlat, setHealFlat] = useState<number | "">("");
-  const [healPercent, setHealPercent] = useState<number | "">("");
+  // const [healPercent, setHealPercent] = useState<number | "">(""); // Unused in your snippet, but kept if you need it later
   const [maxDurability, setMaxDurability] = useState<number | "">("");
   
   useEffect(() => { loadItems(); }, []);
@@ -406,7 +404,7 @@ function ItemsPanel() {
   function resetForm() {
     setId(""); setName(""); setDesc(""); setPrice(10); setType("weapon"); setSlot("mainHand");
     setImageUrl(""); setMaxDurability("");
-    setDmgFlat(""); setDmgMult(""); setDefFlat(""); setDefMult(""); setMaxHpFlat(""); setMaxHpMult(""); setTimeFactor("");
+    setDmgFlat(""); setDmgMult(""); setMaxHpFlat(""); setMaxHpMult(""); setTimeFlat(""); setTimeFactor("");
     setMsg("");
   }
 
@@ -422,10 +420,9 @@ function ItemsPanel() {
 
     setDmgFlat(item.stats?.damage?.flat ?? "");
     setDmgMult(item.stats?.damage?.mult ?? "");
-    setDefFlat(item.stats?.defense?.flat ?? "");
-    setDefMult(item.stats?.defense?.mult ?? "");
     setMaxHpFlat(item.stats?.maxHp?.flat || "");
     setMaxHpMult(item.stats?.maxHp?.mult || "");
+    setTimeFlat(item.stats?.time?.flat || "");
     setTimeFactor(item.stats?.timeFactor ?? "");
     setMsg(`✏️ Editing: ${item.name}`);
   }
@@ -438,8 +435,8 @@ function ItemsPanel() {
         imageUrl: imageUrl || `https://placehold.co/100?text=${name.charAt(0)}`,
         stats: {
           ...((dmgFlat || dmgMult) && { damage: { ...(dmgFlat && { flat: Number(dmgFlat) }), ...(dmgMult && { mult: Number(dmgMult) }) } }),
-          ...((defFlat || defMult) && { defense: { ...(defFlat && { flat: Number(defFlat) }), ...(defMult && { mult: Number(defMult) }) } }),
           ...((maxHpFlat || maxHpMult) && { maxHp: { ...(maxHpFlat && { flat: Number(maxHpFlat) }), ...(maxHpMult && { mult: Number(maxHpMult) }) } }),
+          ...(timeFlat && { time: { flat: Number(timeFlat) } }),
           ...(timeFactor && { timeFactor: Number(timeFactor) })
         }
       };
@@ -508,6 +505,7 @@ function ItemsPanel() {
 
           <hr className="border-gray-200" />
 
+          {/* 👇 REARRANGED: Now 3 columns since Defense is gone */}
           <div className="grid grid-cols-3 gap-4">
             {/* DAMAGE BOX (RED) */}
             <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded border border-red-100 dark:border-red-900/50">
@@ -515,15 +513,6 @@ function ItemsPanel() {
               <div className="flex gap-2">
                 <input type="number" className="input text-xs dark:bg-gray-800 dark:border-red-900/50" placeholder="Flat" value={dmgFlat} onChange={(e: any) => setDmgFlat(e.target.value === "" ? "" : Number(e.target.value))} />
                 <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-red-900/50" placeholder="Mult" value={dmgMult} onChange={(e: any) => setDmgMult(e.target.value === "" ? "" : Number(e.target.value))} />
-              </div>
-            </div>
-
-            {/* DEFENSE BOX (BLUE) */}
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-900/50">
-              <div className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-2">Defense</div>
-              <div className="flex gap-2">
-                <input type="number" className="input text-xs dark:bg-gray-800 dark:border-blue-900/50" placeholder="Flat" value={defFlat} onChange={(e: any) => setDefFlat(e.target.value === "" ? "" : Number(e.target.value))} />
-                <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-blue-900/50" placeholder="Mult" value={defMult} onChange={(e: any) => setDefMult(e.target.value === "" ? "" : Number(e.target.value))} />
               </div>
             </div>
 
@@ -538,12 +527,29 @@ function ItemsPanel() {
 
             {/* TIME BOX (PURPLE) */}
             <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-100 dark:border-purple-900/50 col-span-3 md:col-span-1">
-              <div className="text-xs font-bold text-purple-800 dark:text-purple-300 uppercase mb-2">Time</div>
-              <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-purple-900/50" placeholder="Factor" value={timeFactor} onChange={(e: any) => setTimeFactor(e.target.value === "" ? "" : Number(e.target.value))} />
+              <div className="text-xs font-bold text-purple-800 dark:text-purple-300 uppercase mb-2">Time Bonus</div>
+              <div className="flex gap-2">
+                 {/* Flat Input */}
+                 <input 
+                   type="number" 
+                   className="input text-xs dark:bg-gray-800 dark:border-purple-900/50" 
+                   placeholder="Flat (+s)" 
+                   value={timeFlat} 
+                   onChange={(e: any) => setTimeFlat(e.target.value === "" ? "" : Number(e.target.value))} 
+                 />
+                 {/* Factor Input */}
+                 <input 
+                   type="number" 
+                   step="0.01" 
+                   className="input text-xs dark:bg-gray-800 dark:border-purple-900/50" 
+                   placeholder="Factor (x)" 
+                   value={timeFactor} 
+                   onChange={(e: any) => setTimeFactor(e.target.value === "" ? "" : Number(e.target.value))} 
+                 />
+              </div>
             </div>
           </div>
           
-          {/* 👇 UPDATED BUTTONS */}
           <div className="flex gap-2 mt-4">
               <button onClick={handleSave} className="btn-primary w-full py-3 bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 rounded-lg font-bold">
                   {isEditing ? "Update Item" : "Save Item"}
@@ -607,9 +613,8 @@ function FoesPanel() {
   const [emoji, setEmoji] = useState("👾");
   const [maxHp, setMaxHp] = useState<number | "">("");
   
-  // 🟢 NEW FIELDS
+  // 🟢 NEW FIELDS (Defense Removed)
   const [attack, setAttack] = useState<number | "">("");
-  const [defense, setDefense] = useState<number | "">("");
 
   useEffect(() => { loadFoes(); }, []);
 
@@ -622,7 +627,7 @@ function FoesPanel() {
 
   function resetForm() {
     setId(""); setName(""); setDesc(""); setEmoji("👾");
-    setMaxHp(""); setAttack(""); setDefense(""); 
+    setMaxHp(""); setAttack(""); 
     setMsg("");
   }
 
@@ -633,7 +638,6 @@ function FoesPanel() {
     setEmoji(f.emoji || "👾");
     setMaxHp(f.maxHp || "");
     setAttack(f.attackDamage ?? ""); 
-    setDefense(f.defense ?? "");
     setMsg(`✏️ Editing: ${f.name}`);
   }
 
@@ -647,7 +651,7 @@ function FoesPanel() {
       emoji,
       maxHp: Number(maxHp) || 20,
       attackDamage: Number(attack) || 5, 
-      defense: Number(defense) || 0,
+      // Defense removed from save data
     };
 
     try {
@@ -685,10 +689,9 @@ function FoesPanel() {
            <Input type="number" label="Max HP" value={maxHp} onChange={(e: any) => setMaxHp(Number(e.target.value))} />
         </div>
 
-        {/* 🟢 NEW STAT INPUTS */}
-        <div className="grid grid-cols-2 gap-4 bg-red-50 dark:bg-red-900/20 p-3 rounded-xl border border-red-100 dark:border-red-900/50">
+        {/* 🟢 NEW STAT INPUTS (Attack Only) */}
+        <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-xl border border-red-100 dark:border-red-900/50">
            <Input type="number" label="Attack Dmg" value={attack} onChange={(e: any) => setAttack(Number(e.target.value))} placeholder="5" />
-           <Input type="number" label="Defense" value={defense} onChange={(e: any) => setDefense(Number(e.target.value))} placeholder="0" />
         </div>
 
         <div className="flex gap-2 pt-2">
@@ -727,9 +730,9 @@ function FoesPanel() {
                     <div className="text-2xl">{f.emoji || "👾"}</div>
                     <div>
                         <div className="font-bold text-sm dark:text-gray-100">{f.name}</div>
-                        {/* 🟢 SHOW STATS IN LIST */}
+                        {/* 🟢 SHOW STATS IN LIST (Defense Removed) */}
                         <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                           ❤️{f.maxHp} ⚔️{f.attackDamage ?? "?"} 🛡️{f.defense ?? "?"}
+                           ❤️{f.maxHp} ⚔️{f.attackDamage ?? "?"}
                         </div>
                     </div>
                 </div>

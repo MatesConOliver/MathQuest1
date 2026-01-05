@@ -29,13 +29,19 @@ export interface GameItem {
   inShop?: boolean;
 }
 
-// An item inside the player's inventory
 export interface InventoryItem {
   itemId: string;
   obtainedAt: number;
   instanceId: string;
   durability?: number;    
   maxDurability?: number; 
+}
+
+export interface CharacterStats {
+  a: number; // Coefficient for x^3 (Unlocks Lvl 50)
+  b: number; // Coefficient for x^2 (Unlocks Lvl 20)
+  c: number; // Coefficient for x   (Linear)
+  d: number; // Constant term
 }
 
 export interface Character {
@@ -46,12 +52,12 @@ export interface Character {
   xp: number;
   gold: number;
   maxHp: number;
-  baseDamage: number;
-  baseDefense: number;
+  stats: CharacterStats; 
+  unspentPoints: number;
   inventory: InventoryItem[]; 
   equipment: {
     mainHand: string | null;
-    offHand: string | null; // 👈 ADDED THIS (Fixes your TS error)
+    offHand: string | null;
     armor: string | null;
     head: string | null;
   };
@@ -65,16 +71,9 @@ export interface Monster {
   description?: string; 
   emoji?: string;
   attackDamage?: number; 
-  defense?: number;     
   level?: number;
   maxHp: number;
-  hp: number;        // Current HP (Starting HP)
-  
-  //Legacy fields
-  imageUrl?: string;
-  damage?: number;
-  xpReward?: number;
-  goldReward?: number;
+  hp: number;     
 }
 
 export interface Question {
@@ -112,7 +111,6 @@ export type FoeDoc = {
   name: string;
   maxHp: number;
   attackDamage: number;
-  defense: number;
   imageUrl?: string;
 };
 

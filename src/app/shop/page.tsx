@@ -103,7 +103,7 @@ export default function ShopPage() {
 
   // 3. Secret Admin Function to Seed the Database
   const restockShop = async () => {
-    if(!confirm("This will overwrite/add default items to the database. Continue?")) return;
+    if(!confirm("This will overwrite/add default items. Continue?")) return;
     
     const initialItems: GameItem[] = [
       {
@@ -120,11 +120,12 @@ export default function ShopPage() {
       {
         id: 'armor-cloth',
         name: 'Apprentice Robe',
-        description: 'Offers minimal protection.',
+        description: 'Offers warmth and vitality.',
         type: 'armor',
         slot: 'armor',
         price: 30,
-        stats: { defense: { flat: 1 } },
+        // Changed Defense -> Max HP
+        stats: { maxHp: { flat: 10 } }, 
         maxDurability: 50,
         inShop: true
       },
@@ -140,11 +141,12 @@ export default function ShopPage() {
       {
         id: 'shield-calc',
         name: 'Calculator Shield',
-        description: 'Blocks attacks with logic.',
+        description: 'A heavy slate that adds life.',
         type: 'armor',
         slot: 'offHand',
         price: 100,
-        stats: { defense: { flat: 3 } },
+        // Changed Defense -> Max HP
+        stats: { maxHp: { flat: 25 } },
         maxDurability: 50,
         inShop: true
       }
@@ -240,14 +242,7 @@ export default function ShopPage() {
                         </div>
                     )}
 
-                    {/* DEFENSE */}
-                    {(item.stats?.defense?.flat || item.stats?.defense?.mult) && (
-                        <div className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 text-xs font-bold rounded flex items-center gap-1 border border-blue-100 dark:border-blue-900/30">
-                            <span>🛡️</span>
-                            {item.stats.defense.flat ? `+${item.stats.defense.flat}` : ''}
-                            {item.stats.defense.mult ? `x${item.stats.defense.mult}` : ''} Def
-                        </div>
-                    )}
+                    {/* Defense Removed Here */}
 
                     {/* HEAL */}
                     {item.stats?.heal?.flat && (
@@ -256,12 +251,21 @@ export default function ShopPage() {
                         </div>
                     )}
 
-                    {/* TIME */}
-                    {item.stats?.timeFactor && (
+                    {/* MAX HP (New for Armor) */}
+                    {(item.stats?.maxHp?.flat || item.stats?.maxHp?.mult) && (
+                        <div className="px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 text-xs font-bold rounded flex items-center gap-1 border border-green-100 dark:border-green-900/30">
+                            <span>💚</span> 
+                            {item.stats.maxHp.flat ? `+${item.stats.maxHp.flat}` : ''}
+                            {item.stats.maxHp.mult ? `x${item.stats.maxHp.mult}` : ''} MaxHP
+                        </div>
+                    )}
+
+                    {/* TIME (Updated for Flat + Factor) */}
+                    {(item.stats?.time?.flat || item.stats?.timeFactor) && (
                         <div className="px-2 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-200 text-xs font-bold rounded flex items-center gap-1 border border-purple-100 dark:border-purple-900/30">
                            <span>⏳</span> 
-                           {item.stats.timeFactor > 1 ? "+" : ""}
-                           {Math.round((item.stats.timeFactor - 1) * 100)}% Time
+                           {item.stats.time?.flat ? `+${item.stats.time.flat}s ` : ""}
+                           {item.stats.timeFactor ? `${Math.round((item.stats.timeFactor - 1) * 100)}%` : ""}
                         </div>
                     )}
 

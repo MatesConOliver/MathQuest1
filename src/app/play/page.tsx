@@ -366,15 +366,15 @@ function PlayContent() {
     const isCorrect = choiceIndex === currentQ.correctIndex;
 
     if (isCorrect) {
-      // 1. Damage Logic
-      const rawDamage = calculatePlayerDamage(); 
-      const foeDefense = foe.defense || 0; 
-      const finalDamage = Math.max(0, rawDamage - foeDefense);
+      // 1. Damage Logic (Formula based on Time Limit)
+      // We pass the timeLimit to calculate 'x' (Difficulty)
+      // 👇 CHANGED: No subtraction of foe.defense. Damage is pure.
+      const finalDamage = calculatePlayerDamage(currentQ.timeLimit || 30); 
 
       const newFoeHp = foeHp - finalDamage;
       setFoeHp(newFoeHp);
 
-      // 2. Degrade Weapon (AWAIT THIS)
+      // 2. Degrade Weapon
       const { broken, newInv } = await degradation("mainHand", 1); 
 
       // 3. Message
@@ -385,7 +385,7 @@ function PlayContent() {
       }
 
       if (newFoeHp <= 0) {
-          // Pasa el inventario nuevo a handleWin para que no se pierda el daño
+          // Pass new inventory to win handler
           handleWin(newInv);
       } else {
           nextQuestion();
@@ -482,38 +482,38 @@ function PlayContent() {
     const xpReward = activeEncounter.winRewardXp || 0;
     const goldReward = activeEncounter.winRewardGold || 0;
     
-    // Usamos el inventario más reciente (el que nos pasan o el del estado)
     const baseInv = currentInventoryOverride || character.inventory || [];
 
-    // Logica de Nivel (Sin cambios)
+    // --- LEVEL UP LOGIC ---
     let currentXp = character.xp + xpReward;
     let currentLevel = character.level;
     let currentMaxHp = character.maxHp;
-    let currentBaseDmg = character.baseDamage || 0;
-    let currentBaseDef = character.baseDefense || 0;
     
     let leveledUp = false;
     let oldLevel = character.level;
     let hpGainedTotal = 0;
-    let atkGainedTotal = 0;
-    let defGainedTotal = 0;
+    let pointsGainedTotal = 0; // 👇 NEW: Track points
 
     while (currentLevel < 100) {
+        // Example Curve: XP needed grows by 10% per level
         const xpNeeded = Math.floor(100 * Math.pow(1.1, currentLevel - 1));
+        
         if (currentXp >= xpNeeded) {
             currentXp -= xpNeeded;
             currentLevel++;
             leveledUp = true;
+            
             const isMilestone = currentLevel % 10 === 0;
             const tier = Math.floor(currentLevel / 10) + 1;
             const statBoost = isMilestone ? tier : 1;
-            currentMaxHp += 5*statBoost;
-            setPlayerHp(prev => prev + (5 * statBoost));
-            currentBaseDmg += statBoost;
-            currentBaseDef += isMilestone ? tier : 0;
-            hpGainedTotal += 5*statBoost;
-            atkGainedTotal += statBoost;
-            defGainedTotal += isMilestone ? tier : 0;
+            
+            // Keep HP scaling
+            currentMaxHp += 5 * statBoost;
+            hpGainedTotal += 5 * statBoost;
+            
+            // 👇 NEW: Gain 1 Point per level
+            pointsGainedTotal += 1; 
+
         } else {
             break;
         }
@@ -535,8 +535,6 @@ function PlayContent() {
 
     // --- SAVE TO DB ---
     const charRef = doc(db, "characters", user.uid);
-    
-    // Combina el inventario base (dañado) con el botín nuevo
     const finalInventory = [...baseInv, ...newItems];
 
     const updatePayload: any = {
@@ -544,17 +542,19 @@ function PlayContent() {
       xp: currentXp,
       level: currentLevel,
       maxHp: currentMaxHp,
-      baseDamage: currentBaseDmg,
-      baseDefense: currentBaseDef, 
       gold: increment(goldReward),
-      inventory: finalInventory // Siempre guardamos el inventario final
+      inventory: finalInventory,
+      unspentPoints: increment(pointsGainedTotal) // 👇 NEW: Add points to DB
     };
 
     await updateDoc(charRef, updatePayload);
     
     // Update Local State
     setCharacter(prev => prev ? ({ 
-        ...prev, ...updatePayload
+        ...prev, 
+        ...updatePayload,
+        // Manually update points locally
+        unspentPoints: (prev.unspentPoints || 0) + pointsGainedTotal 
     }) : null);
 
     if (leveledUp) {
@@ -562,8 +562,7 @@ function PlayContent() {
             oldLvl: oldLevel, 
             newLvl: currentLevel, 
             hpGain: hpGainedTotal,
-            atkGain: atkGainedTotal,
-            defGain: defGainedTotal
+            pointsGain: pointsGainedTotal 
         } as any);
     }
   };
@@ -577,66 +576,49 @@ function PlayContent() {
     return item?.stats?.timeFactor || 1;
   };
 
-  const calculatePlayerDamage = () => {
-    // 1. BASE STATS (From Character Sheet)
-    const charBase = character?.baseDamage ?? 1;
-    
-    // Default to base if no gear
-    if (!character?.equipment) return charBase;
+  const calculatePlayerDamage = (timeLimitInSeconds: number) => {
+    // 1. Calculate Difficulty 'x' (Minutes rounded up)
+    const x = Math.ceil((timeLimitInSeconds || 30) / 60);
 
-    let totalFlat = 0;
-    let totalMult = 1;
+    // 2. Get Coefficients (Default to 0 if missing)
+    const { a = 0, b = 0, c = 0, d = 0 } = character?.stats || {};
 
-    // 2. EQUIPMENT LOOP
-    Object.values(character.equipment).forEach(itemId => {
-      if (!itemId) return;
-      // Find item in inventory to check durability
-      const invItem = character?.inventory.find(i => i.itemId === itemId);
-      
-      // If broken, ignore it
-      if (invItem && invItem.durability !== undefined && invItem.durability <= 0) return;
+    // 3. THE FORMULA: (a/400)x^3 + (b/40)x^2 + (1 + c/10)x + d/2
+    const termA = (a / 400) * Math.pow(x, 3);
+    const termB = (b / 40) * Math.pow(x, 2);
+    const termC = (1 + (c / 10)) * x;
+    const termD = d / 2;
 
-      const item = gameItems[itemId];
-      // Add up Damage Stats
-      if (item?.stats?.damage) {
-        if (item.stats.damage.flat) totalFlat += item.stats.damage.flat;
-        if (item.stats.damage.mult) totalMult *= item.stats.damage.mult;
-      }
-    });
+    const baseFormulaDamage = termA + termB + termC + termD;
 
-    // Formula: (Base + ItemDamage) * Multipliers
-    return Math.ceil((charBase + totalFlat) * totalMult);
-  };
+    // 4. Equipment Bonus (Damage only)
+    let itemFlat = 0;
+    let itemMult = 1;
 
-  const calculateIncomingDamage = (rawFoeDamage: number) => {
-    // 1. BASE DEFENSE
-    const charBaseDef = character?.baseDefense ?? 0;
-    
-    let totalFlatDef = 0;
-    let totalMultDef = 1;
-
-    // 2. EQUIPMENT LOOP
     if (character?.equipment) {
       Object.values(character.equipment).forEach(itemId => {
         if (!itemId) return;
         const invItem = character?.inventory.find(i => i.itemId === itemId);
-        
-        // If broken, ignore it
+        // Ignore broken items
         if (invItem && invItem.durability !== undefined && invItem.durability <= 0) return;
 
         const item = gameItems[itemId];
-        if (item?.stats?.defense) {
-          if (item.stats.defense.flat) totalFlatDef += item.stats.defense.flat;
-          if (item.stats.defense.mult) totalMultDef *= item.stats.defense.mult;
+        if (item?.stats?.damage) {
+           if (item.stats.damage.flat) itemFlat += item.stats.damage.flat;
+           if (item.stats.damage.mult) itemMult *= item.stats.damage.mult;
         }
       });
     }
 
-    // 3. CALCULATE TOTAL DEFENSE
-    const totalPlayerDefense = Math.floor((charBaseDef + totalFlatDef) * totalMultDef);
+    // Final: (Formula + ItemFlat) * ItemMult
+    return Math.ceil((baseFormulaDamage + itemFlat) * itemMult);
+  };
 
-    // 4. FINAL DAMAGE (Attack - Defense), minimum 1
-    return Math.max(1, rawFoeDamage - totalPlayerDefense);
+  const calculateIncomingDamage = (rawFoeDamage: number) => {
+    // 👇 CHANGED: DEFENSE IS SCRAPPED.
+    // We strictly return the incoming damage. 
+    // Even if legacy items have 'defense' stats, they are ignored here.
+    return Math.max(1, rawFoeDamage);
   };
 
   const degradation = async (slot: EquipmentSlot, amount: number) => {
@@ -761,23 +743,14 @@ function PlayContent() {
                   <span className="font-black text-green-600 dark:text-green-400 text-xl">+{hpGain} 💚</span>
                 </div>
 
-                {/* ATTACK */}
-                <div className="flex justify-between items-center px-4">
-                  <span className="font-bold text-gray-600 dark:text-gray-400">Base Attack</span>
-                  <span className="font-black text-red-600 dark:text-red-400 text-xl">+{atkGain} ⚔️</span>
+                {/* UPGRADE POINTS (NEW) */}
+                <div className="flex justify-between items-center px-4 bg-yellow-100 dark:bg-yellow-800/30 rounded-lg py-2">
+                  <span className="font-bold text-gray-700 dark:text-gray-300">Upgrade Points</span>
+                  <span className="font-black text-yellow-700 dark:text-yellow-400 text-xl">+{data.pointsGain} 🆙</span>
                 </div>
-
-                {/* DEFENSE */}
-                {defGain > 0 ? (
-                  <div className="flex justify-between items-center px-4">
-                    <span className="font-bold text-gray-600 dark:text-gray-400">Base Defense</span>
-                    <span className="font-black text-blue-600 dark:text-blue-400 text-xl">+{defGain} 🛡️</span>
-                  </div>
-                ) : (
-                  <div className="text-[10px] text-gray-400 italic">
-                    (Extra rewards on Milestone levels)
-                  </div>
-                )}
+                <div className="text-[10px] text-center text-gray-400 italic">
+                    Visit Character Page to spend points!
+                </div>
             </div>
           )}
           
@@ -942,13 +915,12 @@ function PlayContent() {
 
             {/* Quick Stats Row (Grid) */}
             <div className="grid grid-cols-2 gap-4">
-                {/* 1. FOE STATS */}
+                {/* 1. FOE STATS - 👇 DEFENSE REMOVED HERE */}
                 <div className="bg-slate-50 dark:bg-gray-700/50 p-3 rounded-xl border border-slate-100 dark:border-gray-600 flex flex-col items-center justify-center text-center">
                     <span className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">Enemy Stats</span>
                     <div className="text-sm font-bold text-slate-700 dark:text-gray-200 flex flex-wrap justify-center gap-x-2">
                        <span className="text-green-600 dark:text-green-400">❤ {foe?.maxHp || 50}</span>
                        <span className="text-red-600 dark:text-red-400">⚔️ {foe?.attackDamage || 5}</span>
-                       <span className="text-blue-600 dark:text-blue-400">🛡️ {foe?.defense || 0}</span>
                     </div>
                 </div>
 

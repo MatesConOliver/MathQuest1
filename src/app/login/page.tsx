@@ -67,8 +67,13 @@ export default function LoginPage() {
           xp: 0,
           gold: 0,
           maxHp: 15,
-          baseDamage: 1,  
-          baseDefense: 0,
+          stats: {
+            a: 0, 
+            b: 0, 
+            c: 0, 
+            d: 0  
+          },
+          unspentPoints: 0,
           inventory: [],
           equipment: { mainHand: null, offHand: null, armor: null, head: null },
           createdAt: serverTimestamp(),

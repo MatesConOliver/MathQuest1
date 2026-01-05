@@ -194,34 +194,74 @@ export default function CharacterPage() {
     alert(`This is a ${def.name}. It can't be used, but maybe it's worth some gold?`);
   };
 
+  // 📈 STAT UPGRADE LOGIC
+  const upgradeStat = async (key: 'a' | 'b' | 'c' | 'd') => {
+    if (!char || !user) return;
+    
+    // 1. Check Points
+    const points = char.unspentPoints || 0;
+    if (points <= 0) {
+        alert("You have no Upgrade Points! Level up to earn more.");
+        return;
+    }
+
+    // 2. Check Level Locks
+    if (key === 'a' && char.level < 50) { alert("Stat 'A' unlocks at Level 50!"); return; }
+    if (key === 'b' && char.level < 20) { alert("Stat 'B' unlocks at Level 20!"); return; }
+
+    // 3. Optimistic Update
+    const currentVal = char.stats?.[key] || 0;
+    const newStats = { ...(char.stats || {}), [key]: currentVal + 1 };
+    
+    setChar({ 
+        ...char, 
+        stats: newStats as any, 
+        unspentPoints: points - 1 
+    });
+
+    // 4. Save to DB
+    try {
+        await updateDoc(doc(db, "characters", user.uid), {
+            [`stats.${key}`]: increment(1),
+            unspentPoints: increment(-1)
+        });
+        playSfx("/upgrade-sfx.mp3"); // Optional sound
+        setMsg(`Upgraded Stat ${key.toUpperCase()}!`);
+    } catch (e) {
+        console.error(e);
+        setMsg("Error saving stats.");
+    }
+  };
+
   // --- RENDERING ---
 
   if (loading) return <div className="p-10 text-center">Loading Character...</div>;
   if (!char) return <div className="p-10 text-center">No character found. <Link href="/create" className="underline">Create one?</Link></div>;
 
-  const getStat = (type: 'damage' | 'defense') => {
-    let total = type === 'damage' ? (char.baseDamage || 0) : (char.baseDefense || 0);
+  const getStat = (type: 'damage' | 'maxHp' | 'time') => {
+    let total = 0; 
 
+    // Loop through all equipped slots
     Object.values(char.equipment).forEach(equippedInstanceId => {
         if (!equippedInstanceId) return;
 
-        // 1. Find the specific item instance in inventory using unique ID
+        // 1. Find item in inventory
         const instance = char.inventory.find(i => i.instanceId === equippedInstanceId);
-        if (!instance) return; // Item equipped but not found in bag? Skip.
+        if (!instance) return;
 
-        // 2. Get Definition
+        // 2. Get Item Definition
         const def = gameItems[instance.itemId];
         if (!def) return;
         
-        // 3. Check Broken
+        // 3. Check if Broken
         const isBroken = (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
 
-        // 4. Add Stats
-        // We use (def.stats as any) to prevent the red squiggles you saw earlier
+        // 4. Add Stats if not broken
         if (!isBroken && (def.stats as any)?.[type]?.flat) {
             total += (def.stats as any)[type]!.flat!;
         }
     });
+    
     return total;
   };
 
@@ -246,20 +286,64 @@ export default function CharacterPage() {
         {/* LEFT COL: STATS & GEAR */}
         <div className="space-y-6">
           <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border space-y-4">
-            <h2 className="text-xl font-bold">Stats</h2>
-            <div className="grid grid-cols-2 gap-4">
-               <StatBox 
-                 label="Health" 
-                 value={`${(char as any).hp ?? char.maxHp} / ${char.maxHp}`} 
-                 icon="❤️" 
+            <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold">Character Stats</h2>
+                <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 dark:border-yellow-700">
+                    POINTS AVAILABLE: {char.unspentPoints || 0}
+                </div>
+            </div>
+
+            {/* STATS GRID */}
+            <div className="grid grid-cols-2 gap-3">
+               {/* STAT A (Cubic) - Unlocks Lvl 50 */}
+               <StatUpgradeBox 
+                  label="Stat A (Cubic)" 
+                  desc="High scaling (x³)"
+                  value={char.stats?.a || 0} 
+                  locked={char.level < 50}
+                  canUpgrade={(char.unspentPoints || 0) > 0}
+                  onUpgrade={() => upgradeStat('a')}
+                  color="text-red-600"
                />
-               <StatBox 
-                 label="XP Progress" 
-                 value={`${char.xp} / ${Math.floor(100 * Math.pow(1.1, (char.level || 1) - 1))}`} 
-                 icon="✨" 
+
+               {/* STAT B (Quadratic) - Unlocks Lvl 20 */}
+               <StatUpgradeBox 
+                  label="Stat B (Quad)" 
+                  desc="Mid scaling (x²)"
+                  value={char.stats?.b || 0} 
+                  locked={char.level < 20}
+                  canUpgrade={(char.unspentPoints || 0) > 0}
+                  onUpgrade={() => upgradeStat('b')}
+                  color="text-orange-600"
                />
-               <StatBox label="Attack" value={getStat('damage')} icon="⚔️" />
-               <StatBox label="Defense" value={getStat('defense')} icon="🛡️" />
+
+               {/* STAT C (Linear) */}
+               <StatUpgradeBox 
+                  label="Stat C (Linear)" 
+                  desc="Consistent dmg (x)"
+                  value={char.stats?.c || 0} 
+                  locked={false}
+                  canUpgrade={(char.unspentPoints || 0) > 0}
+                  onUpgrade={() => upgradeStat('c')}
+                  color="text-blue-600"
+               />
+
+               {/* STAT D (Flat) */}
+               <StatUpgradeBox 
+                  label="Stat D (Base)" 
+                  desc="Flat bonus"
+                  value={char.stats?.d || 0} 
+                  locked={false}
+                  canUpgrade={(char.unspentPoints || 0) > 0}
+                  onUpgrade={() => upgradeStat('d')}
+                  color="text-green-600"
+               />
+            </div>
+            
+            {/* ITEM BONUS ROW */}
+            <div className="pt-2 border-t dark:border-gray-700 flex justify-between text-xs text-gray-500">
+                <span>Gear Bonus: +{getStat('damage')} Flat Dmg</span>
+                <span className="italic">Def: Scrapped</span>
             </div>
           </section>
 
@@ -406,6 +490,43 @@ function StatBox({ label, value, icon }: { label: string, value: string | number
         <div className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-bold">{label}</div>
         <div className="text-lg font-bold dark:text-gray-100">{value}</div>
       </div>
+    </div>
+  );
+}
+
+function StatUpgradeBox({ label, desc, value, locked, canUpgrade, onUpgrade, color }: any) {
+  return (
+    <div className={`relative p-3 border rounded-xl flex flex-col justify-between transition-colors ${locked ? "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:border-gray-700" : "bg-gray-50 dark:bg-gray-700/50 dark:border-gray-600"}`}>
+      
+      {/* HEADER */}
+      <div className="flex justify-between items-start mb-2">
+         <div>
+            <div className="text-[10px] uppercase font-bold tracking-wider">{label}</div>
+            {!locked && <div className="text-[9px] opacity-70 italic">{desc}</div>}
+         </div>
+         <div className={`text-xl font-black ${locked ? "text-gray-300" : color}`}>
+            {value}
+         </div>
+      </div>
+
+      {/* ACTION */}
+      {locked ? (
+         <div className="text-[10px] font-bold text-center bg-gray-200 dark:bg-gray-700 rounded py-1 flex items-center justify-center gap-1">
+            🔒 LOCKED
+         </div>
+      ) : (
+         <button 
+           onClick={onUpgrade}
+           disabled={!canUpgrade}
+           className={`text-[10px] font-bold py-1.5 rounded-lg transition-all flex items-center justify-center gap-1
+             ${canUpgrade 
+               ? "bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 shadow-sm" 
+               : "bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-600 dark:text-gray-500"}
+           `}
+         >
+           {canUpgrade ? "UPGRADE (+1)" : "MAXED"} 
+         </button>
+      )}
     </div>
   );
 }
