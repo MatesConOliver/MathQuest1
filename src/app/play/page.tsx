@@ -1186,7 +1186,7 @@ function PlayContent() {
                 key={idx} 
                 disabled={isPaused} 
                 onClick={() => handleAnswer(idx)} 
-                className={`p-4 border-2 rounded-2xl text-base md:text-lg font-bold transition-all duration-200 group relative
+                className={`p-4 pr-10 border-2 rounded-2xl text-base md:text-lg font-bold transition-all duration-200 group relative
                   ${highlightClass}
                   ${!isPaused && "hover:border-black dark:hover:border-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black active:scale-[0.98]"}
                 `}
@@ -1198,12 +1198,12 @@ function PlayContent() {
                 {/* Visual Feedback Icons - Dark Mode optimized colors */}
                 {isPaused && isCorrectChoice && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 scale-125">
-                    check_circle
+                    ✅
                   </span>
                 )}
                 {isPaused && isSelected && !isCorrectChoice && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-600 dark:text-red-400 scale-125">
-                    cancel
+                    ❌
                   </span>
                 )}
               </button>
