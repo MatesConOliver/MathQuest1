@@ -12,16 +12,7 @@ export const seedInitialItems = async () => {
       type: 'weapon',
       slot: 'mainHand',
       price: 50,
-      stats: { damage: { flat: 2 } }
-    },
-    {
-      id: 'armor-cloth',
-      name: 'Túnica de Aprendiz',
-      description: 'Ofrece una protección mínima.',
-      type: 'armor',
-      slot: 'armor',
-      price: 30,
-      stats: { defense: { flat: 1 } }
+      stats: { d: 2 }
     },
     {
       id: 'potion-small',
@@ -31,15 +22,6 @@ export const seedInitialItems = async () => {
       price: 15,
       stats: { heal: { flat: 10 } }
     },
-    {
-      id: 'calculator-shield',
-      name: 'Escudo Calculadora',
-      description: 'Bloquea ataques con el poder de las matemáticas.',
-      type: 'armor',
-      slot: 'offHand', // Escudo en mano secundaria
-      price: 100,
-      stats: { defense: { flat: 3 } }
-    }
   ];
 
   try {
