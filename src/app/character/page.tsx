@@ -612,11 +612,6 @@ export default function CharacterPage() {
         <div>
           <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white">{char.name}</h1>
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Level {char.level} • {char.className || char.className}</div>
-          
-          {/* HEALTH BAR ADDED HERE */}
-          <div className="w-48">
-             <HealthBar current={char.hp ?? char.maxHp} max={char.maxHp} />
-          </div>
         </div>
 
         <div className="text-right">
@@ -651,84 +646,134 @@ export default function CharacterPage() {
                 </div>
             </div>
 
-            {/* DAMAGE FORMULA / PREVIEW BOX */}
-            <div className="p-4 bg-gray-900 dark:bg-black text-gray-100 rounded-xl space-y-3 border border-transparent dark:border-gray-800 shadow-inner">
-               <div className="text-center text-xs text-gray-400 mb-1 font-mono uppercase tracking-widest">Damage Formula</div>
-               
-               {/* Math Formula */}
-               <div className="text-[10px] md:text-xs overflow-x-auto text-center text-purple-300 py-2">
-                  <BlockMath math="y = k \cdot [ \frac{a}{400}x^3 + \frac{b}{40}x^2 + (1 + \frac{c}{10})x + \frac{d}{2} ]" />
-               </div>
-               
-               {/* Slider and Results */}
-               <div className="border-t border-gray-700 dark:border-gray-800 pt-3 mt-3">
-                  <div className="flex justify-between text-xs font-bold text-gray-400 mb-2">
-                     <span>DIFFICULTY: <span className="text-white">{previewX} min</span></span>
-                     <span>DAMAGE: <span className="text-purple-300 text-lg ml-2">{derivedStats.currentPower.toFixed(2)}</span></span>
-                  </div>
-                  
-                  <input 
-                    type="range" min="1" max="15" step="1" 
-                    value={previewX} 
-                    onChange={(e) => setPreviewX(parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500 dark:accent-purple-400"
-                  />
-                  
-                  <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-600 mt-1 font-mono">
-                     <span>x=1 (Easy)</span>
-                     <span>x=15 (Hard)</span>
-                  </div>
-               </div>
-            </div>
-
             {/* STAT BOXES GRID */}
             <div className="grid grid-cols-2 gap-3">
-               <StatUpgradeBox 
-                  label="Mastery (a)" 
-                  flavor="Massively boosts damage on the hardest challenges."
-                  value={derivedStats.a} 
-                  pending={pendingUpgrades.a}
-                  locked={char.level < 50} 
-                  unlockLevel={50}
-                  canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
-                  onIncrement={() => handlePendingChange('a', 1)}
-                  onDecrement={() => handlePendingChange('a', -1)}
-                  color="text-red-600 dark:text-red-400"
-               />
-               <StatUpgradeBox 
-                  label="Insight (b)" 
-                  flavor="Greatly increases damage on difficult questions."
-                  value={derivedStats.b}
-                  pending={pendingUpgrades.b}
-                  locked={char.level < 20} 
-                  unlockLevel={20}
-                  canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
-                  onIncrement={() => handlePendingChange('b', 1)}
-                  onDecrement={() => handlePendingChange('b', -1)}
-                  color="text-orange-600 dark:text-orange-400"
-               />
-               <StatUpgradeBox 
-                  label="Understanding (c)" 
-                  flavor="Improves your damage consistently on all questions."
-                  value={derivedStats.c} 
-                  pending={pendingUpgrades.c}
-                  locked={false}
-                  canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
-                  onIncrement={() => handlePendingChange('c', 1)}
-                  onDecrement={() => handlePendingChange('c', -1)}
-                  color="text-blue-600 dark:text-blue-400"
-               />
-               <StatUpgradeBox 
-                  label="Focus (d)" 
-                  flavor="Increases the minimum damage you deal, especially on easy questions."
-                  value={derivedStats.d} 
-                  pending={pendingUpgrades.d}
-                  locked={false}
-                  canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
-                  onIncrement={() => handlePendingChange('d', 1)}
-                  onDecrement={() => handlePendingChange('d', -1)}
-                  color="text-green-600 dark:text-green-400"
-               />
+              {/* 1. HEALTH BOX */}
+              {(() => {
+                  const currentHp = char.hp ?? char.maxHp;
+                  const maxHp = char.maxHp;
+                  const hpPct = (currentHp / maxHp) * 100;
+                  // Color Logic: Green > Orange > Red
+                  const heartColor = hpPct < 15 ? "text-red-600 animate-pulse" : hpPct < 50 ? "text-orange-500" : "text-green-500";
+                  
+                  return (
+                      <div className="p-3 border rounded-xl flex flex-col justify-between h-28 bg-white dark:bg-gray-700/30 border-gray-200 dark:border-gray-600">
+                          <span className="text-[10px] font-black uppercase tracking-tighter text-gray-500 dark:text-gray-400">Health</span>
+                          <div className="flex items-center gap-2">
+                              <span className="text-xl font-black text-gray-800 dark:text-white">{currentHp}/{maxHp}</span>
+                          </div>
+                          {/* Heart Icon */}
+                          <div className={`mt-auto text-right ${heartColor}`}>
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 ml-auto">
+                                  <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z" />
+                              </svg>
+                          </div>
+                      </div>
+                  );
+              })()}
+
+              {/* 2. MULTIPLIER (K) BOX */}
+              <div className="p-3 border rounded-xl flex flex-col justify-between h-28 bg-white dark:bg-gray-700/30 border-gray-200 dark:border-gray-600">
+                  <span className="text-[10px] font-black uppercase tracking-tighter text-gray-500 dark:text-gray-400">Multiplier (k)</span>
+                  <span className="text-xl font-black text-purple-600 dark:text-purple-400">
+                      x{derivedStats.k.toFixed(2)}
+                  </span>
+                  <div className="mt-auto text-[9px] font-bold text-gray-400 text-right">
+                      GEAR BONUS
+                  </div>
+              </div>
+              <StatUpgradeBox 
+                label="Mastery (a)" 
+                flavor="Massively boosts damage on the hardest challenges."
+                value={derivedStats.a} 
+                pending={pendingUpgrades.a}
+                locked={char.level < 50} 
+                unlockLevel={50}
+                canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
+                onIncrement={() => handlePendingChange('a', 1)}
+                onDecrement={() => handlePendingChange('a', -1)}
+                color="text-red-600 dark:text-red-400"
+              />
+              <StatUpgradeBox 
+                label="Insight (b)" 
+                flavor="Greatly increases damage on difficult questions."
+                value={derivedStats.b}
+                pending={pendingUpgrades.b}
+                locked={char.level < 20} 
+                unlockLevel={20}
+                canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
+                onIncrement={() => handlePendingChange('b', 1)}
+                onDecrement={() => handlePendingChange('b', -1)}
+                color="text-orange-600 dark:text-orange-400"
+              />
+              <StatUpgradeBox 
+                label="Understanding (c)" 
+                flavor="Improves your damage consistently on all questions."
+                value={derivedStats.c} 
+                pending={pendingUpgrades.c}
+                locked={false}
+                canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
+                onIncrement={() => handlePendingChange('c', 1)}
+                onDecrement={() => handlePendingChange('c', -1)}
+                color="text-blue-600 dark:text-blue-400"
+              />
+              <StatUpgradeBox 
+                label="Focus (d)" 
+                flavor="Increases the minimum damage you deal, especially on easy questions."
+                value={derivedStats.d} 
+                pending={pendingUpgrades.d}
+                locked={false}
+                canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
+                onIncrement={() => handlePendingChange('d', 1)}
+                onDecrement={() => handlePendingChange('d', -1)}
+                color="text-green-600 dark:text-green-400"
+              />
+            </div>
+            
+            {/* DAMAGE FORMULA TOGGLE & PREVIEW */}
+            <div className="space-y-2">
+              <button 
+                onClick={() => setShowFormula(!showFormula)}
+                className="w-full py-3 px-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl text-purple-700 dark:text-purple-300 text-xs font-bold flex justify-between items-center hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors shadow-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <span>{showFormula ? "▼ HIDE" : "▶ VIEW"} DAMAGE FUNCTION</span>
+                </div>
+                <span className="font-mono text-sm bg-white dark:bg-black/50 px-2 py-1 rounded border border-purple-100 dark:border-purple-800">
+                  {derivedStats.currentPower.toFixed(2)} Dmg
+                </span>
+              </button>
+
+              {showFormula && (
+                <div className="p-4 bg-gray-900 dark:bg-black text-gray-100 rounded-xl space-y-3 border border-transparent dark:border-gray-800 shadow-inner animate-in slide-in-from-top-2 fade-in duration-300">
+                  <div className="text-center text-xs text-gray-400 mb-1 font-mono uppercase tracking-widest">Damage Formula</div>
+                  
+                  {/* Math Formula */}
+                  <div className="text-[10px] md:text-xs overflow-x-auto text-center text-purple-300 py-2">
+                      <BlockMath math="y = k \cdot [ \frac{a}{400}x^3 + \frac{b}{40}x^2 + (1 + \frac{c}{10})x + \frac{d}{2} ]" />
+                  </div>
+                  
+                  {/* Slider and Results */}
+                  <div className="border-t border-gray-700 dark:border-gray-800 pt-3 mt-3">
+                      <div className="flex justify-between text-xs font-bold text-gray-400 mb-2">
+                        <span>DIFFICULTY (x): <span className="text-purple-300 text-lg ml-2">{previewX} min</span></span>
+                        <span>DAMAGE: <span className="text-white text-lg ml-2">{derivedStats.currentPower.toFixed(2)}</span></span>
+                      </div>
+                      
+                      <input 
+                        type="range" min="1" max="15" step="1" 
+                        value={previewX} 
+                        onChange={(e) => setPreviewX(parseInt(e.target.value))}
+                        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500 dark:accent-purple-400"
+                      />
+                      
+                      <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-600 mt-1 font-mono">
+                        <span>x=1 (Trivial)</span>
+                        <span>x=15 (VERY Hard)</span>
+                      </div>
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="pt-2 border-t border-gray-100 dark:border-gray-700 text-center text-xs text-gray-400 italic">
