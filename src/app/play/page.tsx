@@ -210,8 +210,14 @@ function PlayContent() {
 
   // --- 💀 HANDLE TIME UP ---
   const handleTimeout = () => {
+    // Fix: Stop the timer engine immediately so it doesn't tick to -1 or flicker
+    if (timerRef.current) {
+        clearInterval(timerRef.current);
+    }
+
     setIsPaused(true);       // 1. Pause the game
     setShowInventory(false); // 2. Close the backpack if open
+    setSelectedChoice(-1); // Recommended: Ensures button UI knows no choice was made
 
     // 3. Calculate Damage (Use '??' to prevent crashes on old foes)
     const rawDamage = foe?.attackDamage ?? 5; 
