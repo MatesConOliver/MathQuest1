@@ -87,44 +87,91 @@ const InventoryItemCard = ({
         }`}></div>
       </div>
 
-      {/* ... Rest of card content ... */}
+      {/* CARD CONTENT */}
+      <div className="flex justify-between items-start">
+          <div>
+              <div className="font-bold text-sm text-gray-900 dark:text-gray-100">
+                  {def.name} 
+                  {isEquipped && <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1 rounded ml-1 border border-green-200 dark:border-green-800">EQUIPPED</span>}
+                  {isBroken && <span className="text-[10px] bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-1 rounded ml-1 font-bold border border-red-200 dark:border-red-800">BROKEN</span>}
+              </div>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
+                {def.slot || (def.type as string)}
+              </div>
+                
+                {item.maxDurability && (
+                  <div className="mt-2">
+                    <div className="flex justify-between items-center w-24 mb-0.5">
+                      <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500">DURABILITY</span>
+                      <span className={`text-[9px] font-bold ${isBroken ? "text-red-500" : "text-gray-600 dark:text-gray-300"}`}>
+                        {item.durability}/{item.maxDurability}
+                      </span>
+                    </div>
+                    <div className="w-24 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div 
+                        className={isBroken ? "bg-red-500 h-full" : "bg-blue-500 h-full"} 
+                        style={{ width: `${((item.durability || 0) / item.maxDurability) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+          </div>
+          {def.imageUrl && <img src={def.imageUrl} className="w-10 h-10 rounded bg-gray-200 dark:bg-gray-700 object-cover" alt={def.name}/>}
+      </div>
+
+      {/* BUTTONS */}
+      <div className="flex gap-2 mt-1">
+          <button 
+            onClick={isGear ? () => onEquip(item) : () => onUse(item)}
+            disabled={isEquipped || (isGear && isBroken)}
+            className={`flex-1 py-1 text-xs rounded font-bold transition-colors ${
+              isEquipped || (isGear && isBroken)
+                ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
+                : "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+            }`}
+          >
+            {isEquipped ? "Equipped" : (isGear && isBroken ? "Needs Repair" : (isGear ? "Equip" : "Use"))}
+          </button>
+
+          <button 
+            onClick={() => onSell(item)}
+            disabled={isEquipped}
+            className={`px-3 py-1 text-xs rounded font-bold border transition-colors ${
+              isEquipped 
+                ? "bg-gray-100 text-gray-300 border-gray-200 dark:bg-gray-700 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed"
+                : "bg-red-50 text-red-600 border-red-100 hover:bg-red-100 dark:bg-red-900/10 dark:text-red-300 dark:border-red-900/30 dark:hover:bg-red-900/30"
+            }`}
+          >
+            {isEquipped ? "In Use" : `Sell ${sellValue}G`}
+          </button>
+      </div>
     </div>
   );
 };
 
-function StatUpgradeBox({ label, desc, value, locked, canUpgrade, onUpgrade, color }: any) {
+function StatUpgradeBox({ label, flavor, value, locked, canUpgrade, onUpgrade, color }: any) {
   return (
-    <div className={`relative p-3 border rounded-xl flex flex-col justify-between transition-colors ${locked ? "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:border-gray-700" : "bg-gray-50 dark:bg-gray-700/50 dark:border-gray-600"}`}>
-      
-      {/* HEADER */}
-      <div className="flex justify-between items-start mb-2">
-         <div>
-            <div className="text-[10px] uppercase font-bold tracking-wider">{label}</div>
-            {!locked && <div className="text-[9px] opacity-70 italic">{desc}</div>}
-         </div>
-         <div className={`text-xl font-black ${locked ? "text-gray-300" : color}`}>
-            {value}
-         </div>
+    <div className="group relative">
+      {/* HOVER TOOLTIP */}
+      <div className="absolute bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-gray-800 text-white text-[10px] rounded-lg z-10 shadow-xl pointer-events-none">
+        {locked ? "Locked: Level up to reveal." : flavor}
+        <div className="absolute top-full left-4 border-8 border-transparent border-t-gray-800"></div>
       </div>
 
-      {/* ACTION */}
-      {locked ? (
-         <div className="text-[10px] font-bold text-center bg-gray-200 dark:bg-gray-700 rounded py-1 flex items-center justify-center gap-1">
-            🔒 LOCKED
-         </div>
-      ) : (
-         <button 
-           onClick={onUpgrade}
-           disabled={!canUpgrade}
-           className={`text-[10px] font-bold py-1.5 rounded-lg transition-all flex items-center justify-center gap-1
-             ${canUpgrade 
-               ? "bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 shadow-sm" 
-               : "bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-600 dark:text-gray-500"}
-           `}
-         >
-           {canUpgrade ? "UPGRADE (+1)" : "MAXED"} 
-         </button>
-      )}
+      <div className={`p-3 border rounded-xl flex flex-col justify-between h-24 transition-all ${locked ? "opacity-50 bg-gray-100" : "bg-white dark:bg-gray-700/50"}`}>
+        <div className="flex justify-between items-start">
+          <span className="text-[10px] font-black uppercase tracking-tighter">{label}</span>
+          <span className={`text-xl font-black ${color}`}>{value}</span>
+        </div>
+        
+        <button 
+          onClick={onUpgrade}
+          disabled={locked || !canUpgrade}
+          className="mt-2 text-[9px] font-bold py-1 bg-black text-white rounded disabled:bg-gray-300"
+        >
+          {locked ? "LOCKED" : "UPGRADE"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -187,6 +234,7 @@ export default function CharacterPage() {
   const [gameItems, setGameItems] = useState<Record<string, GameItem>>({});
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+  const [showFormula, setShowFormula] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -486,64 +534,69 @@ export default function CharacterPage() {
             </div>
 
             {/* TOTAL POWER PREVIEW */}
-            <div className="my-4 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-600 flex justify-between items-center">
-                <div>
-                  <div className="text-xs font-bold uppercase text-gray-500">Est. Power (x=1)</div>
-                  <div className="text-[10px] text-gray-400 font-mono">y = k · f(x)</div>
+            <div className="space-y-2">
+              <button 
+                onClick={() => setShowFormula(!showFormula)}
+                className="w-full py-2 px-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl text-purple-700 dark:text-purple-300 text-xs font-bold flex justify-between items-center hover:bg-purple-100 transition-colors"
+              >
+                <span>{showFormula ? "▼ HIDE DAMAGE FUNCTION" : "▶ VIEW DAMAGE FUNCTION"}</span>
+                <span className="font-mono text-sm">{derivedStats.powerScore.toFixed(2)} Power</span>
+              </button>
+
+              {showFormula && (
+                <div className="p-4 bg-gray-900 text-gray-100 rounded-xl font-mono text-[10px] space-y-2 animate-in slide-in-from-top-2">
+                  <p className="text-purple-400 font-bold">
+                    Damage = k * [ (a/400)x³ + (b/40)x² + (1 + c/10)x + d/2 ]
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 opacity-80">
+                    <div>k: {derivedStats.k.toFixed(2)}</div>
+                    <div>x: 1.00 (Base)</div>
+                  </div>
                 </div>
-                <div className="text-right">
-                    <span className="text-xl font-black font-mono block">
-                    {derivedStats.powerScore.toFixed(2)}
-                    </span>
-                    {derivedStats.k !== 1 && (
-                        <span className="text-[10px] font-bold text-purple-500 bg-purple-100 dark:bg-purple-900/30 px-1 rounded">
-                            k = {derivedStats.k.toFixed(2)}x
-                        </span>
-                    )}
-                </div>
+              )}
             </div>
 
             {/* STATS GRID */}
             <div className="grid grid-cols-2 gap-3">
                <StatUpgradeBox 
-                  label="Stat A (Cubic)" 
-                  desc={derivedStats.a > derivedStats.baseA ? `Base: ${derivedStats.baseA} + Gear: ${derivedStats.a - derivedStats.baseA}` : "Effect: a / 400"}
-                  value={derivedStats.a} 
-                  locked={char.level < 50}
-                  canUpgrade={(char.unspentPoints || 0) > 0}
-                  onUpgrade={() => upgradeStat('a')}
-                  color="text-red-600"
-               />
+                    label="Mastery (a)" 
+                    flavor="Massively boosts damage on the hardest challenges."
+                    value={derivedStats.a} 
+                    locked={char.level < 50}
+                    canUpgrade={(char.unspentPoints || 0) > 0}
+                    onUpgrade={() => upgradeStat('a')}
+                    color="text-red-600"
+                />
 
                <StatUpgradeBox 
-                  label="Stat B (Quad)" 
-                  desc={derivedStats.b > derivedStats.baseB ? `Base: ${derivedStats.baseB} + Gear: ${derivedStats.b - derivedStats.baseB}` : "Effect: b / 40"}
-                  value={derivedStats.b} 
-                  locked={char.level < 20}
-                  canUpgrade={(char.unspentPoints || 0) > 0}
-                  onUpgrade={() => upgradeStat('b')}
-                  color="text-orange-600"
-               />
+                    label="Insight (b)" 
+                    flavor="Greatly increases damage on difficult questions."
+                    value={derivedStats.b} 
+                    locked={char.level < 20}
+                    canUpgrade={(char.unspentPoints || 0) > 0}
+                    onUpgrade={() => upgradeStat('b')}
+                    color="text-orange-600"
+                />
 
-               <StatUpgradeBox 
-                  label="Stat C (Linear)" 
-                  desc={derivedStats.c > derivedStats.baseC ? `Base: ${derivedStats.baseC} + Gear: ${derivedStats.c - derivedStats.baseC}` : "Effect: 1 + c/10"}
-                  value={derivedStats.c} 
-                  locked={false}
-                  canUpgrade={(char.unspentPoints || 0) > 0}
-                  onUpgrade={() => upgradeStat('c')}
-                  color="text-blue-600"
-               />
+                <StatUpgradeBox 
+                    label="Understanding (c)" 
+                    flavor="Improves your damage consistently on all questions."
+                    value={derivedStats.c} 
+                    locked={false}
+                    canUpgrade={(char.unspentPoints || 0) > 0}
+                    onUpgrade={() => upgradeStat('c')}
+                    color="text-blue-600"
+                />
 
-               <StatUpgradeBox 
-                  label="Stat D (Flat)" 
-                  desc={derivedStats.d > derivedStats.baseD ? `Base: ${derivedStats.baseD} + Gear: ${derivedStats.d - derivedStats.baseD}` : "Effect: d / 2"}
-                  value={derivedStats.d} 
-                  locked={false}
-                  canUpgrade={(char.unspentPoints || 0) > 0}
-                  onUpgrade={() => upgradeStat('d')}
-                  color="text-green-600"
-               />
+                <StatUpgradeBox 
+                    label="Focus (d)" 
+                    flavor="Increases the minimum damage you deal, especially on easy questions."
+                    value={derivedStats.d} 
+                    locked={false}
+                    canUpgrade={(char.unspentPoints || 0) > 0}
+                    onUpgrade={() => upgradeStat('d')}
+                    color="text-green-600"
+                />
             </div>
             
             {/* FOOTER NOTE */}
@@ -575,8 +628,10 @@ export default function CharacterPage() {
               </Link>
           </div>
           
-          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-            {char.inventory.length === 0 && <p className="text-gray-400 text-center py-8">Your bag is empty.</p>}
+          <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+            {char.inventory.length === 0 && (
+              <p className="col-span-2 text-gray-400 text-center py-8">Your bag is empty.</p>
+            )}
             
             {char.inventory.map((item, index) => {
                 const def = gameItems[item.itemId];
