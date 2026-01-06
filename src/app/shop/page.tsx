@@ -113,7 +113,7 @@ export default function ShopPage() {
         type: 'weapon',
         slot: 'mainHand',
         price: 50,
-        stats: { damage: { flat: 2 } },
+        stats: { d: 1 },
         maxDurability: 50,
         inShop: true
       },
@@ -193,11 +193,12 @@ export default function ShopPage() {
       {/* SHOP GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {items.map((item) => {
-           // Calculate dynamic visual things
-           const canAfford = (character?.gold || 0) >= item.price;
-           const isRare = item.price > 500; 
+            // Calculate dynamic visual things
+            const canAfford = (character?.gold || 0) >= item.price;
+            const isRare = item.price > 500; 
+            const s = item.stats || {}; // Short helper
 
-           return (
+            return (
             <div 
               key={item.id} 
               className={`
@@ -233,39 +234,79 @@ export default function ShopPage() {
 
                 {/* 2. STATS BADGES */}
                 <div className="flex flex-wrap gap-2 mb-4">
-                    {/* DAMAGE */}
-                    {(item.stats?.damage?.flat || item.stats?.damage?.mult) && (
+                    
+                    {/* --- NEW DAMAGE VARIABLES (A, B, C, D) --- */}
+                    
+                    {/* Stat A (Cubic) */}
+                    {s.a && (
                         <div className="px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 text-xs font-bold rounded flex items-center gap-1 border border-red-100 dark:border-red-900/30">
-                            <span>⚔️</span>
-                            {item.stats.damage.flat ? `+${item.stats.damage.flat}` : ''}
-                            {item.stats.damage.mult ? `x${item.stats.damage.mult}` : ''} Dmg
+                            <span>🟥</span> A +{s.a}
                         </div>
                     )}
 
-                    {/* Defense Removed Here */}
+                    {/* Stat B (Quadratic) */}
+                    {s.b && (
+                        <div className="px-2 py-1 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-200 text-xs font-bold rounded flex items-center gap-1 border border-orange-100 dark:border-orange-900/30">
+                            <span>🟧</span> B +{s.b}
+                        </div>
+                    )}
+
+                    {/* Stat C (Linear) */}
+                    {s.c && (
+                        <div className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 text-xs font-bold rounded flex items-center gap-1 border border-blue-100 dark:border-blue-900/30">
+                            <span>🟦</span> C +{s.c}
+                        </div>
+                    )}
+
+                    {/* Stat D (Flat) */}
+                    {s.d && (
+                        <div className="px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 text-xs font-bold rounded flex items-center gap-1 border border-green-100 dark:border-green-900/30">
+                            <span>🟩</span> D +{s.d}
+                        </div>
+                    )}
+
+                    {/* --- MULTIPLIERS & SPECIALS --- */}
+
+                    {/* X Bonus (Flat modifier to x) */}
+                    {s.xBonus && (
+                        <div className="px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-200 text-xs font-bold rounded flex items-center gap-1 border border-indigo-100 dark:border-indigo-900/30">
+                            <span>✖️</span> X +{s.xBonus}
+                        </div>
+                    )}
+
+                    {/* Global Damage Mult (K) */}
+                    {s.damage?.mult && (
+                        <div className="px-2 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-200 text-xs font-bold rounded flex items-center gap-1 border border-purple-100 dark:border-purple-900/30">
+                            <span>💥</span> Dmg {s.damage.mult > 0 ? '+' : ''}{Math.round(s.damage.mult * 100)}%
+                        </div>
+                    )}
+
+                    {/* --- DEFENSE / SURVIVAL --- */}
 
                     {/* HEAL */}
-                    {item.stats?.heal?.flat && (
-                        <div className="px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 text-xs font-bold rounded flex items-center gap-1 border border-green-100 dark:border-green-900/30">
-                            <span>❤️</span> +{item.stats.heal.flat} HP
+                    {(s.heal?.flat || s.heal?.mult) && (
+                        <div className="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-200 text-xs font-bold rounded flex items-center gap-1 border border-emerald-100 dark:border-emerald-900/30">
+                            <span>🧪</span> 
+                            {s.heal.flat ? `+${s.heal.flat} HP ` : ''}
+                            {s.heal.mult ? `(+${Math.round(s.heal.mult * 100)}%)` : ''}
                         </div>
                     )}
 
-                    {/* MAX HP (New for Armor) */}
-                    {(item.stats?.maxHp?.flat || item.stats?.maxHp?.mult) && (
-                        <div className="px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 text-xs font-bold rounded flex items-center gap-1 border border-green-100 dark:border-green-900/30">
-                            <span>💚</span> 
-                            {item.stats.maxHp.flat ? `+${item.stats.maxHp.flat}` : ''}
-                            {item.stats.maxHp.mult ? `x${item.stats.maxHp.mult}` : ''} MaxHP
+                    {/* MAX HP */}
+                    {(s.maxHp?.flat || s.maxHp?.mult) && (
+                        <div className="px-2 py-1 bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-200 text-xs font-bold rounded flex items-center gap-1 border border-pink-100 dark:border-pink-900/30">
+                            <span>❤️</span> 
+                            {s.maxHp.flat ? `+${s.maxHp.flat} ` : ''}
+                            {s.maxHp.mult ? `(+${Math.round(s.maxHp.mult * 100)}%)` : ''} HP
                         </div>
                     )}
 
-                    {/* TIME (Updated for Flat + Factor) */}
-                    {(item.stats?.time?.flat || item.stats?.timeFactor) && (
-                        <div className="px-2 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-200 text-xs font-bold rounded flex items-center gap-1 border border-purple-100 dark:border-purple-900/30">
-                           <span>⏳</span> 
-                           {item.stats.time?.flat ? `+${item.stats.time.flat}s ` : ""}
-                           {item.stats.timeFactor ? `${Math.round((item.stats.timeFactor - 1) * 100)}%` : ""}
+                    {/* TIME (Fixed: uses time.flat and time.mult) */}
+                    {(s.time?.flat || s.time?.mult) && (
+                        <div className="px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-200 text-xs font-bold rounded flex items-center gap-1 border border-yellow-100 dark:border-yellow-900/30">
+                            <span>⏳</span> 
+                            {s.time.flat ? `+${s.time.flat}s ` : ""}
+                            {s.time.mult ? `(+${Math.round(s.time.mult * 100)}%)` : ""}
                         </div>
                     )}
 

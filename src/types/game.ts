@@ -17,12 +17,17 @@ export interface GameItem {
   price: number;
   imageUrl?: string;   
   stats?: {
-    damage?: StatModifier;  // replacing number
-    defense?: StatModifier; // replacing number
-    heal?: StatModifier;    // replacing number
+    a?: number;
+    b?: number; 
+    c?: number; 
+    d?: number;
+    xBonus?: number;
+    damage?: { 
+        mult?: number;
+    };
+    heal?: StatModifier;   
     maxHp?: StatModifier; 
     time?: StatModifier;
-    timeFactor?: number;    // e.g., 1.2 for +20% time
   };
   slot?: EquipmentSlot;
   maxDurability?: number;

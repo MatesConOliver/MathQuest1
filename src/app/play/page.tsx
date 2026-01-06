@@ -116,8 +116,8 @@ function PlayContent() {
   const [maxTime, setMaxTime] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null); 
   const [isPaused, setIsPaused] = useState(false);
+  const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
 
-  // 👇 NEW HELPER: Renders text mixed with LaTeX (e.g. "Solve $x^2$ now")
   const renderMixedText = (text: string) => {
     if (!text) return null;
     // Split by '$' to separate text from math
@@ -236,8 +236,7 @@ function PlayContent() {
   };
 
   const resetTimer = (baseSeconds: number) => {
-    const multiplier = getTimerMultiplier(); 
-    const finalTime = Math.floor(baseSeconds * multiplier);
+    const finalTime = calculateAdjustedTime(baseSeconds);
     setTimeLeft(finalTime);
     setMaxTime(finalTime);
   };
@@ -351,13 +350,6 @@ function PlayContent() {
     }
   };
 
-  const handleNextQuestion = () => {
-    setIsPaused(false); 
-    setMsg(""); 
-    if (playerHp <= 0) { setMode("lost"); return; }
-    nextQuestion();
-  };
-
   const handleAnswer = async (choiceIndex: number) => {
     if (!activeEncounter || !foe) return;
     if (timerRef.current) clearInterval(timerRef.current);
@@ -365,17 +357,24 @@ function PlayContent() {
     const currentQ = questions[currentQIndex];
     const isCorrect = choiceIndex === currentQ.correctIndex;
 
+    setSelectedChoice(choiceIndex);
+
     if (isCorrect) {
       // 1. Damage Logic (Formula based on Time Limit)
       // We pass the timeLimit to calculate 'x' (Difficulty)
-      // 👇 CHANGED: No subtraction of foe.defense. Damage is pure.
       const finalDamage = calculatePlayerDamage(currentQ.timeLimit || 30); 
-
       const newFoeHp = foeHp - finalDamage;
       setFoeHp(newFoeHp);
 
       // 2. Degrade Weapon
       const { broken, newInv } = await degradation("mainHand", 1); 
+
+      if (newFoeHp <= 0) {
+          setMsg(`⚔️ FINAL BLOW! Dealt ${finalDamage} damage!`);
+          // Jump straight to victory screen without waiting for "Next" button
+          handleWin(newInv); 
+          return; // Exit function early
+      }
 
       // 3. Message
       if (broken) {
@@ -384,12 +383,7 @@ function PlayContent() {
         setMsg(`⚔️ Hit for ${finalDamage} dmg!`);
       }
 
-      if (newFoeHp <= 0) {
-          // Pass new inventory to win handler
-          handleWin(newInv);
-      } else {
-          nextQuestion();
-      }
+      setIsPaused(true);
 
     } else {
       // Incorrect logic
@@ -415,23 +409,35 @@ function PlayContent() {
   };
 
   const nextQuestion = () => {
-    // Verificamos si quedan preguntas
+    // 1. Reset UI States
+    setMsg("");
+    setIsPaused(false);
+    setSelectedChoice(null);
+
+    // 2. Check if we have more questions
     if (currentQIndex < questions.length - 1) {
       const nextIdx = currentQIndex + 1;
       setCurrentQIndex(nextIdx);
 
-      // 1. Obtenemos la siguiente pregunta
+      // 3. Get next question & Base Time
       const nextQ = questions[nextIdx];
+      // Note: We use the raw timeLimit from the question, then modify it with our helper
+      const baseSeconds = (nextQ?.timeLimit || 30) * (activeEncounter?.timeMultiplier || 1.0);
 
-      // 2. Calculamos: Tiempo Base de Pregunta * Multiplicador del Encuentro
-      const baseTime = (nextQ?.timeLimit || 30) * (activeEncounter?.timeMultiplier || 1.0);
-
-      // 3. Reseteamos el Timer y la Barra Visual
-      resetTimer(baseTime);
-      setTotalTime(baseTime); // 👈 ¡Importante para que la barra se vea llena!
+      // 4. Reset Timers using the new logic
+      resetTimer(baseSeconds);
+      // We also update totalTime manually here for the visual bar to fill up
+      setTotalTime(calculateAdjustedTime(baseSeconds));
       
     } else {
-      handleLoss("⌛ Ran out of turns! You weren't able to defeat the enemy in time. Retreating to camp.");
+      // 5. No more questions?
+      // If the foe is still alive, we LOSE (Ran out of time/ammo)
+      if (foeHp > 0) {
+          handleLoss("⌛ Ran out of turns! You weren't able to defeat the enemy in time.");
+      } else {
+          // If foe is dead (should be handled in handleAnswer, but just in case)
+          handleWin();
+      }
     }
   };
 
@@ -570,54 +576,96 @@ function PlayContent() {
   // ----------------------------------------------
   // 4. STAT HELPERS
   // ----------------------------------------------
-  const getTimerMultiplier = () => {
-    if (!character?.equipment?.mainHand) return 1;
-    const item = gameItems[character.equipment.mainHand];
-    return item?.stats?.timeFactor || 1;
-  };
-
-  const calculatePlayerDamage = (timeLimitInSeconds: number) => {
-    // 1. Calculate Difficulty 'x' (Minutes rounded up)
-    const x = Math.ceil((timeLimitInSeconds || 30) / 60);
-
-    // 2. Get Coefficients (Default to 0 if missing)
-    const { a = 0, b = 0, c = 0, d = 0 } = character?.stats || {};
-
-    // 3. THE FORMULA: (a/400)x^3 + (b/40)x^2 + (1 + c/10)x + d/2
-    const termA = (a / 400) * Math.pow(x, 3);
-    const termB = (b / 40) * Math.pow(x, 2);
-    const termC = (1 + (c / 10)) * x;
-    const termD = d / 2;
-
-    const baseFormulaDamage = termA + termB + termC + termD;
-
-    // 4. Equipment Bonus (Damage only)
-    let itemFlat = 0;
-    let itemMult = 1;
+  const calculateAdjustedTime = (baseTime: number) => {
+    let bonusFlat = 0;
+    let bonusMult = 1; // Start at 100% (1.0)
 
     if (character?.equipment) {
-      Object.values(character.equipment).forEach(itemId => {
-        if (!itemId) return;
-        const invItem = character?.inventory.find(i => i.itemId === itemId);
-        // Ignore broken items
-        if (invItem && invItem.durability !== undefined && invItem.durability <= 0) return;
+      Object.values(character.equipment).forEach(equippedInstanceId => {
+        if (!equippedInstanceId) return;
 
-        const item = gameItems[itemId];
-        if (item?.stats?.damage) {
-           if (item.stats.damage.flat) itemFlat += item.stats.damage.flat;
-           if (item.stats.damage.mult) itemMult *= item.stats.damage.mult;
-        }
+        // 1. Find Inventory Instance (to check durability)
+        const invItem = character?.inventory.find(i => i.instanceId === equippedInstanceId);
+        
+        // Skip if missing or broken
+        if (!invItem || (invItem.maxDurability && (invItem.durability || 0) <= 0)) return;
+
+        // 2. Get Item Data
+        const def = gameItems[invItem.itemId];
+        if (!def || !def.stats || !def.stats.time) return;
+
+        // 3. Aggregate Time Stats
+        if (def.stats.time.flat) bonusFlat += def.stats.time.flat;
+        if (def.stats.time.mult) bonusMult += def.stats.time.mult;
       });
     }
 
-    // Final: (Formula + ItemFlat) * ItemMult
-    return Math.ceil((baseFormulaDamage + itemFlat) * itemMult);
+    // Logic: Apply Flat bonus first, then the Multiplier
+    // Example: Base 60s + 10s (flat) = 70s. Then 70s * 1.2 (mult) = 84s.
+    // Using Math.floor/round/ceil as you prefer, Math.ceil is generous to the player.
+    return Math.max(1, Math.ceil((baseTime + bonusFlat) * bonusMult));
+  };
+
+  const calculatePlayerDamage = (timeLimitInSeconds: number) => {
+    // 1. Get Base Character Stats
+    const { a = 0, b = 0, c = 0, d = 0 } = character?.stats || {};
+
+    // 2. Initialize Totals
+    let totalA = a;
+    let totalB = b;
+    let totalC = c;
+    let totalD = d;
+    let totalXBonus = 0;
+    let totalK = 1; // Global Multiplier starts at 1.0 (100%)
+
+    // 3. Loop through Equipment to add Bonuses
+    if (character?.equipment) {
+      Object.values(character.equipment).forEach(equippedInstanceId => {
+        if (!equippedInstanceId) return;
+
+        // Find specific inventory item (to check durability)
+        const invItem = character?.inventory.find(i => i.instanceId === equippedInstanceId);
+        
+        // Skip if item missing or Broken
+        if (!invItem || (invItem.maxDurability && (invItem.durability || 0) <= 0)) return;
+
+        // Get Item Definition
+        const def = gameItems[invItem.itemId];
+        if (!def || !def.stats) return;
+
+        // --- Sum Flat Stats (A, B, C, D) ---
+        if (def.stats.a) totalA += def.stats.a;
+        if (def.stats.b) totalB += def.stats.b;
+        if (def.stats.c) totalC += def.stats.c;
+        if (def.stats.d) totalD += def.stats.d;
+
+        // --- Sum X Bonus (Difficulty Modifier) ---
+        if (def.stats.xBonus) totalXBonus += def.stats.xBonus;
+
+        // --- Sum K (Damage Multiplier) ---
+        // We add multipliers (e.g. +0.1 and +0.2 becomes 1.3 total)
+        if (def.stats.damage?.mult) totalK += def.stats.damage.mult;
+      });
+    }
+
+    // 4. Calculate 'x' (Difficulty Variable)
+    // Formula: (Minutes Rounded Up) + Gear xBonus
+    const minutesRoundedUp = Math.ceil((timeLimitInSeconds || 30) / 60);
+    const x = Math.max(1, minutesRoundedUp + totalXBonus); 
+
+    // 5. THE FORMULA
+    // y = K * [ (a/400)x^3 + (b/40)x^2 + (1 + c/10)x + d/2 ]
+    const termA = (totalA / 400) * Math.pow(x, 3);
+    const termB = (totalB / 40) * Math.pow(x, 2);
+    const termC = (1 + (totalC / 10)) * x;
+    const termD = totalD / 2;
+
+    const finalDamage = totalK * (termA + termB + termC + termD);
+
+    return Math.ceil(finalDamage);
   };
 
   const calculateIncomingDamage = (rawFoeDamage: number) => {
-    // 👇 CHANGED: DEFENSE IS SCRAPPED.
-    // We strictly return the incoming damage. 
-    // Even if legacy items have 'defense' stats, they are ignored here.
     return Math.max(1, rawFoeDamage);
   };
 
@@ -727,9 +775,13 @@ function PlayContent() {
           
           <div className="text-6xl animate-bounce">🎉</div>
           
-          <div>
-            <h1 className="text-4xl font-black text-yellow-600 dark:text-yellow-400 uppercase tracking-widest">Victory!</h1>
-            <p className="text-gray-400 font-bold mt-2">Level {character?.level}</p>
+          <div className="text-center"> {/* Added centering usually found in Victory cards */}
+            <h1 className="text-4xl font-black text-yellow-600 dark:text-yellow-400 uppercase tracking-widest drop-shadow-sm">
+              Victory!
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400 font-bold mt-2 uppercase text-sm tracking-tighter">
+              Level {character?.level || 1}
+            </p>
           </div>
 
           {/* LEVEL UP CARD */}
@@ -785,9 +837,13 @@ function PlayContent() {
           
           <div className="text-6xl animate-pulse">💀</div>
           
-          <div>
-            <h1 className="text-4xl font-black text-red-600 dark:text-red-500 uppercase tracking-widest">Defeat</h1>
-            <p className="text-gray-400 font-bold mt-2">You have fallen...</p>
+          <div className="text-center"> {/* Center alignment for the death screen */}
+            <h1 className="text-4xl font-black text-red-600 dark:text-red-500 uppercase tracking-widest drop-shadow-md">
+              Defeat
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400 font-bold mt-2 italic">
+              "You have fallen..."
+            </p>
           </div>
 
           <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-200 dark:border-gray-600">
@@ -823,9 +879,14 @@ function PlayContent() {
           
           <div className="text-6xl">💨</div>
           
-          <div>
-            <h1 className="text-4xl font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest">Escaped!</h1>
-            <p className="text-gray-400 font-bold mt-2">Ran away safely</p>
+          <div className="text-center">
+            <h1 className="text-4xl font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest">
+              Escaped!
+            </h1>
+            
+            <p className="text-gray-500 dark:text-slate-400 font-bold mt-2">
+              Ran away safely
+            </p>
           </div>
 
           {/* PENALTY INFO */}
@@ -863,75 +924,70 @@ function PlayContent() {
     const displayEmoji = activeEncounter?.emoji || "👹"; 
 
     return (
-      <main className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center p-4 transition-colors">
+      <main className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center p-4 transition-colors duration-500">
         
         {/* Card Container */}
         <div className="max-w-lg w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-200 dark:border-gray-700">
           
-          {/* --- HEADER (Image OR Emoji) --- */}
+          {/* --- HEADER --- */}
           <div className="relative h-64 w-full bg-gray-900">
             {heroImage ? (
-              // OPTION A: Show the Image
               <img 
                 src={heroImage} 
                 alt="Enemy" 
                 className="w-full h-full object-cover opacity-90 hover:scale-105 transition-transform duration-700 ease-in-out" 
               />
             ) : (
-              // OPTION B: Show the Emoji (on a nice gradient)
               <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 via-slate-900 to-black">
-                {/* Decorative circles in background */}
                 <div className="absolute opacity-20 w-48 h-48 bg-blue-500 blur-3xl rounded-full -top-10 -left-10"></div>
                 <div className="absolute opacity-20 w-48 h-48 bg-purple-500 blur-3xl rounded-full bottom-0 right-0"></div>
-                
-                {/* The Emoji */}
                 <span className="relative z-10 text-8xl filter drop-shadow-2xl animate-pulse-slow">
                   {displayEmoji}
                 </span>
               </div>
             )}
 
-            {/* Title Overlay (Gradient Fade at bottom) */}
-            <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/90 to-transparent pt-20 pb-6 px-8">
+            {/* Title Overlay */}
+            <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/95 via-black/70 to-transparent pt-20 pb-6 px-8">
               <h1 className="text-3xl font-black text-white uppercase tracking-wider drop-shadow-md">
                 {activeEncounter?.title || foe?.name || "Battle"}
               </h1>
               <p className="text-slate-300 text-sm font-bold flex items-center gap-2">
-                <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px]">ENEMY</span> 
+                <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px] tracking-tighter">ENEMY</span> 
                 {foe?.name || "Unknown Foe"}
               </p>
             </div>
           </div>
 
-          {/* --- BODY (Story & Stats) --- */}
-          <div className="p-8 space-y-6 bg-white dark:bg-gray-800 dark:text-gray-100">
+          {/* --- BODY --- */}
+          <div className="p-8 space-y-6 bg-white dark:bg-gray-800">
             
             {/* Description / Story */}
-            <div className="relative pl-4 border-l-4 border-slate-300 dark:border-slate-600">
+            <div className="relative pl-4 border-l-4 border-slate-300 dark:border-slate-500">
               <p className="text-gray-600 dark:text-gray-300 text-lg leading-relaxed italic">
                 "{activeEncounter?.description || "A shadow moves in the darkness. Prepare yourself..."}"
               </p>
             </div>
 
-            {/* Quick Stats Row (Grid) */}
+            {/* Quick Stats Row */}
             <div className="grid grid-cols-2 gap-4">
-                {/* 1. FOE STATS - 👇 DEFENSE REMOVED HERE */}
-                <div className="bg-slate-50 dark:bg-gray-700/50 p-3 rounded-xl border border-slate-100 dark:border-gray-600 flex flex-col items-center justify-center text-center">
-                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">Enemy Stats</span>
-                    <div className="text-sm font-bold text-slate-700 dark:text-gray-200 flex flex-wrap justify-center gap-x-2">
-                       <span className="text-green-600 dark:text-green-400">❤ {foe?.maxHp || 50}</span>
-                       <span className="text-red-600 dark:text-red-400">⚔️ {foe?.attackDamage || 5}</span>
+                {/* 1. FOE STATS */}
+                <div className="bg-slate-50 dark:bg-gray-900/40 p-3 rounded-xl border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
+                    <span className="text-[10px] font-black text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1">Enemy Stats</span>
+                    <div className="text-sm font-bold flex flex-wrap justify-center gap-x-3">
+                      <span className="text-green-600 dark:text-green-400">❤ {foe?.maxHp || 50}</span>
+                      <span className="text-red-600 dark:text-red-400">⚔️ {foe?.attackDamage || 5}</span>
                     </div>
                 </div>
 
                 {/* 2. REWARD */}
-                <div className="bg-slate-50 dark:bg-gray-700/50 p-3 rounded-xl border border-slate-100 dark:border-gray-600 flex flex-col items-center justify-center text-center">
-                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">Rewards</span>
+                <div className="bg-slate-50 dark:bg-gray-900/40 p-3 rounded-xl border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
+                    <span className="text-[10px] font-black text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1">Rewards</span>
                     <div className="flex flex-col items-center">
                         <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
                           +{activeEncounter?.winRewardXp || 0} XP
                         </span>
-                        <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">
+                        <span className="text-sm font-bold text-yellow-600 dark:text-yellow-500">
                           +{activeEncounter?.winRewardGold || 0} Gold
                         </span>
                     </div>
@@ -940,13 +996,13 @@ function PlayContent() {
 
             {/* Turns Warning */}
             <p className="text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-               You have <span className="text-red-600 dark:text-red-400 text-sm">{questions.length} Turns</span> to defeat this enemy!
+              You have <span className="text-red-600 dark:text-red-500 text-sm px-1">{questions.length} Turns</span> to defeat this enemy!
             </p>
 
             {/* Action Button */}
             <button
               onClick={() => setMode("battle")}
-              className="group relative w-full overflow-hidden rounded-2xl bg-black text-white dark:bg-white dark:text-black px-8 py-4 shadow-xl transition-all hover:bg-gray-800 dark:hover:bg-gray-200 hover:shadow-2xl active:scale-95"
+              className="group relative w-full overflow-hidden rounded-2xl bg-black dark:bg-white text-white dark:text-black px-8 py-4 shadow-xl transition-all hover:bg-gray-800 dark:hover:bg-gray-100 hover:shadow-2xl active:scale-[0.98]"
             >
               <div className="relative z-10 flex items-center justify-center gap-2">
                 <span className="text-xl font-black tracking-widest">FIGHT!</span>
@@ -969,15 +1025,12 @@ function PlayContent() {
   );
 
   return (
-    // 👇 CHANGED: Reduced padding (p-2) and ensured min-height handles content better
     <main className="min-h-screen p-2 md:p-4 flex flex-col items-center max-w-2xl mx-auto relative transition-colors font-sans">
       
       {/* HUD (HEALTH BARS) */}
-      {/* 👇 CHANGED: Reduced gap and margin */}
       <div className="w-full grid grid-cols-2 gap-2 md:gap-4 mb-2">
         
         {/* PLAYER CARD */}
-        {/* 👇 CHANGED: p-4 -> p-3 to save space */}
         <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl border border-blue-100 dark:border-blue-800 text-center space-y-1 transition-colors flex flex-col justify-between">
             <div>
                 <h3 className="font-bold text-sm text-blue-900 dark:text-blue-200 truncate">{character?.name}</h3>
@@ -1039,7 +1092,7 @@ function PlayContent() {
 
         {/* 2. QUESTION CONTENT */}
         <div className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100 text-center my-2">
-          {/* Priority 1: IMAGE PROMPT - 👇 CHANGED: Restricted height */}
+          {/* Priority 1: IMAGE PROMPT */}
           {currentQ.promptImageUrl && (
             <div className="flex justify-center mb-2">
                 <img 
@@ -1066,7 +1119,6 @@ function PlayContent() {
         </div>
 
         {/* 3. ANSWERS (GRID) */}
-        {/* 👇 CHANGED: md:grid-cols-2 allows side-by-side on tablets to save height */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
           
           {/* A. ROUND OVER / NEXT BUTTON */}
@@ -1076,21 +1128,17 @@ function PlayContent() {
                  {msg || "Round Over"}
               </div>
               <button 
-                onClick={() => {
-                  setMsg(""); 
-                  setIsPaused(false);
-                  const nextQ = questions[currentQIndex + 1];
-                  const baseTime = (nextQ?.timeLimit || 30) * (activeEncounter?.timeMultiplier || 1.0);
-                  setTimeLeft(baseTime);
-                  setTotalTime(baseTime);
-                  resetTimer(baseTime); 
-                  if (currentQIndex < questions.length - 1) {
-                      setCurrentQIndex(prev => prev + 1);
-                  } else {
-                      handleWin();
-                  }
-                }} 
-                className="w-full py-3 bg-blue-600 text-white text-lg font-black rounded-xl hover:bg-blue-800 shadow-lg transition-transform hover:scale-[1.02]"
+                onClick={nextQuestion} 
+                className={`
+                  w-full py-3 rounded-xl text-lg font-black shadow-lg transition-all duration-200 hover:scale-[1.02]
+                  
+                  /* Light Mode */
+                  bg-blue-600 text-white hover:bg-blue-800 
+                  
+                  /* Dark Mode */
+                  dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500 
+                  dark:shadow-blue-900/30 dark:ring-1 dark:ring-blue-500/50
+                `}
               >
                 NEXT ➡️
               </button>
@@ -1098,23 +1146,51 @@ function PlayContent() {
           )}
 
           {/* B. ANSWER BUTTONS */}
-          {/* 👇 CHANGED: Reduced padding inside buttons (p-4 -> p-3) */}
           {currentQ.choices.map((choice, idx) => {
+            const isSelected = selectedChoice === idx;
+            const isCorrectChoice = idx === currentQ.correctIndex;
+
+            // 1. Default Styles (Unselected/Unanswered)
+            let highlightClass = "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-transparent";
+            
+            if (isPaused) {
+              if (isCorrectChoice) {
+                // 2. Correct Answer (Green)
+                highlightClass = "border-green-500 bg-green-50 dark:bg-green-950/50 text-green-700 dark:text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]";
+              } else if (isSelected && !isCorrectChoice) {
+                // 3. User picked wrong (Red)
+                highlightClass = "border-red-500 bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400";
+              } else {
+                // 4. Neutral/Inactive (Faded)
+                highlightClass = "opacity-30 border-gray-200 dark:border-gray-800 text-gray-400 dark:text-gray-600";
+              }
+            }
+
             return (
               <button 
                 key={idx} 
                 disabled={isPaused} 
                 onClick={() => handleAnswer(idx)} 
-                className={`p-3 border-2 rounded-xl text-base md:text-lg font-medium transition-all group relative
-                  ${isPaused 
-                    ? "opacity-50 cursor-not-allowed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-400" 
-                    : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-black hover:text-white hover:border-black dark:hover:bg-white dark:hover:text-black dark:hover:border-white"
-                  }
+                className={`p-4 border-2 rounded-2xl text-base md:text-lg font-bold transition-all duration-200 group relative
+                  ${highlightClass}
+                  ${!isPaused && "hover:border-black dark:hover:border-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black active:scale-[0.98]"}
                 `}
               >
-                <span className="block w-full text-center pointer-events-none">
+                <span className="block w-full text-center">
                   {renderMixedText(choice)}
                 </span>
+                
+                {/* Visual Feedback Icons - Dark Mode optimized colors */}
+                {isPaused && isCorrectChoice && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 scale-125">
+                    check_circle
+                  </span>
+                )}
+                {isPaused && isSelected && !isCorrectChoice && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-600 dark:text-red-400 scale-125">
+                    cancel
+                  </span>
+                )}
               </button>
             );
           })}

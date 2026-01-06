@@ -371,7 +371,7 @@ function ItemsPanel() {
   const [msg, setMsg] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Form States
+  // --- Form States ---
   const [id, setId] = useState("");
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
@@ -379,18 +379,30 @@ function ItemsPanel() {
   const [type, setType] = useState<ItemType>("weapon");
   const [slot, setSlot] = useState<EquipmentSlot>("mainHand");
   const [imageUrl, setImageUrl] = useState("");
+  const [maxDurability, setMaxDurability] = useState<number | "">("");
 
-  const [dmgFlat, setDmgFlat] = useState<number | "">("");
-  const [dmgMult, setDmgMult] = useState<number | "">("");
+  // 🟢 POLYNOMIAL STATS (A, B, C, D) + X Bonus
+  const [valA, setValA] = useState<number | "">("");
+  const [valB, setValB] = useState<number | "">("");
+  const [valC, setValC] = useState<number | "">("");
+  const [valD, setValD] = useState<number | "">("");
+  const [valX, setValX] = useState<number | "">(""); // Difficulty Displacer
+
+  // 🔴 GLOBAL DAMAGE MULTIPLIER (k)
+  const [dmgMult, setDmgMult] = useState<number | "">(""); 
+
+  // 🔵 UTILITY STATS (Heal, HP, Time)
+  const [healFlat, setHealFlat] = useState<number | "">("");
+  const [healMult, setHealMult] = useState<number | "">(""); // % Max HP
+  
   const [maxHpFlat, setMaxHpFlat] = useState<number | "">("");
   const [maxHpMult, setMaxHpMult] = useState<number | "">("");
-  const [timeFlat, setTimeFlat] = useState<number | "">("");
-  const [timeFactor, setTimeFactor] = useState<number | "">("");
-  const [healFlat, setHealFlat] = useState<number | "">("");
-  // const [healPercent, setHealPercent] = useState<number | "">(""); // Unused in your snippet, but kept if you need it later
-  const [maxDurability, setMaxDurability] = useState<number | "">("");
   
+  const [timeFlat, setTimeFlat] = useState<number | "">("");
+  const [timeMult, setTimeMult] = useState<number | "">(""); // Replaces timeFactor
+
   useEffect(() => { loadItems(); }, []);
+
   async function loadItems() {
     const s = await getDocs(collection(db, "items"));
     setItems(s.docs.map(d => ({ ...d.data(), id: d.id } as GameItem)));
@@ -404,7 +416,11 @@ function ItemsPanel() {
   function resetForm() {
     setId(""); setName(""); setDesc(""); setPrice(10); setType("weapon"); setSlot("mainHand");
     setImageUrl(""); setMaxDurability("");
-    setDmgFlat(""); setDmgMult(""); setMaxHpFlat(""); setMaxHpMult(""); setTimeFlat(""); setTimeFactor("");
+    // Reset Stats
+    setValA(""); setValB(""); setValC(""); setValD(""); setValX(""); setDmgMult("");
+    setHealFlat(""); setHealMult("");
+    setMaxHpFlat(""); setMaxHpMult(""); 
+    setTimeFlat(""); setTimeMult("");
     setMsg("");
   }
 
@@ -418,28 +434,73 @@ function ItemsPanel() {
     setImageUrl(item.imageUrl || "");
     setMaxDurability(item.maxDurability || "");
 
-    setDmgFlat(item.stats?.damage?.flat ?? "");
+    // 🟢 Load Poly Stats (Supports negatives)
+    setValA(item.stats?.a ?? "");
+    setValB(item.stats?.b ?? "");
+    setValC(item.stats?.c ?? "");
+    setValD(item.stats?.d ?? "");
+    setValX(item.stats?.xBonus ?? "");
+    
+    // 🔴 Load Damage Multiplier
     setDmgMult(item.stats?.damage?.mult ?? "");
-    setMaxHpFlat(item.stats?.maxHp?.flat || "");
-    setMaxHpMult(item.stats?.maxHp?.mult || "");
-    setTimeFlat(item.stats?.time?.flat || "");
-    setTimeFactor(item.stats?.timeFactor ?? "");
+
+    // 🔵 Load Utility
+    setHealFlat(item.stats?.heal?.flat ?? "");
+    setHealMult(item.stats?.heal?.mult ?? "");
+
+    setMaxHpFlat(item.stats?.maxHp?.flat ?? "");
+    setMaxHpMult(item.stats?.maxHp?.mult ?? "");
+    
+    setTimeFlat(item.stats?.time?.flat ?? "");
+    setTimeMult(item.stats?.time?.mult ?? "");
+
     setMsg(`✏️ Editing: ${item.name}`);
   }
 
   const handleSave = async () => {
     if (!id || !name) { setMsg("❌ ID & Name required"); return; }
     try {
+      // Construct the stats object cleanly
+      // We use Number() which handles negatives perfectly (-5 becomes -5)
+      const statsObj: any = {};
+
+      // Poly Stats
+      if (valA !== "") statsObj.a = Number(valA);
+      if (valB !== "") statsObj.b = Number(valB);
+      if (valC !== "") statsObj.c = Number(valC);
+      if (valD !== "") statsObj.d = Number(valD);
+      if (valX !== "") statsObj.xBonus = Number(valX);
+
+      // Damage Multiplier
+      if (dmgMult !== "") statsObj.damage = { mult: Number(dmgMult) };
+
+      // Utility - HP
+      if (maxHpFlat !== "" || maxHpMult !== "") {
+        statsObj.maxHp = {};
+        if (maxHpFlat !== "") statsObj.maxHp.flat = Number(maxHpFlat);
+        if (maxHpMult !== "") statsObj.maxHp.mult = Number(maxHpMult);
+      }
+
+      // Utility - Heal
+      if (healFlat !== "" || healMult !== "") {
+        statsObj.heal = {};
+        if (healFlat !== "") statsObj.heal.flat = Number(healFlat);
+        if (healMult !== "") statsObj.heal.mult = Number(healMult);
+      }
+
+      // Utility - Time
+      if (timeFlat !== "" || timeMult !== "") {
+        statsObj.time = {};
+        if (timeFlat !== "") statsObj.time.flat = Number(timeFlat);
+        if (timeMult !== "") statsObj.time.mult = Number(timeMult);
+      }
+
       const baseItem: any = {
         id, name, description: desc, price: Number(price), type,
         imageUrl: imageUrl || `https://placehold.co/100?text=${name.charAt(0)}`,
-        stats: {
-          ...((dmgFlat || dmgMult) && { damage: { ...(dmgFlat && { flat: Number(dmgFlat) }), ...(dmgMult && { mult: Number(dmgMult) }) } }),
-          ...((maxHpFlat || maxHpMult) && { maxHp: { ...(maxHpFlat && { flat: Number(maxHpFlat) }), ...(maxHpMult && { mult: Number(maxHpMult) }) } }),
-          ...(timeFlat && { time: { flat: Number(timeFlat) } }),
-          ...(timeFactor && { timeFactor: Number(timeFactor) })
-        }
+        stats: statsObj // Attach our clean stats object
       };
+
       if (type !== 'potion' && type !== 'misc') baseItem.slot = slot;
       if (maxDurability) baseItem.maxDurability = Number(maxDurability);
 
@@ -459,11 +520,12 @@ function ItemsPanel() {
     } catch (e: any) { setMsg("Error: " + e.message); }
   }
 
-  // Determine if we are technically in "Edit Mode" (ID exists in list)
   const isEditing = id && items.some(i => i.id === id);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border dark:border-gray-700 shadow-sm transition-colors">
+      
+      {/* --- LEFT COLUMN: EDIT FORM --- */}
       <div className="md:col-span-2 space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold">{isEditing ? "Item Factory (Editing)" : "Item Factory (New)"}</h2>
@@ -505,49 +567,78 @@ function ItemsPanel() {
 
           <hr className="border-gray-200" />
 
-          {/* 👇 REARRANGED: Now 3 columns since Defense is gone */}
-          <div className="grid grid-cols-3 gap-4">
-            {/* DAMAGE BOX (RED) */}
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded border border-red-100 dark:border-red-900/50">
-              <div className="text-xs font-bold text-red-800 dark:text-red-300 uppercase mb-2">Damage</div>
-              <div className="flex gap-2">
-                <input type="number" className="input text-xs dark:bg-gray-800 dark:border-red-900/50" placeholder="Flat" value={dmgFlat} onChange={(e: any) => setDmgFlat(e.target.value === "" ? "" : Number(e.target.value))} />
-                <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-red-900/50" placeholder="Mult" value={dmgMult} onChange={(e: any) => setDmgMult(e.target.value === "" ? "" : Number(e.target.value))} />
-              </div>
-            </div>
+          {/* 🟢 POLYNOMIAL STATS GRID */}
+          <div className="grid grid-cols-4 gap-2 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/50">
+             <div className="col-span-4 text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">
+                Polynomial Modifiers (Negatives Allowed)
+             </div>
+             
+             {/* A */}
+             <div>
+               <label className="text-[10px] font-bold text-gray-500 uppercase">A (x³)</label>
+               <input type="number" className="input text-xs dark:bg-gray-800" placeholder="0" value={valA} onChange={(e:any) => setValA(e.target.value)} />
+             </div>
+             {/* B */}
+             <div>
+               <label className="text-[10px] font-bold text-gray-500 uppercase">B (x²)</label>
+               <input type="number" className="input text-xs dark:bg-gray-800" placeholder="0" value={valB} onChange={(e:any) => setValB(e.target.value)} />
+             </div>
+             {/* C */}
+             <div>
+               <label className="text-[10px] font-bold text-gray-500 uppercase">C (x)</label>
+               <input type="number" className="input text-xs dark:bg-gray-800" placeholder="0" value={valC} onChange={(e:any) => setValC(e.target.value)} />
+             </div>
+             {/* D */}
+             <div>
+               <label className="text-[10px] font-bold text-gray-500 uppercase">D (Const)</label>
+               <input type="number" className="input text-xs dark:bg-gray-800" placeholder="0" value={valD} onChange={(e:any) => setValD(e.target.value)} />
+             </div>
+          </div>
 
-            {/* MAX HP BOX (GREEN) */}
+          {/* 🟢 MULTIPLIERS & X-BONUS */}
+          <div className="grid grid-cols-2 gap-4 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-900/50">
+             <div>
+               <label className="text-[10px] font-bold text-red-800 dark:text-red-300 uppercase">Global Multiplier (k)</label>
+               <input type="number" step="0.01" className="input text-xs dark:bg-gray-800" placeholder="x1.0" value={dmgMult} onChange={(e:any) => setDmgMult(e.target.value)} />
+               <p className="text-[9px] text-gray-500 mt-1">Multiplies FINAL damage.</p>
+             </div>
+             <div>
+               <label className="text-[10px] font-bold text-red-800 dark:text-red-300 uppercase">Difficulty Bonus (x)</label>
+               <input type="number" className="input text-xs dark:bg-gray-800" placeholder="+0" value={valX} onChange={(e:any) => setValX(e.target.value)} />
+               <p className="text-[9px] text-gray-500 mt-1">Adds to difficulty 'x' before calc.</p>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            
+            {/* 🟢 MAX HP BOX */}
              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded border border-green-100 dark:border-green-900/50">
               <div className="text-xs font-bold text-green-800 dark:text-green-300 uppercase mb-2">Max HP</div>
               <div className="flex gap-2">
-                <input type="number" className="input text-xs dark:bg-gray-800 dark:border-green-900/50" placeholder="Flat" value={maxHpFlat} onChange={(e: any) => setMaxHpFlat(e.target.value === "" ? "" : Number(e.target.value))} />
-                <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-green-900/50" placeholder="Mult" value={maxHpMult} onChange={(e: any) => setMaxHpMult(e.target.value === "" ? "" : Number(e.target.value))} />
+                <input type="number" className="input text-xs dark:bg-gray-800 dark:border-green-900/50" placeholder="Flat" value={maxHpFlat} onChange={(e: any) => setMaxHpFlat(e.target.value)} />
+                <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-green-900/50" placeholder="Mult" value={maxHpMult} onChange={(e: any) => setMaxHpMult(e.target.value)} />
               </div>
             </div>
 
-            {/* TIME BOX (PURPLE) */}
-            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-100 dark:border-purple-900/50 col-span-3 md:col-span-1">
+            {/* 🟢 HEALING BOX */}
+            <div className="p-3 bg-pink-50 dark:bg-pink-900/20 rounded border border-pink-100 dark:border-pink-900/50">
+              <div className="text-xs font-bold text-pink-800 dark:text-pink-300 uppercase mb-2">Heal Power</div>
+              <div className="flex gap-2">
+                <input type="number" className="input text-xs dark:bg-gray-800 dark:border-pink-900/50" placeholder="Flat" value={healFlat} onChange={(e: any) => setHealFlat(e.target.value)} />
+                <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-pink-900/50" placeholder="% (0.5)" value={healMult} onChange={(e: any) => setHealMult(e.target.value)} />
+              </div>
+              <p className="text-[8px] text-gray-500 mt-1">Use 0.5 for 50% Max HP</p>
+            </div>
+
+            {/* 🟢 TIME BOX */}
+            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-100 dark:border-purple-900/50">
               <div className="text-xs font-bold text-purple-800 dark:text-purple-300 uppercase mb-2">Time Bonus</div>
               <div className="flex gap-2">
-                 {/* Flat Input */}
-                 <input 
-                   type="number" 
-                   className="input text-xs dark:bg-gray-800 dark:border-purple-900/50" 
-                   placeholder="Flat (+s)" 
-                   value={timeFlat} 
-                   onChange={(e: any) => setTimeFlat(e.target.value === "" ? "" : Number(e.target.value))} 
-                 />
-                 {/* Factor Input */}
-                 <input 
-                   type="number" 
-                   step="0.01" 
-                   className="input text-xs dark:bg-gray-800 dark:border-purple-900/50" 
-                   placeholder="Factor (x)" 
-                   value={timeFactor} 
-                   onChange={(e: any) => setTimeFactor(e.target.value === "" ? "" : Number(e.target.value))} 
-                 />
+                 <input type="number" className="input text-xs dark:bg-gray-800 dark:border-purple-900/50" placeholder="Flat (+s)" value={timeFlat} onChange={(e: any) => setTimeFlat(e.target.value)} />
+                 <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-purple-900/50" placeholder="Mult (x)" value={timeMult} onChange={(e: any) => setTimeMult(e.target.value)} />
               </div>
             </div>
+
           </div>
           
           <div className="flex gap-2 mt-4">
@@ -560,6 +651,7 @@ function ItemsPanel() {
           </div>
       </div>
 
+      {/* --- RIGHT COLUMN: ITEM LIST --- */}
       <div className="space-y-4 border-l dark:border-gray-700 pl-4">
         <input className="input w-full text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="🔍 Filter Items..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         <div className="space-y-2 max-h-[800px] overflow-y-auto">
@@ -576,10 +668,13 @@ function ItemsPanel() {
                 >
                     <div>
                         <div className="font-bold text-sm dark:text-gray-100">{item.name}</div>
-                        <div className="text-xs text-gray-400 font-mono">{item.id}</div>
-                        <div className="mt-1 flex gap-2 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400">
-                            <span className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{item.type}</span>
-                            <span>💰 {item.price}</span>
+                        
+                        {/* 🟢 SHOW ICONS IF PRESENT */}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                             {item.stats?.damage?.mult && <span className="text-[9px] bg-red-100 text-red-800 px-1 rounded">k: x{item.stats.damage.mult}</span>}
+                             {item.stats?.xBonus && <span className="text-[9px] bg-purple-100 text-purple-800 px-1 rounded">x+: {item.stats.xBonus}</span>}
+                             {item.stats?.a && <span className="text-[9px] bg-gray-100 text-gray-600 px-1 rounded">A:{item.stats.a}</span>}
+                             {item.stats?.heal?.flat && <span className="text-[9px] bg-pink-100 text-pink-600 px-1 rounded">Heal:{item.stats.heal.flat}</span>}
                         </div>
                     </div>
                     
