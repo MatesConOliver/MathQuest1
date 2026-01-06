@@ -6,6 +6,8 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc, updateDoc, collection, getDocs, increment } from "firebase/firestore";
 import { GameItem, InventoryItem, Character } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
+import 'katex/dist/katex.min.css'; 
+import { BlockMath } from 'react-katex';
 import Link from "next/link";
 
 // --- COMPONENTS ---
@@ -149,28 +151,76 @@ const InventoryItemCard = ({
   );
 };
 
-function StatUpgradeBox({ label, flavor, value, locked, canUpgrade, onUpgrade, color }: any) {
+function StatUpgradeBox({ 
+  label, flavor, value, pending, locked, unlockLevel, 
+  canAfford, onIncrement, onDecrement, color 
+}: any) {
+  
+  const totalValue = value + pending;
+  const isChanged = pending > 0;
+
   return (
-    <div className="group relative">
-      {/* HOVER TOOLTIP */}
-      <div className="absolute bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-gray-800 text-white text-[10px] rounded-lg z-10 shadow-xl pointer-events-none">
-        {locked ? "Locked: Level up to reveal." : flavor}
-        <div className="absolute top-full left-4 border-8 border-transparent border-t-gray-800"></div>
+    <div className={`p-3 border rounded-xl flex flex-col justify-between h-28 transition-all 
+      ${locked 
+        ? "opacity-50 bg-gray-100 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700" 
+        : "bg-white dark:bg-gray-700/30 border-gray-200 dark:border-gray-600 relative overflow-hidden"
+      }`}>
+      
+      {/* Pending Indicator (Yellow Corner) */}
+      {isChanged && <div className="absolute top-0 right-0 w-8 h-8 bg-yellow-400/30 dark:bg-yellow-400/20 rounded-bl-full z-0"></div>}
+
+      <div className="flex justify-between items-start z-10">
+        <div>
+           <span className="text-[10px] font-black uppercase tracking-tighter block text-gray-700 dark:text-gray-300">{label}</span>
+           {locked && <span className="text-[9px] text-red-500 dark:text-red-400 font-bold">Unlocks Lvl {unlockLevel}</span>}
+        </div>
+        <div className="text-right">
+           <span className={`text-xl font-black ${color}`}>{totalValue}</span>
+           {isChanged && <div className="text-[9px] text-green-600 dark:text-green-400 font-bold">+{pending} Pending</div>}
+        </div>
       </div>
 
-      <div className={`p-3 border rounded-xl flex flex-col justify-between h-24 transition-all ${locked ? "opacity-50 bg-gray-100" : "bg-white dark:bg-gray-700/50"}`}>
-        <div className="flex justify-between items-start">
-          <span className="text-[10px] font-black uppercase tracking-tighter">{label}</span>
-          <span className={`text-xl font-black ${color}`}>{value}</span>
-        </div>
-        
-        <button 
-          onClick={onUpgrade}
-          disabled={locked || !canUpgrade}
-          className="mt-2 text-[9px] font-bold py-1 bg-black text-white rounded disabled:bg-gray-300"
-        >
-          {locked ? "LOCKED" : "UPGRADE"}
-        </button>
+      <div className="mt-auto flex items-center justify-between gap-2 z-10">
+        {locked ? (
+           <div className="w-full text-center text-[10px] bg-gray-200 dark:bg-gray-800 rounded py-1 font-bold text-gray-500 dark:text-gray-400">LOCKED</div>
+        ) : (
+          <>
+            <button 
+              onClick={onDecrement} disabled={pending === 0}
+              className="w-8 h-6 flex items-center justify-center bg-gray-200 dark:bg-gray-600 rounded text-gray-600 dark:text-gray-200 font-bold hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-30 transition-colors"
+            >-</button>
+            
+            <button 
+              onClick={onIncrement} disabled={!canAfford}
+              className={`flex-1 h-6 flex items-center justify-center text-[10px] font-bold rounded transition-colors ${
+                 !canAfford 
+                   ? "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600" 
+                   : "bg-black text-white dark:bg-white dark:text-black hover:opacity-80 shadow-md"
+              }`}
+            >
+              UPGRADE
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HealthBar({ current, max }: { current: number, max: number }) {
+  const percent = Math.min(100, Math.max(0, (current / max) * 100));
+  
+  return (
+    <div className="w-full">
+      <div className="flex justify-between text-[10px] font-bold uppercase mb-1 text-gray-500 dark:text-gray-400">
+        <span>Health</span>
+        <span>{current} / {max} HP</span>
+      </div>
+      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden relative">
+        <div 
+          className="h-full bg-red-500 dark:bg-red-600 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(239,68,68,0.5)]"
+          style={{ width: `${percent}%` }}
+        />
       </div>
     </div>
   );
@@ -235,6 +285,8 @@ export default function CharacterPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [showFormula, setShowFormula] = useState(false);
+  const [pendingUpgrades, setPendingUpgrades] = useState({ a: 0, b: 0, c: 0, d: 0 });
+  const [previewX, setPreviewX] = useState(1);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -260,34 +312,35 @@ export default function CharacterPage() {
 
   // --- STATS CALCULATION ---
   const derivedStats = useMemo(() => {
-    // Return defaults if no char
+    // 1. SAFETY CHECK: Return safe defaults if data isn't loaded
     if (!char) return { 
        a: 0, b: 0, c: 0, d: 0, 
        k: 1, xBonus: 0, 
-       maxHp: 0, powerScore: 0, 
-       baseA: 0, baseB: 0, baseC: 0, baseD: 0 
+       maxHp: 0, 
+       baseA: 0, baseB: 0, baseC: 0, baseD: 0,
+       currentPower: 0, minPower: 0, maxPower: 0 // <--- Added these defaults so UI doesn't break
     };
 
-    // 1. Base Stats
+    // 2. Base Stats
     const baseA = char.stats?.a || 0;
     const baseB = char.stats?.b || 0;
     const baseC = char.stats?.c || 0;
     const baseD = char.stats?.d || 0;
     const baseHp = char.maxHp;
 
-    // 2. Initialize Totals
+    // 3. Initialize Totals
     let totalA = baseA;
     let totalB = baseB;
     let totalC = baseC;
     let totalD = baseD;
     
     let totalXBonus = 0;
-    let totalK = 1; // K starts at 1 (100% damage)
+    let totalK = 1; 
 
     let hpFlat = baseHp;
-    let hpMult = 0; // Starts at 0% bonus
+    let hpMult = 0; 
 
-    // 3. Loop Equipment
+    // 4. Loop Equipment (Your existing logic)
     Object.values(char.equipment).forEach(equippedInstanceId => {
       if (!equippedInstanceId) return;
       const instance = char.inventory.find(i => i.instanceId === equippedInstanceId);
@@ -295,56 +348,103 @@ export default function CharacterPage() {
       const def = gameItems[instance.itemId];
       if (!def || !def.stats) return;
 
-      // Check Broken
       const isBroken = (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
       if (isBroken) return;
 
       const s = def.stats;
 
-      // --- Sum Simple Numbers ---
       if (s.a) totalA += s.a;
       if (s.b) totalB += s.b;
       if (s.c) totalC += s.c;
       if (s.d) totalD += s.d;
       if (s.xBonus) totalXBonus += s.xBonus;
 
-      // --- Calculate K (Damage Multiplier) ---
-      // If items give +10% (0.1) and +20% (0.2), usually this sums to +30% (1.3 total)
       if (s.damage?.mult) totalK += s.damage.mult;
 
-      // --- HP (Handle Flat and Mult) ---
       if (s.maxHp?.flat) hpFlat += s.maxHp.flat;
       if (s.maxHp?.mult) hpMult += s.maxHp.mult;
     });
 
-    // 4. Final Calculations
+    // 5. ADD PENDING UPGRADES (The new interactive part)
+    // We add the points you are currently clicking in the UI
+    const finalTotalA = totalA + pendingUpgrades.a;
+    const finalTotalB = totalB + pendingUpgrades.b;
+    const finalTotalC = totalC + pendingUpgrades.c;
+    const finalTotalD = totalD + pendingUpgrades.d;
+
+    // 6. Final Calculations
     const finalMaxHp = Math.floor(hpFlat * (1 + hpMult));
 
-    // Power Score Formula (using x=1 for preview)
-    // y = k * [ (a/400)x^3 + (b/40)x^2 + (1 + c/10)x + d/2 ]
-    // Note: We are ignoring xBonus in the *preview* unless you want x to be (1 + xBonus)
-    
-    const x = 1; 
-    
-    const termA = (totalA / 400) * Math.pow(x, 3);
-    const termB = (totalB / 40) * Math.pow(x, 2);
-    const termC = (1 + (totalC / 10)) * x;
-    const termD = (totalD / 2);
-
-    const powerScore = totalK * (termA + termB + termC + termD);
+    // 7. Dynamic Power Function
+    // We use a helper function because we need to calculate this 3 times (Min, Max, and Current)
+    const calculatePower = (xVal: number) => {
+      const termA = (finalTotalA / 400) * Math.pow(xVal, 3);
+      const termB = (finalTotalB / 40) * Math.pow(xVal, 2);
+      const termC = (1 + (finalTotalC / 10)) * xVal;
+      const termD = (finalTotalD / 2);
+      return totalK * (termA + termB + termC + termD);
+    };
 
     return { 
-        a: totalA, baseA,
-        b: totalB, baseB,
-        c: totalC, baseC,
-        d: totalD, baseD,
+        // Return "Final" totals (Base + Gear + Pending)
+        a: finalTotalA, baseA,
+        b: finalTotalB, baseB,
+        c: finalTotalC, baseC,
+        d: finalTotalD, baseD,
         xBonus: totalXBonus,
         k: totalK,
         maxHp: finalMaxHp,
-        powerScore 
+        
+        // The 3 values needed for the new UI:
+        currentPower: calculatePower(previewX), // Uses the slider value
+        minPower: calculatePower(1),            // Range start
+        maxPower: calculatePower(15)            // Range end
     };
-  }, [char, gameItems]);
+  }, [char, gameItems, pendingUpgrades, previewX]); // <--- IMPORTANT: Added pendingUpgrades and previewX to dependencies
 
+  // --- HANDLERS FOR STAT UPGRADES ---
+
+  const handlePendingChange = (stat: 'a'|'b'|'c'|'d', delta: number) => {
+    setPendingUpgrades(prev => {
+      const newVal = prev[stat] + delta;
+      const currentSpent = prev.a + prev.b + prev.c + prev.d;
+      
+      // Prevent negative pending or spending more than you have
+      if (delta > 0 && currentSpent >= (char?.unspentPoints || 0)) return prev;
+      if (newVal < 0) return prev;
+      
+      return { ...prev, [stat]: newVal };
+    });
+  };
+
+  const commitUpgrades = async () => {
+      if(!char || !user) return;
+      const { a, b, c, d } = pendingUpgrades;
+      const totalCost = a + b + c + d;
+      
+      if(totalCost === 0) return;
+
+      try {
+        const charRef = doc(db, "characters", user.uid);
+        
+        // This saves the new stats to the database and subtracts the points
+        await updateDoc(charRef, {
+            "stats.a": increment(a),
+            "stats.b": increment(b),
+            "stats.c": increment(c),
+            "stats.d": increment(d),
+            "unspentPoints": increment(-totalCost)
+        });
+
+        setPendingUpgrades({ a:0, b:0, c:0, d:0 }); // Reset pending after save
+        setMsg("Stats Saved!");
+        //playSfx("/upgrade.mp3");
+      } catch (error) {
+        console.error("Error upgrading stats:", error);
+        setMsg("Error saving stats.");
+      }
+  };
+  
   // --- HANDLERS ---
 
   const handleEquip = async (item: InventoryItem) => {
@@ -508,104 +608,136 @@ export default function CharacterPage() {
   return (
     <main className="min-h-screen p-6 max-w-4xl mx-auto space-y-8">
       {/* HEADER */}
-      <header className="flex justify-between items-end border-b pb-4">
+      <header className="flex justify-between items-end border-b border-gray-200 dark:border-gray-700 pb-4">
         <div>
-          <h1 className="text-4xl font-bold">{char.name}</h1>
-          <p className="text-gray-500">Level {char.level} {char.className}</p>
+          <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white">{char.name}</h1>
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Level {char.level} • {char.className || char.className}</div>
+          
+          {/* HEALTH BAR ADDED HERE */}
+          <div className="w-48">
+             <HealthBar current={char.hp ?? char.maxHp} max={char.maxHp} />
+          </div>
         </div>
+
         <div className="text-right">
-            <div className="text-2xl font-bold text-yellow-600">🪙 {char.gold} G</div>
-            <Link href="/" className="text-sm underline text-gray-400">Back to Map</Link>
+            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">🪙 {char.gold} G</div>
+            <Link href="/" className="text-sm underline text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">Back to Map</Link>
         </div>
       </header>
 
-      {msg && <div className="bg-blue-50 text-blue-800 p-3 rounded-xl text-center font-bold animate-pulse border border-blue-200">{msg}</div>}
+      {/* STATUS MESSAGE POPUP */}
+      {msg && <div className="bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 p-3 rounded-xl text-center font-bold animate-pulse border border-blue-200 dark:border-blue-800">{msg}</div>}
 
       <div className="grid md:grid-cols-2 gap-8">
         
         {/* LEFT COL: STATS & GEAR */}
         <div className="space-y-6">
-          <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border space-y-4">
+          
+          {/* NEW INTERACTIVE STATS SECTION */}
+          <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4 transition-colors">
+            
+            {/* Stats Header with Save Button */}
             <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold">Character Stats</h2>
-                <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 dark:border-yellow-700">
-                    POINTS: {char.unspentPoints || 0}
+                <div className="flex gap-2 items-center">
+                   <div className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 dark:border-yellow-700/50">
+                      PTS: {(char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)}
+                   </div>
+                   {(pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d) > 0 && (
+                       <button onClick={commitUpgrades} className="bg-green-600 text-white dark:bg-green-500 dark:text-white text-xs px-3 py-1 rounded font-bold animate-pulse hover:bg-green-500 dark:hover:bg-green-400 shadow-lg">
+                         CONFIRM ✔
+                       </button>
+                   )}
                 </div>
             </div>
 
-            {/* TOTAL POWER PREVIEW */}
-            <div className="space-y-2">
-              <button 
-                onClick={() => setShowFormula(!showFormula)}
-                className="w-full py-2 px-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl text-purple-700 dark:text-purple-300 text-xs font-bold flex justify-between items-center hover:bg-purple-100 transition-colors"
-              >
-                <span>{showFormula ? "▼ HIDE DAMAGE FUNCTION" : "▶ VIEW DAMAGE FUNCTION"}</span>
-                <span className="font-mono text-sm">{derivedStats.powerScore.toFixed(2)} Power</span>
-              </button>
-
-              {showFormula && (
-                <div className="p-4 bg-gray-900 text-gray-100 rounded-xl font-mono text-[10px] space-y-2 animate-in slide-in-from-top-2">
-                  <p className="text-purple-400 font-bold">
-                    Damage = k * [ (a/400)x³ + (b/40)x² + (1 + c/10)x + d/2 ]
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 opacity-80">
-                    <div>k: {derivedStats.k.toFixed(2)}</div>
-                    <div>x: 1.00 (Base)</div>
+            {/* DAMAGE FORMULA / PREVIEW BOX */}
+            <div className="p-4 bg-gray-900 dark:bg-black text-gray-100 rounded-xl space-y-3 border border-transparent dark:border-gray-800 shadow-inner">
+               <div className="text-center text-xs text-gray-400 mb-1 font-mono uppercase tracking-widest">Damage Formula</div>
+               
+               {/* Math Formula */}
+               <div className="text-[10px] md:text-xs overflow-x-auto text-center text-purple-300 py-2">
+                  <BlockMath math="y = k \cdot [ \frac{a}{400}x^3 + \frac{b}{40}x^2 + (1 + \frac{c}{10})x + \frac{d}{2} ]" />
+               </div>
+               
+               {/* Slider and Results */}
+               <div className="border-t border-gray-700 dark:border-gray-800 pt-3 mt-3">
+                  <div className="flex justify-between text-xs font-bold text-gray-400 mb-2">
+                     <span>DIFFICULTY: <span className="text-white">{previewX} min</span></span>
+                     <span>DAMAGE: <span className="text-purple-300 text-lg ml-2">{derivedStats.currentPower.toFixed(2)}</span></span>
                   </div>
-                </div>
-              )}
+                  
+                  <input 
+                    type="range" min="1" max="15" step="1" 
+                    value={previewX} 
+                    onChange={(e) => setPreviewX(parseInt(e.target.value))}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500 dark:accent-purple-400"
+                  />
+                  
+                  <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-600 mt-1 font-mono">
+                     <span>x=1 (Easy)</span>
+                     <span>x=15 (Hard)</span>
+                  </div>
+               </div>
             </div>
 
-            {/* STATS GRID */}
+            {/* STAT BOXES GRID */}
             <div className="grid grid-cols-2 gap-3">
                <StatUpgradeBox 
-                    label="Mastery (a)" 
-                    flavor="Massively boosts damage on the hardest challenges."
-                    value={derivedStats.a} 
-                    locked={char.level < 50}
-                    canUpgrade={(char.unspentPoints || 0) > 0}
-                    onUpgrade={() => upgradeStat('a')}
-                    color="text-red-600"
-                />
-
+                  label="Mastery (a)" 
+                  flavor="Massively boosts damage on the hardest challenges."
+                  value={derivedStats.a} 
+                  pending={pendingUpgrades.a}
+                  locked={char.level < 50} 
+                  unlockLevel={50}
+                  canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
+                  onIncrement={() => handlePendingChange('a', 1)}
+                  onDecrement={() => handlePendingChange('a', -1)}
+                  color="text-red-600 dark:text-red-400"
+               />
                <StatUpgradeBox 
-                    label="Insight (b)" 
-                    flavor="Greatly increases damage on difficult questions."
-                    value={derivedStats.b} 
-                    locked={char.level < 20}
-                    canUpgrade={(char.unspentPoints || 0) > 0}
-                    onUpgrade={() => upgradeStat('b')}
-                    color="text-orange-600"
-                />
-
-                <StatUpgradeBox 
-                    label="Understanding (c)" 
-                    flavor="Improves your damage consistently on all questions."
-                    value={derivedStats.c} 
-                    locked={false}
-                    canUpgrade={(char.unspentPoints || 0) > 0}
-                    onUpgrade={() => upgradeStat('c')}
-                    color="text-blue-600"
-                />
-
-                <StatUpgradeBox 
-                    label="Focus (d)" 
-                    flavor="Increases the minimum damage you deal, especially on easy questions."
-                    value={derivedStats.d} 
-                    locked={false}
-                    canUpgrade={(char.unspentPoints || 0) > 0}
-                    onUpgrade={() => upgradeStat('d')}
-                    color="text-green-600"
-                />
+                  label="Insight (b)" 
+                  flavor="Greatly increases damage on difficult questions."
+                  value={derivedStats.b}
+                  pending={pendingUpgrades.b}
+                  locked={char.level < 20} 
+                  unlockLevel={20}
+                  canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
+                  onIncrement={() => handlePendingChange('b', 1)}
+                  onDecrement={() => handlePendingChange('b', -1)}
+                  color="text-orange-600 dark:text-orange-400"
+               />
+               <StatUpgradeBox 
+                  label="Understanding (c)" 
+                  flavor="Improves your damage consistently on all questions."
+                  value={derivedStats.c} 
+                  pending={pendingUpgrades.c}
+                  locked={false}
+                  canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
+                  onIncrement={() => handlePendingChange('c', 1)}
+                  onDecrement={() => handlePendingChange('c', -1)}
+                  color="text-blue-600 dark:text-blue-400"
+               />
+               <StatUpgradeBox 
+                  label="Focus (d)" 
+                  flavor="Increases the minimum damage you deal, especially on easy questions."
+                  value={derivedStats.d} 
+                  pending={pendingUpgrades.d}
+                  locked={false}
+                  canAfford={((char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)) > 0}
+                  onIncrement={() => handlePendingChange('d', 1)}
+                  onDecrement={() => handlePendingChange('d', -1)}
+                  color="text-green-600 dark:text-green-400"
+               />
             </div>
             
-            {/* FOOTER NOTE */}
-            <div className="pt-2 border-t dark:border-gray-700 text-center text-xs text-gray-400 italic">
+            <div className="pt-2 border-t border-gray-100 dark:border-gray-700 text-center text-xs text-gray-400 italic">
                 Values shown include equipment bonuses.
             </div>
           </section>
 
-          <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border space-y-4">
+          {/* EQUIPPED GEAR SECTION */}
+          <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4">
             <h2 className="text-xl font-bold">Equipped Gear</h2>
             <div className="space-y-2">
                 <EquipRow slotName="Main Hand" slotKey="mainHand" equippedId={char.equipment.mainHand} gameItems={gameItems} inventory={char.inventory} onUnequip={() => handleUnequip('mainHand')} />
@@ -616,7 +748,7 @@ export default function CharacterPage() {
           </section>
         </div>
 
-        {/* RIGHT COL: INVENTORY */}
+        {/* RIGHT COL: BACKPACK INVENTORY */}
         <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 h-fit transition-colors">
           <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Backpack ({char.inventory.length})</h2>

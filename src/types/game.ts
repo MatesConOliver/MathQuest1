@@ -57,6 +57,7 @@ export interface Character {
   xp: number;
   gold: number;
   maxHp: number;
+  hp: number;
   stats: CharacterStats; 
   unspentPoints: number;
   inventory: InventoryItem[]; 

@@ -223,6 +223,10 @@ function PlayContent() {
     // 5. Hurt the player
     setPlayerHp((prevHp) => {
         const newHp = Math.max(0, prevHp - finalDamage);
+
+        if (user) {
+            updateDoc(doc(db, "characters", user.uid), { hp: newHp });
+        }
         
         // Only lose if HP hits 0
         if (newHp <= 0) {
@@ -264,15 +268,12 @@ function PlayContent() {
 
       // 2. Fetch Questions
       let qQuery;
-      
       if (enc.questionTags && enc.questionTags.length > 0) {
-          // New Way: Match ANY of the tags in the list
           qQuery = query(
               collection(db, "questions"), 
               where("tags", "array-contains-any", enc.questionTags)
           );
       } else {
-          // Old Way: Single tag
           qQuery = query(
               collection(db, "questions"), 
               where("tags", "array-contains", enc.questionTag || "level1")
@@ -282,38 +283,38 @@ function PlayContent() {
       const qSnap = await getDocs(qQuery);
       let qList = qSnap.docs.map(d => ({ id: d.id, ...d.data() } as QuestionDoc));
 
-      // ---------------------------------------------------------
-      // 🧠 LOGIC: RANDOM VS ORDERED
-      // ---------------------------------------------------------
-      // We assume the Encounter doc has a boolean field 'shuffleQuestions'
-      // If true: Randomize. If false: Sort by 'order' field.
-      // @ts-ignore (We will add this field to the type later)
+      // 3. Shuffle or Sort Questions
+      // @ts-ignore 
       if (enc.shuffleQuestions) {
-        qList = shuffleArray(qList);
+        qList = qList.sort(() => Math.random() - 0.5); // Simple shuffle
       } else {
-        // Sort by 'order' property if it exists, otherwise keep DB order
         qList.sort((a, b) => (a.order || 999) - (b.order || 999));
       }
       
       setQuestions(qList);
 
-      // 3. PREPARE BATTLE (But show Intro first!)
+      // 4. PREPARE BATTLE (Show Intro first)
       setTimeout(() => {
+        // A. Define the character to use
         const charToUse = specificChar || character;
-        const pMax = charToUse?.maxHp || 100;
 
-        // 1. Calculate Total Max HP with Equipment (Same logic as Character Page)
-        let totalMaxHp = charToUse?.maxHp || 20; // Base
+        // B. SAFETY CHECK (This fixes the Red Line!)
+        // We tell the code: "If there is no character, stop right here."
+        if (!charToUse) {
+            console.error("Missing character data");
+            setMode("lobby");
+            return;
+        }
 
-        // Calculate bonuses from equipped items
-        if (charToUse && charToUse.equipment) {
+        // C. Calculate Total Max HP with Equipment
+        let totalMaxHp = charToUse.maxHp || 20; 
+
+        if (charToUse.equipment && charToUse.inventory) {
              Object.values(charToUse.equipment).forEach(equipId => {
-                 // Find the item in inventory
+                 if (!equipId) return;
                  const item = charToUse.inventory.find(i => i.instanceId === equipId);
                  if (item) {
-                     // Find the item definition
                      const def = gameItems[item.itemId];
-                     // Add HP bonus if it exists
                      if (def && def.stats?.maxHp?.flat) {
                          totalMaxHp += def.stats.maxHp.flat;
                      }
@@ -321,26 +322,30 @@ function PlayContent() {
              });
         }
 
-        // 2. Set HP
-        // If 'hp' exists in DB, use it. If it's 0 (you died previously) or missing, reset to full Max HP.
-        // We use 'hp' because that is what your Character Page uses.
-        let current = (charToUse as any).hp;
+        // D. Determine Current HP
+        // We look at 'charToUse.hp' (which we added to types/game.ts earlier)
+        let current = charToUse.hp;
         
+        // If HP is missing, invalid, or 0, reset to full health
         if (current === undefined || current === null || current <= 0) {
-            current = totalMaxHp; // Start fresh if dead or new
-             // OPTIONAL: Update DB immediately to reset their HP to full
-             if (user) updateDoc(doc(db, "characters", user.uid), { hp: totalMaxHp });
+            current = totalMaxHp; 
+            // Update DB so they are fresh
+            if (user) {
+                updateDoc(doc(db, "characters", user.uid), { hp: current });
+            }
         }
 
+        // E. Set State
         setPlayerHp(current);
         setFoeHp(currentFoe?.maxHp || 50); 
+        
         const firstTime = (qList[0]?.timeLimit || 30) * (enc.timeMultiplier || 1.0);
         setTimeLeft(firstTime);
         setTotalTime(firstTime);
         setCurrentQIndex(0);
         setIsPaused(false);
 
-        // 🛑 SHOW INTRO FIRST (Story Mode)
+        // F. Start Intro
         setMode("intro"); 
       }, 500);
 
@@ -388,8 +393,12 @@ function PlayContent() {
     } else {
       // Incorrect logic
       const incDmg = calculateIncomingDamage(foe.attackDamage); 
-      const newPlayerHp = playerHp - incDmg;
+      const newPlayerHp = Math.max(0, playerHp - incDmg);
       setPlayerHp(newPlayerHp);
+
+      if (user) {
+          updateDoc(doc(db, "characters", user.uid), { hp: newPlayerHp });
+      }
 
       // Degrade Armor (AWAIT THIS)
       const { broken } = await degradation("armor", 1);
