@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc, updateDoc, collection, getDocs, increment } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, setDoc, getDocs, increment } from "firebase/firestore";
 import { GameItem, InventoryItem, Character } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
 import 'katex/dist/katex.min.css'; 
@@ -156,7 +156,9 @@ function StatUpgradeBox({
   canAfford, onIncrement, onDecrement, color 
 }: any) {
   
-  const totalValue = value + pending;
+  // LOGIC: 'value' (from derivedStats) already includes Base + Gear.
+  // We just add pending to it for the PREVIEW.
+  const totalValue = value + pending; 
   const isChanged = pending > 0;
 
   return (
@@ -166,7 +168,7 @@ function StatUpgradeBox({
         : "bg-white dark:bg-gray-700/30 border-gray-200 dark:border-gray-600 relative overflow-hidden"
       }`}>
       
-      {/* Pending Indicator (Yellow Corner) */}
+      {/* Pending Indicator */}
       {isChanged && <div className="absolute top-0 right-0 w-8 h-8 bg-yellow-400/30 dark:bg-yellow-400/20 rounded-bl-full z-0"></div>}
 
       <div className="flex justify-between items-start z-10">
@@ -202,25 +204,6 @@ function StatUpgradeBox({
             </button>
           </>
         )}
-      </div>
-    </div>
-  );
-}
-
-function HealthBar({ current, max }: { current: number, max: number }) {
-  const percent = Math.min(100, Math.max(0, (current / max) * 100));
-  
-  return (
-    <div className="w-full">
-      <div className="flex justify-between text-[10px] font-bold uppercase mb-1 text-gray-500 dark:text-gray-400">
-        <span>Health</span>
-        <span>{current} / {max} HP</span>
-      </div>
-      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden relative">
-        <div 
-          className="h-full bg-red-500 dark:bg-red-600 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(239,68,68,0.5)]"
-          style={{ width: `${percent}%` }}
-        />
       </div>
     </div>
   );
@@ -419,6 +402,7 @@ export default function CharacterPage() {
 
   const commitUpgrades = async () => {
       if(!char || !user) return;
+      
       const { a, b, c, d } = pendingUpgrades;
       const totalCost = a + b + c + d;
       
@@ -427,7 +411,6 @@ export default function CharacterPage() {
       try {
         const charRef = doc(db, "characters", user.uid);
         
-        // This saves the new stats to the database and subtracts the points
         await updateDoc(charRef, {
             "stats.a": increment(a),
             "stats.b": increment(b),
@@ -435,10 +418,28 @@ export default function CharacterPage() {
             "stats.d": increment(d),
             "unspentPoints": increment(-totalCost)
         });
+        
+        // 2. UPDATE LOCAL STATE (The Screen)
+        // We explicitly tell TypeScript that 'prev' is a Character or null
+        setChar((prev: Character | null) => {
+            if (!prev) return null;
 
-        setPendingUpgrades({ a:0, b:0, c:0, d:0 }); // Reset pending after save
+            return {
+                ...prev,
+                unspentPoints: (prev.unspentPoints || 0) - totalCost,
+                stats: {
+                    a: (prev.stats?.a || 0) + a,
+                    b: (prev.stats?.b || 0) + b,
+                    c: (prev.stats?.c || 0) + c,
+                    d: (prev.stats?.d || 0) + d,
+                }
+            };
+        });
+
+        // 3. Reset Pending
+        setPendingUpgrades({ a:0, b:0, c:0, d:0 }); 
         setMsg("Stats Saved!");
-        //playSfx("/upgrade.mp3");
+
       } catch (error) {
         console.error("Error upgrading stats:", error);
         setMsg("Error saving stats.");
