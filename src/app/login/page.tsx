@@ -67,6 +67,7 @@ export default function LoginPage() {
           xp: 0,
           gold: 0,
           maxHp: 15,
+          hp: 15,
           stats: {
             a: 0, 
             b: 0, 
