@@ -69,6 +69,8 @@ export interface Character {
   };
   createdAt?: any;
   updatedAt?: any;
+  completedStoryEvents: string[]; // List of IDs like ["intro_01", "chapter_1_done"]
+  unlockedContinents: string[];   // List of IDs like ["cont_1", "cont_2"]
 }
 
 export interface Monster {
@@ -145,3 +147,54 @@ export type EncounterDoc = {
   imageUrl?: string;         
   emoji?: string;            
 };
+
+// ==========================================
+// 📖 STORY ENGINE TYPES
+// ==========================================
+
+export type StoryTrigger = 
+  | "ON_LOGIN"           // Plays immediately when opening the game
+  | "ON_ENTER_MAP"       // Plays when entering a specific map/continent
+  | "ON_VICTORY"         // Plays after winning a specific encounter
+  | "ON_DEFEAT"          // Plays after losing a specific encounter
+  | "ON_LEVEL_UP"       // Plays when reaching a specific level
+  | "ON_OBJECT_CONDITIONS"; // Plays when certain object conditions are met, for example, retrieving all pieces of a core or finding a key
+
+export interface StoryEvent {
+  id: string;            // Unique ID (e.g., "intro_01")
+  title: string;         // Internal name
+  triggerType: StoryTrigger;
+  triggerCondition: string; // The ID of the thing that triggers it (e.g., "encounter_rat_king")
+  
+  // The actual visual novel sequence
+  scenes: StoryScene[];
+  
+  // What happens when the story finishes?
+  rewards?: {
+    xp?: number;
+    gold?: number;
+    unlockMapId?: string; // Unlocks a new continent
+    unlockEncounterId?: string; // Unlocks a new fight
+  };
+  
+  // Is it repeatable? Usually stories play once.
+  oneTime: boolean; 
+}
+
+export interface StoryScene {
+  id: string;
+  speakerName?: string;    // e.g., "Wise Wizard"
+  speakerSprite?: string;  // URL to image
+  text: string;            // "Welcome to the world of Math!"
+  backgroundUrl?: string;  // URL to background
+  musicUrl?: string;       // URL to background music
+  
+  // Interaction (Simple Version)
+  choices?: {
+    text: string;          // "I am ready!"
+    nextSceneId: string;   // Jumps to specific scene
+  }[];
+  
+  // If no choices, where does the "Next" button go?
+  nextSceneId?: string | "END"; 
+}
