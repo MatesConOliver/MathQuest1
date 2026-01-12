@@ -79,6 +79,8 @@ export default function LoginPage() {
           equipment: { mainHand: null, offHand: null, armor: null, head: null },
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+          completedStoryEvents: [],
+          unlockedContinents: ["bSL1XkrzgqQxqtCLNumD"]
         };
 
         await setDoc(doc(db, "characters", uid), starter);
