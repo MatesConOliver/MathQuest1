@@ -1,1397 +1,412 @@
 "use client";
 
-import { useEffect, useState, useRef, Suspense } from "react";
-import { auth, db } from "@/lib/firebase";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { auth, getAllDocs, getDoc, updateDoc } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, query, where, updateDoc, increment, setDoc } from "firebase/firestore";
-import { QuestionDoc, FoeDoc, EncounterDoc, Character, EquipmentSlot, GameItem, InventoryItem } from "@/types/game";
-import { useSearchParams, useRouter } from "next/navigation";
-import 'katex/dist/katex.min.css'; 
-import { InlineMath, BlockMath } from 'react-katex';
-import { useAudio } from "@/context/AudioContext";
+import { Character, EncounterDoc, FoeDoc, QuestionDoc, GameItem, InventoryItem } from "@/types/game";
+import { useRouter, useSearchParams } from 'next/navigation';
+import 'katex/dist/katex.min.css';
 
-function PlayContent() {
-  const { playTrack } = useAudio()!; 
+// Import the new components
+import { Lobby } from './components/Lobby';
+import { BattleIntro } from './components/BattleIntro';
+import { BattleScreen } from './components/BattleScreen';
+import { VictoryScreen } from './components/VictoryScreen';
+import { DefeatScreen } from './components/DefeatScreen';
 
-  useEffect(() => {
-    playTrack("/the-tournament-280277.mp3");
-  }, []);
-
+// Main game content component
+export default function PlayContent() {
+  const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const encounterId = searchParams.get("id");
-  const [user, setUser] = useState<User | null>(null);
-  const [character, setCharacter] = useState<Character | null>(null);
-  const [gameItems, setGameItems] = useState<Record<string, GameItem>>({});
 
-  // Game States
-  const [mode, setMode] = useState<"lobby" | "loading" | "intro" | "battle" | "won" | "lost">("lobby");
+  // Game state
+  const [mode, setMode] = useState("lobby");
+  const [character, setCharacter] = useState<Character | null>(null);
   const [encounters, setEncounters] = useState<EncounterDoc[]>([]);
-  
-  // Battle Data
-  const [activeEncounter, setActiveEncounter] = useState<EncounterDoc | null>(null);
+  const [currentEncounter, setCurrentEncounter] = useState<EncounterDoc | null>(null);
   const [foe, setFoe] = useState<FoeDoc | null>(null);
   const [questions, setQuestions] = useState<QuestionDoc[]>([]);
-  
-  // Battle State
   const [currentQIndex, setCurrentQIndex] = useState(0);
-  const [playerHp, setPlayerHp] = useState(20);
-  const [foeHp, setFoeHp] = useState(0);
+  const [playerHp, setPlayerHp] = useState(100);
+  const [foeHp, setFoeHp] = useState(50);
   const [msg, setMsg] = useState("");
-  const loadAllEncounters = async () => {
-    const q = query(collection(db, "encounters"));
-    const snap = await getDocs(q);
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as EncounterDoc));
-    setEncounters(list);
-  };
-  const handleLoss = async (reason?: string) => {
-    // 1. Visual Updates
-    setMsg(reason || "💀 You were defeated!");
-    setMode("lost");
-    if (timerRef.current) clearInterval(timerRef.current);
 
-    // 2. Calculate Death Penalty (20% of your CURRENT gold)
-    // If you have 100g, you lose 20g. If you have 0g, you lose 0g.
-    const currentGold = character?.gold || 0;
-    const penalty = Math.ceil(currentGold * 0.20); 
-    const newGold = Math.max(0, currentGold - penalty);
-
-    // 3. Save to Database
-    if (user && character) {
-        const charRef = doc(db, "characters", user.uid);
-        await updateDoc(charRef, {
-            gold: newGold,       // Pay the death tax
-            hp: character.maxHp || 20 // Respawn fully healed (Game Over reset)
-        });
-    }
-  };
-
-  // --- NEW: SKIP FUNCTION ---
-  const skipQuestion = () => {
-      // 1. Calculate Damage (Same as wrong answer)
-      const dmg = foe?.attackDamage || 5;
-      const newHp = Math.max(0, playerHp - dmg);
-      
-      // 2. Apply Damage
-      setPlayerHp(newHp);
-      setMsg(`Skipped! Took -${dmg} HP`);
-
-      // 3. Check if dead, otherwise move next
-      if (newHp <= 0) {
-          handleLoss();
-      } else {
-          nextQuestion(); // Uses the function we fixed earlier
-      }
-  };
-
-  // --- NEW: EXECUTE ESCAPE (Action only) ---
-  const executeEscape = async () => {
-      // 1. Close the modal immediately
-      setShowEscapeConfirm(false);
-
-      // 2. Save current injury to Database
-      if (user) {
-          const charRef = doc(db, "characters", user.uid);
-          await updateDoc(charRef, {
-              // We do NOT touch gold (Safe!)
-              hp: playerHp  // IMPORTANT: We save 'hp' (not currentHp) so the injury sticks.
-          });
-      }
-      
-      // 3. Go back to map
-      setMode("lobby"); 
-      router.push("/map");
-  };
-
-  // Level Up & Loot State
-  const [levelUpData, setLevelUpData] = useState<{ oldLvl: number, newLvl: number, hpGain: number } | null>(null);
-  const [lootDrops, setLootDrops] = useState<string[]>([]); // New: Stores item names found
-
-  const [showInventory, setShowInventory] = useState(false);
-  const [showEscapeConfirm, setShowEscapeConfirm] = useState(false);
-
-  // 🕒 TIMER STATES
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [totalTime, setTotalTime] = useState(30);
-  const [maxTime, setMaxTime] = useState(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null); 
+  // Battle mechanics state
+  const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const totalTime = useMemo(() => questions[currentQIndex]?.timeLimit || 30, [questions, currentQIndex]);
   const [isPaused, setIsPaused] = useState(false);
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
+  const [levelUpData, setLevelUpData] = useState<{ oldLvl: number, newLvl: number, hpGain: number, pointsGain: number } | null>(null);
+  const [lootDrops, setLootDrops] = useState<string[]>([]);
 
-  const renderMixedText = (text: string) => {
-    if (!text) return null;
-    // Split by '$' to separate text from math
-    const parts = text.split('$');
-    
-    return (
-      <span>
-        {parts.map((part, index) => {
-          // If index is ODD (1, 3, 5...), it was inside $$ -> Render as Math
-          if (index % 2 === 1) {
-             return <span key={index} onClick={(e) => e.stopPropagation()} className="inline-block mx-1"><InlineMath math={part} /></span>;
-          }
-          // If index is EVEN (0, 2, 4...), it is regular Text
-          return <span key={index}>{part}</span>;
-        })}
-      </span>
-    );
-  };
-
-  // ----------------------------------------------
-  // 1. INIT & LOADING
-  // ----------------------------------------------
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      if (!u) {
-        setUser(null);
-        return;
-      }
-      setUser(u);
-
-      // 1. Load Character & Store in a local variable
-      let fetchedChar: Character | undefined = undefined;
-      const charRef = doc(db, "characters", u.uid);
-      const charSnap = await getDoc(charRef);
-      
-      if (charSnap.exists()) {
-        fetchedChar = charSnap.data() as Character;
-        setCharacter(fetchedChar); // Update State
-      }
-
-      // 2. Load Items
-      const itemsSnap = await getDocs(collection(db, "items"));
-      const itemsMap: Record<string, GameItem> = {};
-      itemsSnap.forEach((d) => (itemsMap[d.id] = { id: d.id, ...d.data() } as GameItem));
-      setGameItems(itemsMap);
-
-      // 3. Logic: URL ID vs Lobby
-      if (encounterId) {
-        setMode("loading");
-        const encRef = doc(db, "encounters", encounterId);
-        const encSnap = await getDoc(encRef);
-        
-        if (encSnap.exists()) {
-          const encData = { id: encSnap.id, ...encSnap.data() } as EncounterDoc;
-          
-          // 🟢 PASS FETCHED CHAR DIRECTLY HERE
-          startEncounter(encData, fetchedChar); 
-          
-        } else {
-          setMode("lobby");
-          loadAllEncounters();
-        }
-      } else {
-        setMode("lobby");
-        loadAllEncounters();
-      }
-    });
-
-    return () => unsubscribe();
-  }, [encounterId]);
-
-  // ----------------------------------------------
-  // 2. TIMER LOGIC
-  // ----------------------------------------------
-  useEffect(() => {
-    // Stop timer if not battling OR if game is paused (answered/timeout)
-    if (mode !== "battle" || isPaused) return;
-
-    if (timeLeft <= 0) {
-      handleTimeout();
-      return;
+  // UI state
+  const [isLoading, setIsLoading] = useState(true);
+  const [showInventory, setShowInventory] = useState(false);
+  const [showEscapeConfirm, setShowEscapeConfirm] = useState(false);
+  const [gameItems, setGameItems] = useState<Record<string, GameItem>>({});
+  
+  const battleStats = useMemo(() => {
+    if (!character) {
+      return { a: 0, b: 0, c: 0, d: 0, k: 1, xBonus: 0, maxHp: 100 };
     }
 
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => Math.max(0, prev - 0.1));
-    }, 100);
+    const baseA = character.stats?.a || 0;
+    const baseB = character.stats?.b || 0;
+    const baseC = character.stats?.c || 0;
+    const baseD = character.stats?.d || 0;
+    const baseHp = character.maxHp;
 
-    return () => clearInterval(timer);
-  }, [mode, isPaused, timeLeft]);
+    let totalA = baseA;
+    let totalB = baseB;
+    let totalC = baseC;
+    let totalD = baseD;
+    let totalXBonus = 0;
+    let totalK = 1;
+    let hpFlat = baseHp;
+    let hpMult = 0;
 
-  // --- 💀 HANDLE TIME UP ---
-  const handleTimeout = () => {
-    // Fix: Stop the timer engine immediately so it doesn't tick to -1 or flicker
-    if (timerRef.current) {
-        clearInterval(timerRef.current);
-    }
+    Object.values(character.equipment).forEach(equippedInstanceId => {
+      if (!equippedInstanceId) return;
+      const instance = character.inventory.find(i => i.instanceId === equippedInstanceId);
+      if (!instance) return;
+      const def = gameItems[instance.itemId];
+      if (!def || !def.stats) return;
 
-    setIsPaused(true);       // 1. Pause the game
-    setShowInventory(false); // 2. Close the backpack if open
-    setSelectedChoice(-1); // Recommended: Ensures button UI knows no choice was made
+      const isBroken = (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
+      if (isBroken) return;
 
-    // 3. Calculate Damage (Use '??' to prevent crashes on old foes)
-    const rawDamage = foe?.attackDamage ?? 5; 
-    const finalDamage = calculateIncomingDamage(rawDamage);
-    
-    // 4. Set the message using your existing 'setMsg'
-    setMsg(`⏰ Time's Up! You took ${finalDamage} damage!`);
+      const s = def.stats;
 
-    // 5. Hurt the player
-    setPlayerHp((prevHp) => {
-        const newHp = Math.max(0, prevHp - finalDamage);
-
-        if (user) {
-            updateDoc(doc(db, "characters", user.uid), { hp: newHp });
-        }
-        
-        // Only lose if HP hits 0
-        if (newHp <= 0) {
-            setTimeout(() => setMode("lost"), 1000);
-        }
-        return newHp;
+      if (s.a) totalA += s.a;
+      if (s.b) totalB += s.b;
+      if (s.c) totalC += s.c;
+      if (s.d) totalD += s.d;
+      if (s.xBonus) totalXBonus += s.xBonus;
+      if (s.damage?.mult) totalK += s.damage.mult;
+      if (s.maxHp?.flat) hpFlat += s.maxHp.flat;
+      if (s.maxHp?.mult) hpMult += s.maxHp.mult;
     });
+
+    const finalMaxHp = Math.floor(hpFlat * (1 + hpMult));
+
+    return { a: totalA, b: totalB, c: totalC, d: totalD, k: totalK, xBonus: totalXBonus, maxHp: finalMaxHp };
+  }, [character, gameItems]);
+
+
+  const calculatePlayerDamage = useCallback((questionDifficulty: number) => {
+    const { a, b, c, d, k, xBonus } = battleStats;
+    const x = (questionDifficulty || 1) + xBonus;
+
+    const termA = (a / 400) * Math.pow(x, 3);
+    const termB = (b / 40) * Math.pow(x, 2);
+    const termC = (1 + (c / 10)) * x;
+    const termD = d / 2;
     
-    // 6. Optional: Damage armor
-    degradation("armor", 1);
-  };
+    const totalDamage = k * (termA + termB + termC + termD);
+    
+    return Math.max(1, Math.floor(totalDamage));
+  }, [battleStats]);
 
-  const resetTimer = (baseSeconds: number) => {
-    const finalTime = calculateAdjustedTime(baseSeconds);
-    setTimeLeft(finalTime);
-    setMaxTime(finalTime);
-  };
-
-  // ----------------------------------------------
-  // 3. GAMEPLAY ACTIONS
-  // ----------------------------------------------
-  const startEncounter = async (enc: EncounterDoc, specificChar?: Character) => {
-    setActiveEncounter(enc);
-    setMode("loading");
-
+  const handleLoss = useCallback(async (reason: string) => {
+    if (!user) return;
     try {
-      // 1. Fetch Foe
-      let currentFoe: FoeDoc | null = null;
-      // @ts-ignore
-      const targetId = (enc.foes && enc.foes.length > 0) ? enc.foes[0] : enc.foeId;
-
-      if (targetId) {
-        const foeSnap = await getDoc(doc(db, "foes", targetId));
-        if (foeSnap.exists()) {
-          currentFoe = { id: foeSnap.id, ...foeSnap.data() } as FoeDoc;
-          setFoe(currentFoe);
-        }
-      }
-
-      // 2. Fetch Questions
-      let qQuery;
-      if (enc.questionTags && enc.questionTags.length > 0) {
-          qQuery = query(
-              collection(db, "questions"), 
-              where("tags", "array-contains-any", enc.questionTags)
-          );
-      } else {
-          qQuery = query(
-              collection(db, "questions"), 
-              where("tags", "array-contains", enc.questionTag || "level1")
-          );
-      }
-
-      const qSnap = await getDocs(qQuery);
-      let qList = qSnap.docs.map(d => ({ id: d.id, ...d.data() } as QuestionDoc));
-
-      // 3. Shuffle or Sort Questions
-      // @ts-ignore 
-      if (enc.shuffleQuestions) {
-        qList = qList.sort(() => Math.random() - 0.5); // Simple shuffle
-      } else {
-        qList.sort((a, b) => (a.order || 999) - (b.order || 999));
-      }
-      
-      setQuestions(qList);
-
-      // 4. PREPARE BATTLE (Show Intro first)
-      setTimeout(() => {
-        // A. Define the character to use
-        const charToUse = specificChar || character;
-
-        // B. SAFETY CHECK (This fixes the Red Line!)
-        // We tell the code: "If there is no character, stop right here."
-        if (!charToUse) {
-            console.error("Missing character data");
-            setMode("lobby");
-            return;
-        }
-
-        // C. Calculate Total Max HP with Equipment
-        let totalMaxHp = charToUse.maxHp || 20; 
-
-        if (charToUse.equipment && charToUse.inventory) {
-             Object.values(charToUse.equipment).forEach(equipId => {
-                 if (!equipId) return;
-                 const item = charToUse.inventory.find(i => i.instanceId === equipId);
-                 if (item) {
-                     const def = gameItems[item.itemId];
-                     if (def && def.stats?.maxHp?.flat) {
-                         totalMaxHp += def.stats.maxHp.flat;
-                     }
-                 }
-             });
-        }
-
-        // D. Determine Current HP
-        // We look at 'charToUse.hp' (which we added to types/game.ts earlier)
-        let current = charToUse.hp;
-        
-        // If HP is missing, invalid, or 0, reset to full health
-        if (current === undefined || current === null || current <= 0) {
-            current = totalMaxHp; 
-            // Update DB so they are fresh
-            if (user) {
-                updateDoc(doc(db, "characters", user.uid), { hp: current });
-            }
-        }
-
-        // E. Set State
-        setPlayerHp(current);
-        setFoeHp(currentFoe?.maxHp || 50); 
-        
-        const firstTime = (qList[0]?.timeLimit || 30) * (enc.timeMultiplier || 1.0);
-        setTimeLeft(firstTime);
-        setTotalTime(firstTime);
-        setCurrentQIndex(0);
-        setIsPaused(false);
-
-        // F. Start Intro
-        setMode("intro"); 
-      }, 500);
-
-    } catch (error) {
-      console.error("Error starting game:", error);
-      setMode("lobby");
+       await updateDoc("characters", user.uid, { hp: playerHp > 0 ? playerHp : 0 });
+       setMsg(reason);
+       setMode("lose");
+    } catch(e) {
+       console.error("Error updating character on loss: ", e)
+       setMsg("Error saving character state.")
+       setMode("lobby")
     }
-  };
+  }, [user, playerHp]);
 
-  const handleAnswer = async (choiceIndex: number) => {
-    if (!activeEncounter || !foe) return;
-    if (timerRef.current) clearInterval(timerRef.current);
-
-    const currentQ = questions[currentQIndex];
-    const isCorrect = choiceIndex === currentQ.correctIndex;
-
-    setSelectedChoice(choiceIndex);
-
-    if (isCorrect) {
-      // 1. Damage Logic (Formula based on Time Limit)
-      // We pass the timeLimit to calculate 'x' (Difficulty)
-      const finalDamage = calculatePlayerDamage(currentQ.timeLimit || 30); 
-      const newFoeHp = foeHp - finalDamage;
-      setFoeHp(newFoeHp);
-
-      // 2. Degrade Weapon
-      const { broken, newInv } = await degradation("mainHand", 1); 
-
-      if (newFoeHp <= 0) {
-          setMsg(`⚔️ FINAL BLOW! Dealt ${finalDamage} damage!`);
-          // Jump straight to victory screen without waiting for "Next" button
-          handleWin(newInv); 
-          return; // Exit function early
-      }
-
-      // 3. Message
-      if (broken) {
-        setMsg(`⚔️ Hit for ${finalDamage} dmg... but your weapon CRACKED and broke! 💥`);
-      } else {
-        setMsg(`⚔️ Hit for ${finalDamage} dmg!`);
-      }
-
-      setIsPaused(true);
-
-    } else {
-      // Incorrect logic
-      const incDmg = calculateIncomingDamage(foe.attackDamage); 
-      const newPlayerHp = Math.max(0, playerHp - incDmg);
-      setPlayerHp(newPlayerHp);
-
-      if (user) {
-          updateDoc(doc(db, "characters", user.uid), { hp: newPlayerHp });
-      }
-
-      // Degrade Armor (AWAIT THIS)
-      const { broken } = await degradation("armor", 1);
-
-      if (newPlayerHp <= 0) {
-        handleLoss();
-      } else {
-        if (broken) {
-           setMsg("🛡️💥 Ouch! You took damage and your Armor SHATTERED!");
-        } else {
-           setMsg(choiceIndex === -1 ? "⏰ Time Out!" : "Wrong! You took damage.");
-        }
-        setIsPaused(true);       
-        setShowInventory(false); 
-      }
-    }
-  };
-
-  const nextQuestion = () => {
-    // 1. Reset UI States
-    setMsg("");
+  const nextQuestion = useCallback(() => {
     setIsPaused(false);
     setSelectedChoice(null);
+    setCurrentQIndex(prev => prev + 1);
+    setTimeLeft(totalTime);
+    setMsg("");
+  }, [totalTime]);
 
-    // 2. Check if we have more questions
-    if (currentQIndex < questions.length - 1) {
-      const nextIdx = currentQIndex + 1;
-      setCurrentQIndex(nextIdx);
+  const handleWin = useCallback(async () => {
+    if (!user || !character || !currentEncounter) return;
 
-      // 3. Get next question & Base Time
-      const nextQ = questions[nextIdx];
-      // Note: We use the raw timeLimit from the question, then modify it with our helper
-      const baseSeconds = (nextQ?.timeLimit || 30) * (activeEncounter?.timeMultiplier || 1.0);
+    const xpGain = currentEncounter.winRewardXp || 0;
+    const goldGain = currentEncounter.winRewardGold || 0;
 
-      // 4. Reset Timers using the new logic
-      resetTimer(baseSeconds);
-      // We also update totalTime manually here for the visual bar to fill up
-      setTotalTime(calculateAdjustedTime(baseSeconds));
-      
-    } else {
-      // 5. No more questions?
-      // If the foe is still alive, we LOSE (Ran out of time/ammo)
-      if (foeHp > 0) {
-          handleLoss("⌛ Ran out of turns! You weren't able to defeat the enemy in time.");
-      } else {
-          // If foe is dead (should be handled in handleAnswer, but just in case)
-          handleWin();
+    const oldLvl = character.level;
+    let newXp = (character.xp || 0) + xpGain;
+    let newLvl = oldLvl;
+    let hpGain = 0;
+    let pointsGain = 0;
+    let xpToNextLevel = 100 * Math.pow(1.1, newLvl - 1);
+
+    while (newXp >= xpToNextLevel) {
+      newXp -= xpToNextLevel; // Subtract XP needed for this level
+      newLvl++;
+      hpGain += 10; // 10 HP per level
+      pointsGain += 1; // 1 point per level
+      xpToNextLevel = 100 * Math.pow(1.1, newLvl - 1); // Calculate XP for the *next* level
+    }
+
+    if (currentEncounter.winRewardItems) {
+        const lootNames = currentEncounter.winRewardItems.map(id => gameItems[id]?.name || 'Unknown Item');
+        setLootDrops(lootNames);
+    }
+
+    try {
+      await updateDoc("characters", user.uid, {
+        hp: playerHp,
+        xp: newXp,
+        level: newLvl,
+        maxHp: (character.maxHp || 100) + hpGain,
+        unspentPoints: (character.unspentPoints || 0) + pointsGain,
+        gold: (character.gold || 0) + goldGain,
+        inventory: [...character.inventory, ...(currentEncounter.winRewardItems || []).map(itemId => ({ itemId, instanceId: Date.now().toString() + Math.random() }))]
+      });
+
+      if (newLvl > oldLvl) {
+        setLevelUpData({ oldLvl, newLvl, hpGain, pointsGain });
       }
+      
+      setMode("win");
+
+    } catch (error) {
+      console.error("Error updating character on win:", error);
+      setMsg("Could not save your victory progress. Please try again.");
+      setMode("lobby");
     }
-  };
+  }, [user, character, currentEncounter, gameItems, playerHp]);
 
-  // 🧪 POTION LOGIC (Fixed to include Equipment Bonuses)
-  const usePotion = async (invItem: InventoryItem) => {
-    if (!character || !user) return;
-    const def = gameItems[invItem.itemId];
-    if (!def) return;
+  const handleAnswer = useCallback(async (choiceIndex: number) => {
+    if (isPaused) return;
 
-    // 1. Calculate REAL Max HP (Base + Equipment)
-    // We must repeat this math here because 'character.maxHp' is just the base stats.
-    let totalMaxHp = character.maxHp || 20;
+    setIsPaused(true);
+    setSelectedChoice(choiceIndex);
 
-    if (character.equipment) {
-         Object.values(character.equipment).forEach(equipId => {
-             // Find the equipped item in inventory to ensure we have it
-             const item = character.inventory.find(i => i.instanceId === equipId);
-             if (item) {
-                 const itemDef = gameItems[item.itemId];
-                 // Add HP bonus if it exists
-                 if (itemDef && itemDef.stats?.maxHp?.flat) {
-                     totalMaxHp += itemDef.stats.maxHp.flat;
-                 }
-             }
-         });
+    const correct = choiceIndex === questions[currentQIndex].correctIndex;
+    let newFoeHp = foeHp;
+    let newPlayerHp = playerHp;
+
+    if (correct) {
+      const foeDamage = calculatePlayerDamage(questions[currentQIndex].difficulty || 1);
+      newFoeHp = Math.max(0, foeHp - foeDamage);
+      setMsg(`Correct! You dealt ${foeDamage} damage.`);
+      setFoeHp(newFoeHp);
+    } else {
+      const playerDamage = foe?.attackDamage || 5;
+      newPlayerHp = Math.max(0, playerHp - playerDamage);
+      setMsg(`Incorrect! The enemy dealt ${playerDamage} damage.`);
+      setPlayerHp(newPlayerHp);
     }
 
-    const healAmount = def.stats?.heal?.flat || 20;
-    
-    // 2. Heal relative to TOTAL Max HP
-    const newHp = Math.min(totalMaxHp, playerHp + healAmount);
-    setPlayerHp(newHp);
-
-    // 3. Remove Potion from Inventory
-    const newInventory = character.inventory.filter(i => i.instanceId !== invItem.instanceId);
-    setCharacter({ ...character, inventory: newInventory });
-    await updateDoc(doc(db, "characters", user.uid), { inventory: newInventory });
-
-    setMsg(`🥤 Glug glug... Healed ${healAmount} HP!`);
-    setShowInventory(false);
-  };
-
-  // 🏆 HANDLE WIN & LEVEL UP
-  const handleWin = async (currentInventoryOverride?: InventoryItem[]) => {
-    setMode("won");
-    if (!user || !activeEncounter || !character) return;
-    
-    const xpReward = activeEncounter.winRewardXp || 0;
-    const goldReward = activeEncounter.winRewardGold || 0;
-    
-    const baseInv = currentInventoryOverride || character.inventory || [];
-
-    // --- LEVEL UP LOGIC ---
-    let currentXp = character.xp + xpReward;
-    let currentLevel = character.level;
-    let currentMaxHp = character.maxHp;
-    
-    let leveledUp = false;
-    let oldLevel = character.level;
-    let hpGainedTotal = 0;
-    let pointsGainedTotal = 0; // 👇 NEW: Track points
-
-    while (currentLevel < 100) {
-        // Example Curve: XP needed grows by 10% per level
-        const xpNeeded = Math.floor(100 * Math.pow(1.1, currentLevel - 1));
-        
-        if (currentXp >= xpNeeded) {
-            currentXp -= xpNeeded;
-            currentLevel++;
-            leveledUp = true;
-            
-            const isMilestone = currentLevel % 10 === 0;
-            const tier = Math.floor(currentLevel / 10) + 1;
-            const statBoost = isMilestone ? tier : 1;
-            
-            // Keep HP scaling
-            currentMaxHp += 5 * statBoost;
-            hpGainedTotal += 5 * statBoost;
-            
-            // 👇 NEW: Gain 1 Point per level
-            pointsGainedTotal += 1; 
-
+    setTimeout(() => {
+        if (newFoeHp <= 0) {
+            handleWin();
+        } else if (newPlayerHp <= 0) {
+            handleLoss("You were defeated in battle!");
+        } else if (currentQIndex === questions.length - 1) {
+            handleLoss("You ran out of turns!");
         } else {
-            break;
+            nextQuestion();
         }
+    }, 1200);
+  }, [isPaused, questions, currentQIndex, foeHp, playerHp, calculatePlayerDamage, foe, handleWin, handleLoss, nextQuestion]);
+
+  const handleStartEncounter = useCallback((encounter: EncounterDoc) => {
+    if (!character || character.hp <= 0) {
+        setMsg("You must heal before starting a new battle!");
+        return;
     }
-
-    // --- ITEM DROPS ---
-    let newItems: InventoryItem[] = [];
-    if (activeEncounter.winRewardItems && activeEncounter.winRewardItems.length > 0) {
-        newItems = activeEncounter.winRewardItems.map(itemId => ({
-            itemId: itemId,
-            instanceId: crypto.randomUUID(),
-            obtainedAt: Date.now(),
-            durability: 100
-        }));
-        setLootDrops(newItems.map(i => gameItems[i.itemId]?.name || "Item"));
-    } else {
-        setLootDrops([]);
-    }
-
-    // --- SAVE TO DB ---
-    const charRef = doc(db, "characters", user.uid);
-    const finalInventory = [...baseInv, ...newItems];
-
-    const updatePayload: any = {
-      hp: playerHp + hpGainedTotal,
-      xp: currentXp,
-      level: currentLevel,
-      maxHp: currentMaxHp,
-      gold: increment(goldReward),
-      inventory: finalInventory,
-      unspentPoints: increment(pointsGainedTotal) // 👇 NEW: Add points to DB
-    };
-
-    await updateDoc(charRef, updatePayload);
     
-    // Update Local State
-    setCharacter(prev => prev ? ({ 
-        ...prev, 
-        ...updatePayload,
-        // Manually update points locally
-        unspentPoints: (prev.unspentPoints || 0) + pointsGainedTotal 
-    }) : null);
+    const setupBattle = async (enc: EncounterDoc) => {
+        setIsLoading(true);
+        setMsg("");
+        try {
+            const foeData = await getDoc("foes", enc.foeId) as FoeDoc;
+            const questionData = await getAllDocs(`foes/${enc.foeId}/questions`) as QuestionDoc[];
 
-    if (leveledUp) {
-        setLevelUpData({ 
-            oldLvl: oldLevel, 
-            newLvl: currentLevel, 
-            hpGain: hpGainedTotal,
-            pointsGain: pointsGainedTotal 
-        } as any);
-    }
-  };
-
-  // ----------------------------------------------
-  // 4. STAT HELPERS
-  // ----------------------------------------------
-  const calculateAdjustedTime = (baseTime: number) => {
-    let bonusFlat = 0;
-    let bonusMult = 1; // Start at 100% (1.0)
-
-    if (character?.equipment) {
-      Object.values(character.equipment).forEach(equippedInstanceId => {
-        if (!equippedInstanceId) return;
-
-        // 1. Find Inventory Instance (to check durability)
-        const invItem = character?.inventory.find(i => i.instanceId === equippedInstanceId);
-        
-        // Skip if missing or broken
-        if (!invItem || (invItem.maxDurability && (invItem.durability || 0) <= 0)) return;
-
-        // 2. Get Item Data
-        const def = gameItems[invItem.itemId];
-        if (!def || !def.stats || !def.stats.time) return;
-
-        // 3. Aggregate Time Stats
-        if (def.stats.time.flat) bonusFlat += def.stats.time.flat;
-        if (def.stats.time.mult) bonusMult += def.stats.time.mult;
-      });
-    }
-
-    // Logic: Apply Flat bonus first, then the Multiplier
-    // Example: Base 60s + 10s (flat) = 70s. Then 70s * 1.2 (mult) = 84s.
-    // Using Math.floor/round/ceil as you prefer, Math.ceil is generous to the player.
-    return Math.max(1, Math.ceil((baseTime + bonusFlat) * bonusMult));
-  };
-
-  const calculatePlayerDamage = (timeLimitInSeconds: number) => {
-    // 1. Get Base Character Stats
-    const { a = 0, b = 0, c = 0, d = 0 } = character?.stats || {};
-
-    // 2. Initialize Totals
-    let totalA = a;
-    let totalB = b;
-    let totalC = c;
-    let totalD = d;
-    let totalXBonus = 0;
-    let totalK = 1; // Global Multiplier starts at 1.0 (100%)
-
-    // 3. Loop through Equipment to add Bonuses
-    if (character?.equipment) {
-      Object.values(character.equipment).forEach(equippedInstanceId => {
-        if (!equippedInstanceId) return;
-
-        // Find specific inventory item (to check durability)
-        const invItem = character?.inventory.find(i => i.instanceId === equippedInstanceId);
-        
-        // Skip if item missing or Broken
-        if (!invItem || (invItem.maxDurability && (invItem.durability || 0) <= 0)) return;
-
-        // Get Item Definition
-        const def = gameItems[invItem.itemId];
-        if (!def || !def.stats) return;
-
-        // --- Sum Flat Stats (A, B, C, D) ---
-        if (def.stats.a) totalA += def.stats.a;
-        if (def.stats.b) totalB += def.stats.b;
-        if (def.stats.c) totalC += def.stats.c;
-        if (def.stats.d) totalD += def.stats.d;
-
-        // --- Sum X Bonus (Difficulty Modifier) ---
-        if (def.stats.xBonus) totalXBonus += def.stats.xBonus;
-
-        // --- Sum K (Damage Multiplier) ---
-        // We add multipliers (e.g. +0.1 and +0.2 becomes 1.3 total)
-        if (def.stats.damage?.mult) totalK += def.stats.damage.mult;
-      });
-    }
-
-    // 4. Calculate 'x' (Difficulty Variable)
-    // Formula: (Minutes Rounded Up) + Gear xBonus
-    const minutesRoundedUp = Math.ceil((timeLimitInSeconds || 30) / 60);
-    const x = Math.max(1, minutesRoundedUp + totalXBonus); 
-
-    // 5. THE FORMULA
-    // y = K * [ (a/400)x^3 + (b/40)x^2 + (1 + c/10)x + d/2 ]
-    const termA = (totalA / 400) * Math.pow(x, 3);
-    const termB = (totalB / 40) * Math.pow(x, 2);
-    const termC = (1 + (totalC / 10)) * x;
-    const termD = totalD / 2;
-
-    const finalDamage = totalK * (termA + termB + termC + termD);
-
-    return Math.ceil(finalDamage);
-  };
-
-  const calculateIncomingDamage = (rawFoeDamage: number) => {
-    return Math.max(1, rawFoeDamage);
-  };
-
-  const degradation = async (slot: EquipmentSlot, amount: number) => {
-    if (!character?.equipment || !user) return { broken: false, newInv: character?.inventory || [] };
-    
-    const equippedId = character.equipment[slot];
-    if (!equippedId) return { broken: false, newInv: character.inventory };
-
-    let didJustBreak = false;
-
-    // Calculamos el nuevo inventario
-    const newInventory = character.inventory.map((item) => {
-      if (item.instanceId === equippedId && item.durability !== undefined) {
-        const newDur = Math.max(0, item.durability - amount);
-        
-        if (item.durability > 0 && newDur === 0) {
-            didJustBreak = true;
-        }
-        return { ...item, durability: newDur };
-      }
-      return item;
-    });
-
-    // A. Actualizamos el Estado Visual
-    setCharacter(prev => prev ? ({ ...prev, inventory: newInventory }) : null);
-
-    // B. ¡IMPORTANTE! Guardamos en Firebase inmediatamente
-    const charRef = doc(db, "characters", user.uid);
-    await updateDoc(charRef, { inventory: newInventory });
-
-    return { broken: didJustBreak, newInv: newInventory };
-  };
-
-  // ----------------------------------------------
-  // 5. RENDER
-  // ----------------------------------------------
-  if (!user) return <div className="p-10">Please log in to play.</div>;
-  
-  if (mode === "lobby") return (
-    <main className="p-6 max-w-2xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold text-center mb-8 dark:text-white">Choose Your Battle ⚔️</h1>
-      
-      {msg && (
-        <div className="p-4 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 font-bold rounded-xl text-center animate-pulse">
-            {msg}
-        </div>
-      )}
-      
-      <div className="grid gap-4">
-        {encounters.map(enc => (
-          <div 
-            key={enc.id} 
-            className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
-          >
-            {/* 1. INFO SECTION */}
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{enc.title}</h3>
-                  
-                  <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-gray-500 dark:text-gray-300 font-bold uppercase tracking-wider">
-                    {enc.questionTag}
-                  </span>
-              </div>
-              
-              <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-3">
-                <span>
-                    XP: <span className="text-purple-600 dark:text-purple-400 font-bold">+{enc.winRewardXp || 0}</span>
-                </span>
-                <span>
-                    Gold: <span className="text-yellow-600 dark:text-yellow-400 font-bold">+{enc.winRewardGold || 0}</span>
-                </span>
-              </div>
-            </div>
-
-            {/* 2. ACTION BUTTON */}
-            <button 
-               onClick={() => startEncounter(enc)}
-               className="shrink-0 w-full sm:w-auto bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 font-bold py-3 px-8 rounded-xl transition-transform active:scale-95 flex items-center justify-center gap-2"
-            >
-               <span>FIGHT</span>
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-               </svg>
-            </button>
-          </div>
-        ))}
-      </div>
-    </main>
-  );
-
-  if (mode === "loading") return <div className="p-10 text-center animate-pulse dark:text-white">⚔️ Entering the Arena...</div>;
-  
-  // --- 🏆 VICTORY SCREEN & LEVEL UP CARD ---
-  if (mode === "won") {
-    const data = levelUpData as any;
-    
-    // Fallback defaults
-    const hpGain = data?.hpGain || 0;
-    const atkGain = data?.atkGain || 0;
-    const defGain = data?.defGain || 0;
-
-    return (
-      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-yellow-50 dark:bg-gray-900 transition-colors">
-        
-        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-yellow-400 dark:border-yellow-600 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
-          
-          <div className="text-6xl animate-bounce">🎉</div>
-          
-          <div className="text-center"> {/* Added centering usually found in Victory cards */}
-            <h1 className="text-4xl font-black text-yellow-600 dark:text-yellow-400 uppercase tracking-widest drop-shadow-sm">
-              Victory!
-            </h1>
-            <p className="text-gray-500 dark:text-gray-400 font-bold mt-2 uppercase text-sm tracking-tighter">
-              Level {character?.level || 1}
-            </p>
-          </div>
-
-          {/* LEVEL UP CARD */}
-          {data?.newLvl > data?.oldLvl && (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4 border border-yellow-200 dark:border-yellow-700/50 space-y-3">
-                <div className="font-bold text-yellow-800 dark:text-yellow-200 uppercase text-xs tracking-wider mb-2">Level Up Bonuses</div>
-                
-                {/* HP */}
-                <div className="flex justify-between items-center px-4">
-                  <span className="font-bold text-gray-600 dark:text-gray-400">Max Health</span>
-                  <span className="font-black text-green-600 dark:text-green-400 text-xl">+{hpGain} 💚</span>
-                </div>
-
-                {/* UPGRADE POINTS (NEW) */}
-                <div className="flex justify-between items-center px-4 bg-yellow-100 dark:bg-yellow-800/30 rounded-lg py-2">
-                  <span className="font-bold text-gray-700 dark:text-gray-300">Upgrade Points</span>
-                  <span className="font-black text-yellow-700 dark:text-yellow-400 text-xl">+{data.pointsGain} 🆙</span>
-                </div>
-                <div className="text-[10px] text-center text-gray-400 italic">
-                    Visit Character Page to spend points!
-                </div>
-            </div>
-          )}
-          
-          {lootDrops.length > 0 && (
-             <div className="text-sm font-bold text-gray-500 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 p-2 rounded">
-                Found: {lootDrops.join(", ")}
-             </div>
-          )}
-
-          <div className="pt-4">
-            <button 
-              onClick={() => router.push("/map")}
-              className="w-full bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
-            >
-              Collect Loot & Return ➡️
-            </button>
-          </div>
-
-        </div>
-      </main>
-    );
-  }
-
-  // ==========================================
-  // 💀 DEFEAT CARD (Matches your Victory style)
-  // ==========================================
-  if (mode === "lost") {
-    return (
-      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-red-50 dark:bg-gray-900 transition-colors">
-        
-        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-red-500 dark:border-red-600 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
-          
-          <div className="text-6xl animate-pulse">💀</div>
-          
-          <div className="text-center"> {/* Center alignment for the death screen */}
-            <h1 className="text-4xl font-black text-red-600 dark:text-red-500 uppercase tracking-widest drop-shadow-md">
-              Defeat
-            </h1>
-            <p className="text-gray-500 dark:text-gray-400 font-bold mt-2 italic">
-              "You have fallen..."
-            </p>
-          </div>
-
-          <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-200 dark:border-gray-600">
-             <p className="font-bold text-gray-500 dark:text-gray-400 text-xs uppercase mb-2">Outcome</p>
-             <p className="font-bold text-gray-700 dark:text-gray-200">{msg || "HP Critical. Retreating to camp."}</p>
-          </div>
-
-          <div className="pt-4">
-            <button 
-              onClick={() => router.push("/map")}
-              className="w-full bg-gray-900 text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-gray-200 py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
-            >
-              Return to Map 🗺️
-            </button>
-          </div>
-
-        </div>
-      </main>
-    );
-  }
-
-  // ==========================================
-  // 💨 ESCAPE CARD (Penalty Display)
-  // ==========================================
-  if ((mode as any) === "escaped") {
-    // Calculate penalty for display
-    const penalty = Math.ceil((activeEncounter?.winRewardGold || 0) / 2);
-
-    return (
-      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900 transition-colors">
-        
-        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-gray-400 dark:border-gray-600 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
-          
-          <div className="text-6xl">💨</div>
-          
-          <div className="text-center">
-            <h1 className="text-4xl font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest">
-              Escaped!
-            </h1>
-            
-            <p className="text-gray-500 dark:text-slate-400 font-bold mt-2">
-              Ran away safely
-            </p>
-          </div>
-
-          {/* PENALTY INFO */}
-          <div className="bg-red-50 dark:bg-red-900/30 p-4 rounded-xl border border-red-100 dark:border-red-900/50 space-y-2">
-             <div>
-                <p className="font-bold text-red-500 dark:text-red-300 text-[10px] uppercase">Penalty Paid</p>
-                <p className="font-black text-red-600 dark:text-red-400 text-3xl">-{penalty} Gold</p>
-             </div>
-          </div>
-
-          <div className="pt-4">
-            <button 
-              onClick={() => router.push("/map")}
-              className="w-full bg-gray-900 text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-gray-200 py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
-            >
-              Return to Map 🗺️
-            </button>
-          </div>
-
-        </div>
-      </main>
-    );
-  }
-
-  // --- VIEW: INTRO / STORY ---
-  if (mode === "intro") {
-    
-    // 1. CONFIG: Determine Image or Emoji
-    // (We look for imageUrl on the encounter, then the foe, then fallback to null)
-    // @ts-ignore 
-    const heroImage = activeEncounter?.imageUrl || foe?.imageUrl;
-    
-    // 2. CONFIG: Your "Default Emoji" Choice
-    // @ts-ignore
-    const displayEmoji = activeEncounter?.emoji || "👹"; 
-
-    return (
-      <main className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center p-4 transition-colors duration-500">
-        
-        {/* Card Container */}
-        <div className="max-w-lg w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-200 dark:border-gray-700">
-          
-          {/* --- HEADER --- */}
-          <div className="relative h-64 w-full bg-gray-900">
-            {heroImage ? (
-              <img 
-                src={heroImage} 
-                alt="Enemy" 
-                className="w-full h-full object-cover opacity-90 hover:scale-105 transition-transform duration-700 ease-in-out" 
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 via-slate-900 to-black">
-                <div className="absolute opacity-20 w-48 h-48 bg-blue-500 blur-3xl rounded-full -top-10 -left-10"></div>
-                <div className="absolute opacity-20 w-48 h-48 bg-purple-500 blur-3xl rounded-full bottom-0 right-0"></div>
-                <span className="relative z-10 text-8xl filter drop-shadow-2xl animate-pulse-slow">
-                  {displayEmoji}
-                </span>
-              </div>
-            )}
-
-            {/* Title Overlay */}
-            <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/95 via-black/70 to-transparent pt-20 pb-6 px-8">
-              <h1 className="text-3xl font-black text-white uppercase tracking-wider drop-shadow-md">
-                {activeEncounter?.title || foe?.name || "Battle"}
-              </h1>
-              <p className="text-slate-300 text-sm font-bold flex items-center gap-2">
-                <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px] tracking-tighter">ENEMY</span> 
-                {foe?.name || "Unknown Foe"}
-              </p>
-            </div>
-          </div>
-
-          {/* --- BODY --- */}
-          <div className="p-8 space-y-6 bg-white dark:bg-gray-800">
-            
-            {/* Description / Story */}
-            <div className="relative pl-4 border-l-4 border-slate-300 dark:border-slate-500">
-              <p className="text-gray-600 dark:text-gray-300 text-lg leading-relaxed italic">
-                "{activeEncounter?.description || "A shadow moves in the darkness. Prepare yourself..."}"
-              </p>
-            </div>
-
-            {/* Quick Stats Row */}
-            <div className="grid grid-cols-2 gap-4">
-                {/* 1. FOE STATS */}
-                <div className="bg-slate-50 dark:bg-gray-900/40 p-3 rounded-xl border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
-                    <span className="text-[10px] font-black text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1">Enemy Stats</span>
-                    <div className="text-sm font-bold flex flex-wrap justify-center gap-x-3">
-                      <span className="text-green-600 dark:text-green-400">❤ {foe?.maxHp || 50}</span>
-                      <span className="text-red-600 dark:text-red-400">⚔️ {foe?.attackDamage || 5}</span>
-                    </div>
-                </div>
-
-                {/* 2. REWARD */}
-                <div className="bg-slate-50 dark:bg-gray-900/40 p-3 rounded-xl border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
-                    <span className="text-[10px] font-black text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1">Rewards</span>
-                    <div className="flex flex-col items-center">
-                        <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
-                          +{activeEncounter?.winRewardXp || 0} XP
-                        </span>
-                        <span className="text-sm font-bold text-yellow-600 dark:text-yellow-500">
-                          +{activeEncounter?.winRewardGold || 0} Gold
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Turns Warning */}
-            <p className="text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              You have <span className="text-red-600 dark:text-red-500 text-sm px-1">{questions.length} Turns</span> to defeat this enemy!
-            </p>
-
-            {/* Action Button */}
-            <button
-              onClick={() => setMode("battle")}
-              className="group relative w-full overflow-hidden rounded-2xl bg-black dark:bg-white text-white dark:text-black px-8 py-4 shadow-xl transition-all hover:bg-gray-800 dark:hover:bg-gray-100 hover:shadow-2xl active:scale-[0.98]"
-            >
-              <div className="relative z-10 flex items-center justify-center gap-2">
-                <span className="text-xl font-black tracking-widest">FIGHT!</span>
-                <span className="text-2xl group-hover:translate-x-1 transition-transform">⚔️</span>
-              </div>
-            </button>
-            
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  const currentQ = questions[currentQIndex];
-
-  if (!currentQ) return (
-    <div className="p-10 text-center font-bold text-gray-500 dark:text-gray-400 animate-pulse">
-      Loading Battle...
-    </div>
-  );
-
-  return (
-    <main className="min-h-screen p-2 md:p-4 flex flex-col items-center max-w-2xl mx-auto relative transition-colors font-sans">
-      
-      {/* HUD (HEALTH BARS) */}
-      <div className="w-full grid grid-cols-2 gap-2 md:gap-4 mb-2">
-        
-        {/* PLAYER CARD */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl border border-blue-100 dark:border-blue-800 text-center space-y-1 transition-colors flex flex-col justify-between">
-            <div>
-                <h3 className="font-bold text-sm text-blue-900 dark:text-blue-200 truncate">{character?.name}</h3>
-                <HealthBar 
-                label="YOU" 
-                current={playerHp} 
-                max={character?.maxHp || 100} 
-                />
-            </div>
-          {/* 👇 CHANGED: Made button more compact (py-1) */}
-          <button 
-            onClick={() => setShowInventory(true)}
-            className="mt-2 text-[10px] md:text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 py-1.5 rounded-lg font-bold flex items-center justify-center gap-2 border dark:border-gray-600 w-full transition-colors"
-          >
-            🎒 Items ({character?.inventory.filter(i => gameItems[i.itemId]?.type === 'potion').length || 0})
-          </button>
-        </div>
-        
-        {/* ENEMY CARD */}
-        <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-2xl border border-red-100 dark:border-red-800 text-center space-y-1 transition-colors">
-            <h3 className="font-bold text-sm text-red-900 dark:text-red-200 truncate">{foe?.name || "Enemy"}</h3>
-            <HealthBar 
-              label="ENEMY" 
-              current={foeHp} 
-              max={foe?.maxHp || 50} 
-            />
-        </div>
-      </div>
-
-      {/* TIMER BAR */}
-      {/* 👇 CHANGED: Reduced vertical padding (py-4 -> py-2) and margin */}
-      <div className="bg-white dark:bg-gray-800 dark:text-gray-100 px-4 py-2 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 mb-2 w-full transition-colors">
-        <TimeBar 
-            current={timeLeft} 
-            max={totalTime} 
-        />
-      </div>
-
-      {/* --- QUESTION CARD --- */}
-      {/* 👇 CHANGED: Reduced padding (p-8 -> p-4) and vertical spacing */}
-      <div className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-lg border dark:border-gray-700 p-4 md:p-6 space-y-3 relative transition-colors flex-1 flex flex-col justify-center">
-        
-        {msg && <div className="text-center text-red-500 font-bold animate-bounce text-sm absolute top-2 left-0 w-full">{msg}</div>}
-        
-        <div className="absolute top-3 right-4 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full text-[9px] font-black text-gray-400 dark:text-gray-300 tracking-widest border border-gray-200 dark:border-gray-600">
-           TURN {currentQIndex + 1} / {questions.length}
-        </div>
-        
-        {/* 1. IMAGE (Context) - 👇 CHANGED: Restricted height heavily for mobile */}
-        {currentQ.imageUrl && (
-          <div className="flex justify-center mb-1">
-            <img 
-              src={currentQ.imageUrl} 
-              alt="Question Context" 
-              className="rounded-xl max-h-32 md:max-h-60 object-contain shadow-sm bg-white"
-            />
-          </div>
-        )}
-
-        {/* 2. QUESTION CONTENT */}
-        <div className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100 text-center my-2">
-          {/* Priority 1: IMAGE PROMPT */}
-          {currentQ.promptImageUrl && (
-            <div className="flex justify-center mb-2">
-                <img 
-                    src={currentQ.promptImageUrl} 
-                    alt="Question Image" 
-                    className="max-h-32 md:max-h-48 rounded-lg shadow-md border bg-white" 
-                />
-            </div>
-          )}
-
-          {/* Priority 2: LATEX BLOCK */}
-          {currentQ.promptLatex && (
-            <div className="py-2 overflow-x-auto">
-               <BlockMath math={currentQ.promptLatex} />
-            </div>
-          )}
-
-          {/* Priority 3: TEXT */}
-          {currentQ.promptText && (
-            <div className="whitespace-pre-wrap leading-relaxed dark:text-gray-100 text-sm md:text-base">
-               {renderMixedText(currentQ.promptText || "")}
-            </div>
-          )}
-        </div>
-
-        {/* 3. ANSWERS (GRID) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
-          
-          {/* A. ROUND OVER / NEXT BUTTON */}
-          {isPaused && (
-            <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in mb-2">
-              <div className="text-lg font-bold bg-white dark:bg-gray-700 dark:text-white p-3 rounded-xl border-2 border-black dark:border-gray-500 w-full text-center shadow-md">
-                 {msg || "Round Over"}
-              </div>
-              <button 
-                onClick={nextQuestion} 
-                className={`
-                  w-full py-3 rounded-xl text-lg font-black shadow-lg transition-all duration-200 hover:scale-[1.02]
-                  
-                  /* Light Mode */
-                  bg-blue-600 text-white hover:bg-blue-800 
-                  
-                  /* Dark Mode */
-                  dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500 
-                  dark:shadow-blue-900/30 dark:ring-1 dark:ring-blue-500/50
-                `}
-              >
-                NEXT ➡️
-              </button>
-            </div>
-          )}
-
-          {/* B. ANSWER BUTTONS */}
-          {currentQ.choices.map((choice, idx) => {
-            const isSelected = selectedChoice === idx;
-            const isCorrectChoice = idx === currentQ.correctIndex;
-
-            // 1. Default Styles (Unselected/Unanswered)
-            let highlightClass = "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-transparent";
-            
-            if (isPaused) {
-              if (isCorrectChoice) {
-                // 2. Correct Answer (Green)
-                highlightClass = "border-green-500 bg-green-50 dark:bg-green-950/50 text-green-700 dark:text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]";
-              } else if (isSelected && !isCorrectChoice) {
-                // 3. User picked wrong (Red)
-                highlightClass = "border-red-500 bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400";
-              } else {
-                // 4. Neutral/Inactive (Faded)
-                highlightClass = "opacity-30 border-gray-200 dark:border-gray-800 text-gray-400 dark:text-gray-600";
-              }
+            if (!foeData || questionData.length === 0) {
+                setMsg("Failed to load battle data.");
+                setMode("lobby");
+                return;
             }
 
-            return (
-              <button 
-                key={idx} 
-                disabled={isPaused} 
-                onClick={() => handleAnswer(idx)} 
-                className={`p-4 pr-10 border-2 rounded-2xl text-base md:text-lg font-bold transition-all duration-200 group relative
-                  ${highlightClass}
-                  ${!isPaused && "hover:border-black dark:hover:border-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black active:scale-[0.98]"}
-                `}
-              >
-                <span className="block w-full text-center">
-                  {renderMixedText(choice)}
-                </span>
-                
-                {/* Visual Feedback Icons - Dark Mode optimized colors */}
-                {isPaused && isCorrectChoice && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 scale-125">
-                    ✅
-                  </span>
-                )}
-                {isPaused && isSelected && !isCorrectChoice && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-600 dark:text-red-400 scale-125">
-                    ❌
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+            setFoe(foeData);
+            setQuestions(questionData);
+            setCurrentEncounter(enc);
+            setFoeHp(foeData.maxHp);
+            if (character) {
+                const currentCharacterHp = character.hp > battleStats.maxHp ? battleStats.maxHp : character.hp;
+                setPlayerHp(currentCharacterHp);
+            }
+            
+            setCurrentQIndex(0);
+            setTimeLeft(questionData[0]?.timeLimit || 30);
+            setIsPaused(false);
+            setSelectedChoice(null);
+            setLevelUpData(null);
+            setLootDrops([]);
+            setMode("intro");
+        } catch (error) {
+            console.error("Error setting up battle:", error);
+            setMsg("An error occurred preparing for battle.");
+            setMode("lobby");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    setupBattle(encounter);
+  }, [character, battleStats.maxHp]);
 
-        {/* --- SKIP & ESCAPE BUTTONS --- */}
-        {!isPaused && (
-            // 👇 CHANGED: flex-col -> flex-row. This puts them side-by-side to save huge vertical space.
-            <div className="mt-2 flex flex-row gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                
-                {/* Skip Button */}
-                <button 
-                    onClick={skipQuestion}
-                    className="flex-1 py-2 md:py-3 rounded-xl border-2 border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 text-red-500 dark:text-red-400 font-bold hover:bg-red-100 dark:hover:bg-red-900/30 hover:border-red-200 transition-colors text-xs"
-                >
-                    ⏭️ SKIP
-                </button>
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, currentUser => {
+        if (currentUser) {
+            setUser(currentUser);
+        } else {
+            router.push('/login');
+        }
+    });
+    return () => unsubscribe();
+  }, [router]);
 
-                {/* Escape Button */}
-                <button 
-                    onClick={() => setShowEscapeConfirm(true)} 
-                    className="flex-1 py-2 md:py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-[10px] uppercase tracking-widest"
-                >
-                    🏃 ESCAPE
-                </button>
-            </div>
-        )}
-      </div>
+  useEffect(() => {
+    if (!user) return;
 
-      {/* 🎒 INVENTORY MODAL (Unchanged logic, just ensure z-index is high) */}
-      {showInventory && (
-        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 rounded-3xl">
-           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border dark:border-gray-700">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold">🎒 Backpack</h3>
-                <button onClick={() => setShowInventory(false)} className="text-gray-400 hover:text-black dark:hover:text-white">✕</button>
-              </div>
-              
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {character?.inventory.filter(i => gameItems[i.itemId]?.type === 'potion').length === 0 && (
-                   <p className="text-center text-gray-400 py-4">No potions found!</p>
-                )}
-                
-                {character?.inventory.map((invItem) => {
-                   const def = gameItems[invItem.itemId];
-                   if (!def || def.type !== 'potion') return null;
-                   
-                   return (
-                     <div key={invItem.instanceId} className="flex justify-between items-center p-3 border dark:border-gray-600 rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">
-                        <div className="flex items-center gap-3">
-                           {def.imageUrl ? <img src={def.imageUrl} className="w-8 h-8 rounded bg-gray-200" /> : <div className="w-8 h-8 rounded bg-pink-100 dark:bg-pink-900 flex items-center justify-center text-xs">🧪</div>}
-                           <div>
-                             <div className="font-bold text-sm dark:text-gray-200">{def.name}</div>
-                             <div className="text-xs text-green-600 dark:text-green-400 font-bold">Heals {def.stats?.heal?.flat || 20} HP</div>
-                           </div>
-                        </div>
-                        <button 
-                          onClick={() => usePotion(invItem)}
-                          className="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-lg hover:bg-green-600"
-                        >
-                          Drink
-                        </button>
-                     </div>
-                   );
-                })}
-              </div>
-              <p className="text-center text-[10px] text-red-500 mt-4 animate-pulse">⏰ Time is still ticking!</p>
-           </div>
-        </div>
-      )}
+    const fetchGameData = async () => {
+      try {
+        const [charData, encs, items] = await Promise.all([
+          getDoc("characters", user.uid) as Promise<Character>,
+          getAllDocs("encounters") as Promise<EncounterDoc[]>,
+          getAllDocs("items") as Promise<GameItem[]>,
+        ]);
 
-      {/* 🛑 ESCAPE CONFIRMATION MODAL */}
-      {showEscapeConfirm && (
-        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 rounded-3xl animate-in fade-in duration-200">
-           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl border-4 border-red-100 dark:border-red-900/50 text-center space-y-4">
-              
-              <div className="text-4xl">🏃💨</div>
-              
-              <div>
-                 <h3 className="text-xl font-black text-gray-800 dark:text-gray-100 uppercase">Run Away?</h3>
-                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1">
-                    You will keep your Backpack and Gold.
-                 </p>
-              </div>
+        if (charData) {
+          setCharacter(charData);
+        } else {
+          router.push('/character/new');
+          return;
+        }
 
-              {/* Timer Warning */}
-              <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 text-[10px] font-bold py-2 rounded animate-pulse">
-                 ⚠️ HURRY! THE BATTLE IS STILL ACTIVE!
-              </div>
+        setEncounters(encs);
+        const itemsMap = items.reduce((acc, item) => ({ ...acc, [item.id]: item }), {});
+        setGameItems(itemsMap);
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                 <button 
-                    onClick={() => setShowEscapeConfirm(false)}
-                    className="py-3 rounded-xl font-bold bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
-                 >
-                    Cancel
-                 </button>
-                 <button 
-                    onClick={executeEscape}
-                    className="py-3 rounded-xl font-bold bg-red-600 hover:bg-red-700 text-white shadow-lg hover:scale-105 transition-transform"
-                 >
-                    Yes, Escape!
-                 </button>
-              </div>
-           </div>
-        </div>
-      )}
+      } catch (error) {
+        console.error("Error fetching game data:", error);
+        setMsg("Failed to load game data. Please refresh.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    </main>
-  );
-}
+    fetchGameData();
+  }, [user, router]);
+  
+    useEffect(() => {
+        if (character) {
+            const newHp = Math.min(character.hp, battleStats.maxHp);
+            setPlayerHp(newHp);
+        }
+    }, [character, battleStats]);
 
-// Fisher-Yates Shuffle Algorithm
-function shuffleArray<T>(array: T[]): T[] {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+
+  useEffect(() => {
+    const encounterId = searchParams.get('encounterId');
+    if (encounterId && encounters.length > 0 && character) {
+        const selectedEncounter = encounters.find(e => e.id === encounterId);
+        if (selectedEncounter) {
+            handleStartEncounter(selectedEncounter);
+        } else {
+            setMsg("The battle you were looking for doesn't exist!");
+        }
+    }
+  }, [searchParams, encounters, character, handleStartEncounter]);
+
+  useEffect(() => {
+    if (mode === "battle" && !isPaused && !showInventory) {
+      if (timeLeft <= 0) {
+        handleAnswer(-1); // Automatically fail the question
+        return;
+      }
+      const t = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+      setTimer(t);
+      return () => clearInterval(t);
+    } else if (timer) {
+      clearInterval(timer);
+    }
+  }, [mode, isPaused, timeLeft, showInventory, handleAnswer]);
+
+  const handleStartBattle = () => setMode("battle");
+  
+  const skipQuestion = () => handleAnswer(-1);
+
+  const handleFightAgain = () => {
+    if (currentEncounter) {
+        handleStartEncounter(currentEncounter);
+    }
+  };
+
+  const executeEscape = () => {
+    setShowEscapeConfirm(false);
+    handleLoss("You successfully escaped!");
+  };
+
+  const usePotion = async (item: InventoryItem) => {
+    if (!user || !character || !gameItems[item.itemId] || isPaused) return;
+
+    const potion = gameItems[item.itemId];
+    const healAmount = potion.stats?.heal?.flat || 20;
+    const newHp = Math.min(battleStats.maxHp, playerHp + healAmount);
+
+    const newInventory = [...character.inventory];
+    const itemIndex = newInventory.findIndex(i => i.instanceId === item.instanceId);
+    if (itemIndex > -1) newInventory.splice(itemIndex, 1);
+    
+    try {
+      setPlayerHp(newHp);
+      setCharacter(prev => prev ? ({...prev, inventory: newInventory}) : null);
+      setShowInventory(false);
+      setMsg(`Healed for ${healAmount} HP!`);
+      
+      await updateDoc("characters", user.uid, { inventory: newInventory });
+      setTimeout(() => setMsg(""), 2000);
+
+    } catch (error) {
+       console.error("Error using potion:", error);
+       setPlayerHp(playerHp); // Revert optimistic update
+       setCharacter(character); // Revert optimistic update
+       setMsg("Failed to use potion.")
+    }
+  };
+
+  const renderMixedText = (text: string) => <>{text}</>;
+
+  if (isLoading || !user || !character) {
+    return <div className="w-full h-screen flex items-center justify-center text-lg font-bold text-gray-500 animate-pulse">Loading Your Adventure...</div>;
   }
-  return arr;
-}
 
-function HealthBar({ current, max, label }: { current: number; max: number; label: string }) {
-  const pct = Math.max(0, Math.min(100, (current / max) * 100));
-  
-  let colorClass = "bg-green-500";
-  if (pct <= 50) colorClass = "bg-orange-500";
-  if (pct <= 20) colorClass = "bg-red-600 animate-pulse";
-
-  return (
-    <div className="w-full space-y-2">
-      <div className="flex justify-between items-center">
-        <span className="text-xs font-bold uppercase text-gray-400 dark:text-gray-400">{label}</span>
-        <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{current}/{max} HP</span>
-      </div>
-      
-      <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 relative shadow-inner">
-        <div 
-          className={`h-full ${colorClass} transition-all duration-500 ease-out`} 
-          style={{ width: `${pct}%` }} 
-        />
-      </div>
-    </div>
-  );
-}
-
-function TimeBar({ current, max }: { current: number; max: number }) {
-  const safeMax = max > 0 ? max : 30;
-  const pct = Math.max(0, (current / safeMax) * 100);
-
-  // Format Time: 252 -> 4:12
-  const minutes = Math.floor(current / 60);
-  const seconds = Math.ceil(current % 60);
-  const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-  let colorClass = "bg-blue-500"; 
-  if (pct <= 50) colorClass = "bg-orange-400";
-  if (pct <= 15) colorClass = "bg-red-700 animate-pulse";
-  
-  return (
-    <div className="w-full flex flex-col gap-1">
-      <div className="flex justify-between items-end px-1">
-        <span className="text-xs font-bold uppercase text-gray-400 dark:text-gray-400 tracking-wider">Time Remaining</span>
-        <span className={`text-2xl font-black ${current <= 5 ? 'text-red-600 dark:text-red-500' : 'text-gray-700 dark:text-gray-100'}`}>
-           {timeString}
-        </span>
-      </div>
-      
-      <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 relative shadow-inner">
-        <div 
-          className={`h-full ${colorClass} transition-all duration-500 ease-out`} 
-          style={{ width: `${pct}%` }} 
-        />
-      </div>
-    </div>
-  );
-}
-
-export default function PlayPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center font-bold text-xl bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 animate-pulse">
-        Loading Battle...
-      </div>
-    }>
-      <PlayContent />
-    </Suspense>
-  );
+  switch (mode) {
+    case "intro":
+      return <BattleIntro encounter={currentEncounter} foe={foe} questionCount={questions.length} onStartBattle={handleStartBattle} />;
+    case "battle":
+      return <BattleScreen 
+        character={character} foe={foe} questions={questions} currentQIndex={currentQIndex}
+        playerHp={playerHp} foeHp={foeHp} msg={msg} timeLeft={timeLeft} totalTime={totalTime}
+        isPaused={isPaused} selectedChoice={selectedChoice} gameItems={gameItems}
+        showInventory={showInventory} setShowInventory={setShowInventory}
+        showEscapeConfirm={showEscapeConfirm} setShowEscapeConfirm={setShowEscapeConfirm}
+        handleAnswer={handleAnswer} nextQuestion={nextQuestion} skipQuestion={skipQuestion}
+        executeEscape={executeEscape} usePotion={usePotion} renderMixedText={renderMixedText}
+      />;
+    case "win":
+      return <VictoryScreen character={character} levelUpData={levelUpData} lootDrops={lootDrops} onFightAgain={handleFightAgain} />;
+    case "lose":
+      return <DefeatScreen msg={msg} onTryAgain={handleFightAgain} />;
+    default:
+      return <Lobby encounters={encounters} onStartEncounter={handleStartEncounter} msg={msg} />;
+  }
 }

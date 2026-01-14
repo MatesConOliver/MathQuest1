@@ -158,7 +158,7 @@ function StatUpgradeBox({
   
   // LOGIC: 'value' (from derivedStats) already includes Base + Gear.
   // We just add pending to it for the PREVIEW.
-  const totalValue = value + pending; 
+  const totalValue = value; 
   const isChanged = pending > 0;
 
   return (
