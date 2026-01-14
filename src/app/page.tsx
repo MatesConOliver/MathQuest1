@@ -3,15 +3,20 @@
 import { useEffect, useState } from "react";
 import { auth, db } from "@/lib/firebase"; 
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion } from "firebase/firestore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { StoryEvent, Character } from "@/types/game";
+import { StoryPlayer } from "@/components/StoryPlayer";
+
 
 export default function HomePage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [characterName, setCharacterName] = useState("");
+  const [character, setCharacter] = useState<Character | null>(null);
   const [loading, setLoading] = useState(true);
+  const [storyToPlay, setStoryToPlay] = useState<StoryEvent | null>(null);
+
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -21,18 +26,54 @@ export default function HomePage() {
       }
       setUser(u);
       
-      // Fetch Character Name for a nice greeting
       try {
-        const snap = await getDoc(doc(db, "characters", u.uid));
-        if (snap.exists()) setCharacterName(snap.data().name);
+        // --- Fetch character and stories ---
+        const charSnap = await getDoc(doc(db, "characters", u.uid));
+        if (!charSnap.exists()) {
+            router.push("/character/new");
+            return;
+        }
+        const charData = charSnap.data() as Character;
+        setCharacter(charData);
+
+        // --- Check for an ON_LOGIN story to play ---
+        const storiesSnap = await getDocs(collection(db, "stories"));
+        const allStories = storiesSnap.docs.map(d => ({ ...d.data(), id: d.id })) as StoryEvent[];
+        
+        const loginStory = allStories.find(s => 
+            s.triggerType === "ON_LOGIN" &&
+            s.oneTime &&
+            !(charData.completedStoryEvents || []).includes(s.id)
+        );
+
+        if (loginStory) {
+            setStoryToPlay(loginStory);
+        }
+
       } catch (e) {
-        console.error("Error fetching char", e);
+        console.error("Error fetching char/stories", e);
       }
       
       setLoading(false);
     });
     return () => unsub();
   }, [router]);
+
+  const handleStoryComplete = async () => {
+    if (!user || !storyToPlay) return;
+
+    try {
+        await updateDoc(doc(db, "characters", user.uid), {
+            completedStoryEvents: arrayUnion(storyToPlay.id)
+        });
+        // Optimistically update local state
+        setCharacter(prev => prev ? ({ ...prev, completedStoryEvents: [...(prev.completedStoryEvents || []), storyToPlay.id]}) : null);
+    } catch(e) {
+        console.error("Error updating completed stories", e);
+    } finally {
+        setStoryToPlay(null); // Hide the story player
+    }
+  };
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -45,22 +86,23 @@ export default function HomePage() {
     </div>
   );
 
+  if (storyToPlay) {
+    return <StoryPlayer story={storyToPlay} onComplete={handleStoryComplete} />
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center py-12 px-6 transition-colors duration-300">
       <div className="max-w-md w-full space-y-8 text-center">
         
-        {/* Header */}
         <div className="space-y-2">
           <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">MathQuest ⚔️</h1>
           <p className="text-gray-600 dark:text-gray-300">
-            Welcome back, <span className="font-bold text-blue-600 dark:text-blue-400">{characterName || "Hero"}</span>.
+            Welcome back, <span className="font-bold text-blue-600 dark:text-blue-400">{character?.name || "Hero"}</span>.
           </p>
         </div>
 
-        {/* Navigation Grid */}
         <div className="grid gap-4">
           
-          {/* Main Action: MAP */}
           <Link 
             href="/map" 
             className="group relative p-6 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-500 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all"
@@ -70,7 +112,6 @@ export default function HomePage() {
             <p className="text-sm text-gray-500 dark:text-gray-400">Select a level and fight foes!</p>
           </Link>
 
-          {/* Secondary Actions */}
           <div className="grid grid-cols-2 gap-4">
             <Link 
               href="/character" 
@@ -94,7 +135,6 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {/* Footer Actions */}
         <button 
           onClick={handleLogout}
           className="text-red-500 dark:text-red-400 text-sm font-bold hover:underline mt-8"

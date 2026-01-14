@@ -148,9 +148,9 @@ export type EncounterDoc = {
   emoji?: string;            
 };
 
-// ==========================================
+// =========================================
 // 📖 STORY ENGINE TYPES
-// ==========================================
+// =========================================
 
 export type StoryTrigger = 
   | "ON_LOGIN"           // Plays immediately when opening the game
@@ -188,6 +188,7 @@ export interface StoryScene {
   text: string;            // "Welcome to the world of Math!"
   backgroundUrl?: string;  // URL to background
   musicUrl?: string;       // URL to background music
+  videoUrl?: string;       // URL to a video that will play instead of background/sprite
   
   // Interaction (Simple Version)
   choices?: {
