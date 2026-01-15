@@ -88,6 +88,8 @@ export function StoriesPanel() {
       text: 'New dialogue...',
       speakerName: 'Narrator',
       nextSceneId: 'END',
+      fadeIn: true,
+      fadeOut: true,
     };
 
     const newScenes = [...scenes];
@@ -305,6 +307,29 @@ export function StoriesPanel() {
                       updateScene(idx, 'videoUrl', e.target.value)
                     }
                   />
+                </div>
+
+                <div className='flex gap-4 pt-2'>
+                  <label className='flex items-center gap-2 text-sm cursor-pointer'>
+                    <input
+                      type='checkbox'
+                      checked={scene.fadeIn ?? true}
+                      onChange={(e) =>
+                        updateScene(idx, 'fadeIn', e.target.checked)
+                      }
+                    />
+                    <span>Fade In</span>
+                  </label>
+                  <label className='flex items-center gap-2 text-sm cursor-pointer'>
+                    <input
+                      type='checkbox'
+                      checked={scene.fadeOut ?? true}
+                      onChange={(e) =>
+                        updateScene(idx, 'fadeOut', e.target.checked)
+                      }
+                    />
+                    <span>Fade Out</span>
+                  </label>
                 </div>
 
                 <div className='pt-2 border-t dark:border-gray-700'>
