@@ -1,6 +1,0 @@
-[00:00:08.715] Server  WARN    ⚠ Turbopack's filesystem cache has been deleted because we previously detected an internal error in Turbopack. Builds or page loads may be slower as a result.
-[00:00:09.736] Server  LOG     ✓ Ready in 7.7s
-[00:03:50.096] Server  LOG     ○ Compiling / ...
-[00:13:01.327] Server  LOG     ✓ Compiled in 3.2s
-[01:29:51.778] Server  WARN    ⚠ Cross origin request detected from 9000-firebase-mathquest1-1768313495270.cluster-fbfjltn375c6wqxlhoehbz44sk.cloudworkstations.dev to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
-Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
