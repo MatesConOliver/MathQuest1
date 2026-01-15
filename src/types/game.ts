@@ -189,8 +189,10 @@ export interface StoryScene {
   backgroundUrl?: string;  // URL to background
   musicUrl?: string;       // URL to background music
   videoUrl?: string;       // URL to a video that will play instead of background/sprite
+  loopVideo?: boolean;   // Should the video loop?
   fadeIn?: boolean;
   fadeOut?: boolean;
+  
   // Interaction (Simple Version)
   choices?: {
     text: string;          // "I am ready!"

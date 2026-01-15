@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { StoryEvent, StoryScene } from '@/types/game';
 import { TypewriterText } from './TypewriterText';
 
@@ -27,41 +27,37 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
       return;
     }
     setTransitionDuration(currentScene.fadeIn ?? true ? 500 : 0);
-    // Use a timeout to allow the initial state to render before fading in
     const timer = setTimeout(() => setOpacity(1), 50);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --- Scene Transition Logic ---
   const transitionToScene = (nextId: string) => {
     const shouldFadeOut = currentScene?.fadeOut ?? true;
 
-    // 1. Fade or cut out
     setTransitionDuration(shouldFadeOut ? 500 : 0);
     setOpacity(0);
 
-    // 2. Wait for fade out to finish
     setTimeout(() => {
-        if (nextId === 'END') {
-            onComplete();
-            return;
-        }
+      if (nextId === 'END') {
+        onComplete();
+        return;
+      }
 
-        const nextScene = story.scenes.find(s => s.id === nextId);
-        if (!nextScene) { // Should not happen with correct data
-            onComplete();
-            return;
-        }
+      const nextScene = story.scenes.find((s) => s.id === nextId);
+      if (!nextScene) {
+        onComplete();
+        return;
+      }
 
-        // 3. Change content while invisible
-        setTransitionDuration(nextScene.fadeIn ?? true ? 500 : 0);
-        setCurrentSceneId(nextId);
+      setTransitionDuration(nextScene.fadeIn ?? true ? 500 : 0);
+      setCurrentSceneId(nextId);
 
-        // 4. Fade or cut in
-        setOpacity(1);
-
-    }, shouldFadeOut ? 500 : 10); // Wait for transition or just a moment for hard cut
+      // Use a brief timeout to ensure state update before changing opacity
+      setTimeout(() => setOpacity(1), 50);
+      
+    }, shouldFadeOut ? 500 : 10);
   };
 
   const handleNext = () => {
@@ -73,6 +69,13 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
     transitionToScene(nextId);
   };
 
+  const handleVideoEnd = () => {
+    // If video is not set to loop, advance to the next scene
+    if (currentScene?.videoUrl && !(currentScene.loopVideo ?? true)) {
+      handleNext();
+    }
+  };
+
   if (!currentScene) {
     return null;
   }
@@ -82,9 +85,9 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
   return (
     <div
       className={'fixed inset-0 bg-black z-50 flex flex-col justify-end'}
-      style={{ 
+      style={{
         transition: `opacity ${transitionDuration}ms ease-in-out`,
-        opacity: opacity
+        opacity: opacity,
       }}
       onClick={isClickableOverlay ? handleNext : undefined}
     >
@@ -92,10 +95,12 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
       <div className='absolute inset-0'>
         {currentScene.videoUrl ? (
           <video
+            key={currentScene.id} // Add a key to force re-render on scene change
             src={currentScene.videoUrl}
             autoPlay
-            loop
             muted
+            loop={currentScene.loopVideo ?? true}
+            onEnded={handleVideoEnd}
             className='w-full h-full object-cover'
           />
         ) : (

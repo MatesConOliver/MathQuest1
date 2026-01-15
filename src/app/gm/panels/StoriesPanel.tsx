@@ -90,6 +90,7 @@ export function StoriesPanel() {
       nextSceneId: 'END',
       fadeIn: true,
       fadeOut: true,
+      loopVideo: true,
     };
 
     const newScenes = [...scenes];
@@ -330,6 +331,18 @@ export function StoriesPanel() {
                     />
                     <span>Fade Out</span>
                   </label>
+                  {scene.videoUrl && (
+                    <label className='flex items-center gap-2 text-sm cursor-pointer'>
+                      <input
+                        type='checkbox'
+                        checked={scene.loopVideo ?? true}
+                        onChange={(e) =>
+                          updateScene(idx, 'loopVideo', e.target.checked)
+                        }
+                      />
+                      <span>Loop Video</span>
+                    </label>
+                  )}
                 </div>
 
                 <div className='pt-2 border-t dark:border-gray-700'>
