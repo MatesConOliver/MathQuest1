@@ -1,18 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, db } from "@/lib/firebase"; // Removed 'functions'
+import { auth, db } from "@/lib/firebase"; 
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, getDoc, updateDoc, arrayUnion, collection, query, where, getDocs } from "firebase/firestore"; // Added more firestore functions
+import { doc, getDoc, updateDoc, arrayUnion, onSnapshot } from "firebase/firestore"; // ✅ Added onSnapshot
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StoryEvent, Character } from "@/types/game";
 import { StoryPlayer } from "@/components/StoryPlayer";
 
-// 💡 We can fetch the story directly on the client, no need for a Cloud Function.
-// const checkAndGetLoginStory = httpsCallable(functions, 'checkAndGetLoginStory');
-
-// ✅ Define a constant for the story ID to avoid magic strings
 const LOGIN_STORY_ID = "intro_story";
 
 export default function HomePage() {
@@ -23,62 +19,61 @@ export default function HomePage() {
   const [storyToPlay, setStoryToPlay] = useState<StoryEvent | null>(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
       if (!u) {
         router.push("/login");
         return;
       }
       setUser(u);
-      
-      try {
-        const charSnap = await getDoc(doc(db, "characters", u.uid));
-        if (!charSnap.exists()) {
-            // This case should ideally be handled by the login page redirecting to a character creation screen.
-            router.push("/character"); 
-            return;
-        }
-        
-        const charData = charSnap.data() as Character;
-        setCharacter(charData);
+      setLoading(true); // Start loading when auth state changes
 
-        // --- ✅ SIMPLIFIED STORY CHECK ---
-        // 1. Check if the user has already completed this specific story.
-        const hasCompletedIntro = charData.completedStoryEvents?.includes(LOGIN_STORY_ID);
+      // ✅ Use onSnapshot to listen for character data in real-time
+      const unsubChar = onSnapshot(doc(db, "characters", u.uid), async (charSnap) => {
+        if (charSnap.exists()) {
+          const charData = charSnap.data() as Character;
+          setCharacter(charData);
 
-        // 2. If they haven't, fetch and play it.
-        if (!hasCompletedIntro) {
-          const storyDoc = await getDoc(doc(db, "stories", LOGIN_STORY_ID));
-          if (storyDoc.exists()) {
-            setStoryToPlay({ ...storyDoc.data(), id: storyDoc.id } as StoryEvent);
-          } else {
-            console.warn(`Login story with ID '${LOGIN_STORY_ID}' not found.`);
+          const hasCompletedIntro = charData.completedStoryEvents?.includes(LOGIN_STORY_ID);
+
+          if (!hasCompletedIntro) {
+            // Make sure we are not already trying to play a story
+            if (!storyToPlay) { 
+              const storyDoc = await getDoc(doc(db, "stories", LOGIN_STORY_ID));
+              if (storyDoc.exists()) {
+                setStoryToPlay({ ...storyDoc.data(), id: storyDoc.id } as StoryEvent);
+              }
+            }
           }
+        } else {
+          // If the character doesn't exist, it might still be getting created.
+          // The login page is responsible for redirecting to a creation page if needed.
+          console.log("Waiting for character creation...");
         }
-        // If they have completed it, storyToPlay remains null and the main page will render.
-
-      } catch (e) {
-        console.error("Error during initial load:", e);
-      } finally {
         setLoading(false);
-      }
+      }, (error) => {
+        console.error("Error listening to character data:", error);
+        setLoading(false);
+      });
+
+      return () => unsubChar(); // Cleanup character listener
     });
-    return () => unsub();
-  }, [router]);
+
+    return () => unsubAuth(); // Cleanup auth listener
+  }, [router, storyToPlay]); // Added storyToPlay to dependencies
 
   const handleStoryComplete = async () => {
     if (!user || !storyToPlay) return;
 
     try {
-        // ✅ Mark the story as complete using its actual ID
         await updateDoc(doc(db, "characters", user.uid), {
             completedStoryEvents: arrayUnion(storyToPlay.id)
         });
-        // Optimistically update local state so the UI changes immediately
-        setCharacter(prev => prev ? ({ ...prev, completedStoryEvents: [...(prev.completedStoryEvents || []), storyToPlay.id]}) : null);
+        // The onSnapshot listener will automatically update the character state,
+        // so no need to set it manually here.
     } catch(e) {
         console.error("Error updating completed stories", e);
     } finally {
-        setStoryToPlay(null); // Return to the main page
+        setStoryToPlay(null); // This will cause the main page to render
     }
   };
 
@@ -93,12 +88,10 @@ export default function HomePage() {
     </div>
   );
 
-  // If a story needs to be played, render the StoryPlayer component
   if (storyToPlay) {
     return <StoryPlayer story={storyToPlay} onComplete={handleStoryComplete} />
   }
 
-  // Otherwise, render the main dashboard
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center py-12 px-6 transition-colors duration-300">
       <div className="max-w-md w-full space-y-8 text-center">

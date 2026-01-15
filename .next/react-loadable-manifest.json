@@ -1,13 +1,1 @@
-{
-  "app/play/page.tsx -> ./PlayClient": {
-    "id": 4056,
-    "files": [
-      "static/css/911e6a603adbdfb3.css",
-      "static/chunks/7508b87c-bfe396218b2567e1.js",
-      "static/chunks/84c12632-ff2eb9aec75ec850.js",
-      "static/chunks/bdfe9574-0c4e39a5018dddfd.js",
-      "static/chunks/515-201f74133c437715.js",
-      "static/chunks/56.17d54be8d520ba97.js"
-    ]
-  }
-}
+{}

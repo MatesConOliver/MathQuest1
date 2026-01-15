@@ -7,19 +7,20 @@ import {
   signInWithEmailAndPassword, 
   onAuthStateChanged 
 } from "firebase/auth";
-// 💡 Added onSnapshot to listen for character data changes
 import { doc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore"; 
 import { auth, db } from "@/lib/firebase";
 import { Character } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
 
+// ✅ Define a constant for the story ID to avoid magic strings
+const LOGIN_STORY_ID = "intro_story";
+
 export default function LoginPage() {
   const { playTrack } = useAudio()!; 
 
   useEffect(() => {
-    // Make sure your file name is correct here!
     playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); 
-  }, [playTrack]); // 💡 Added dependency to useEffect
+  }, [playTrack]);
 
   const router = useRouter();
   
@@ -31,24 +32,24 @@ export default function LoginPage() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState("");
 
-  // ✅ Redirect user based on their story progress
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // If a user is logged in, listen for their character data
+        // Listen for the character document to be created or updated.
+        // This solves the race condition for new sign-ups.
         const unsubSnapshot = onSnapshot(doc(db, "characters", user.uid), (charDoc) => {
           if (charDoc.exists()) {
             const character = charDoc.data() as Character;
-            // If the intro story is NOT completed, go to the homepage to see it
-            if (!character.completedStoryEvents?.includes("intro_story_complete")) {
+            
+            // ✅ CORRECTED: Check for the actual story ID
+            if (!character.completedStoryEvents?.includes(LOGIN_STORY_ID)) {
               router.push("/"); 
             } else {
-              // Otherwise, they've seen it, so go to the character page
               router.push("/character");
             }
           }
-          // If charDoc doesn't exist yet (e.g., during registration), 
-          // this listener will pick it up once the document is created.
+          // If the document doesn't exist yet, we wait. The listener will
+          // fire again as soon as it's created by the handleAuth function.
         });
         
         return () => unsubSnapshot(); // Cleanup snapshot listener
@@ -62,22 +63,18 @@ export default function LoginPage() {
     e.preventDefault(); 
     setError("");
 
-    // ✅ FIX: Trim spaces to prevent duplicate users
     const cleanEmail = email.trim();
 
     try {
       if (isRegistering) {
-        // --- VALIDATION ---
         if (!characterName.trim()) {
             setError("Please enter a character name.");
             return;
         }
 
-        // --- REGISTER ---
         const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
         const uid = cred.user.uid;
 
-        // --- CREATE CHARACTER ---
         const starter: Character = {
           ownerUid: uid,
           name: characterName.trim(), 
@@ -87,32 +84,24 @@ export default function LoginPage() {
           gold: 0,
           maxHp: 15,
           hp: 15,
-          stats: {
-            a: 0, 
-            b: 0, 
-            c: 0, 
-            d: 0  
-          },
+          stats: { a: 0, b: 0, c: 0, d: 0 },
           unspentPoints: 0,
           inventory: [],
           equipment: { mainHand: null, offHand: null, armor: null, head: null },
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-          // New characters start with no completed story events
           completedStoryEvents: [], 
           unlockedContinents: ["bSL1XkrzgqQxqtCLNumD"]
         };
 
+        // Create the character doc. The onSnapshot listener will then handle redirection.
         await setDoc(doc(db, "characters", uid), starter);
-        // Redirection is now handled by the onAuthStateChanged listener
         
       } else {
-        // --- LOGIN ---
+        // For login, the onSnapshot listener will also handle redirection.
         await signInWithEmailAndPassword(auth, cleanEmail, password);
-        // Redirection is also handled by the onAuthStateChanged listener
       }
     } catch (err: any) {
-        // Helpful error handling
         if (err.code === 'auth/email-already-in-use') {
             setError("This email is already registered. Please log in.");
         } else {
@@ -122,12 +111,8 @@ export default function LoginPage() {
   };
 
   return (
-    // 1. CONTAINER: Needs 'relative' so absolute children stay inside
     <main className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
       
-      {/* 2. VIDEO BACKGROUND */}
-      {/* 'object-cover' ensures it fills the screen without stretching */}
-      {/* '-z-20' puts it way in the back */}
       <video
         autoPlay
         loop
@@ -139,11 +124,8 @@ export default function LoginPage() {
         <source src="/login.mp4" type="video/mp4" />
       </video>
 
-      {/* 3. DARK OVERLAY */}
-      {/* Semi-transparent black layer so text is readable on top of video */}
       <div className="absolute top-0 left-0 w-full h-full bg-black/50 -z-10" />
 
-      {/* 4. CONTENT (The Login Box) */}
       <div className="relative z-10 w-full max-w-md bg-white/90 backdrop-blur-sm dark:bg-gray-900/90 dark:text-gray-100 p-6 rounded-2xl shadow-2xl border border-white/20">
         <h1 className="text-2xl font-bold mb-2 text-center">
           {isRegistering ? "Create Hero" : "Welcome Back"}
