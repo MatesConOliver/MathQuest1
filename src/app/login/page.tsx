@@ -13,7 +13,7 @@ import { Character } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
 
 // ✅ Define a constant for the story ID to avoid magic strings
-const LOGIN_STORY_ID = "intro_story";
+const LOGIN_STORY_ID = "login";
 
 export default function LoginPage() {
   const { playTrack } = useAudio()!; 

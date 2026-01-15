@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { StoryEvent, Character } from "@/types/game";
 import { StoryPlayer } from "@/components/StoryPlayer";
 
-const LOGIN_STORY_ID = "intro_story";
+const LOGIN_STORY_ID = "login";
 
 export default function HomePage() {
   const router = useRouter();
