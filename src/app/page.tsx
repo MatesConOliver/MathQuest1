@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, db, functions } from "@/lib/firebase"; 
+import { auth, db } from "@/lib/firebase"; // Removed 'functions'
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
+import { doc, getDoc, updateDoc, arrayUnion, collection, query, where, getDocs } from "firebase/firestore"; // Added more firestore functions
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StoryEvent, Character } from "@/types/game";
 import { StoryPlayer } from "@/components/StoryPlayer";
 
-const checkAndGetLoginStory = httpsCallable(functions, 'checkAndGetLoginStory');
+// 💡 We can fetch the story directly on the client, no need for a Cloud Function.
+// const checkAndGetLoginStory = httpsCallable(functions, 'checkAndGetLoginStory');
+
+// ✅ Define a constant for the story ID to avoid magic strings
+const LOGIN_STORY_ID = "intro_story";
 
 export default function HomePage() {
   const router = useRouter();
@@ -30,16 +33,28 @@ export default function HomePage() {
       try {
         const charSnap = await getDoc(doc(db, "characters", u.uid));
         if (!charSnap.exists()) {
-            router.push("/character/new");
+            // This case should ideally be handled by the login page redirecting to a character creation screen.
+            router.push("/character"); 
             return;
         }
-        setCharacter(charSnap.data() as Character);
+        
+        const charData = charSnap.data() as Character;
+        setCharacter(charData);
 
-        // --- Check for a story using the cloud function ---
-        const storyResult = await checkAndGetLoginStory();
-        if (storyResult.data) {
-            setStoryToPlay(storyResult.data as StoryEvent);
+        // --- ✅ SIMPLIFIED STORY CHECK ---
+        // 1. Check if the user has already completed this specific story.
+        const hasCompletedIntro = charData.completedStoryEvents?.includes(LOGIN_STORY_ID);
+
+        // 2. If they haven't, fetch and play it.
+        if (!hasCompletedIntro) {
+          const storyDoc = await getDoc(doc(db, "stories", LOGIN_STORY_ID));
+          if (storyDoc.exists()) {
+            setStoryToPlay({ ...storyDoc.data(), id: storyDoc.id } as StoryEvent);
+          } else {
+            console.warn(`Login story with ID '${LOGIN_STORY_ID}' not found.`);
+          }
         }
+        // If they have completed it, storyToPlay remains null and the main page will render.
 
       } catch (e) {
         console.error("Error during initial load:", e);
@@ -54,14 +69,16 @@ export default function HomePage() {
     if (!user || !storyToPlay) return;
 
     try {
+        // ✅ Mark the story as complete using its actual ID
         await updateDoc(doc(db, "characters", user.uid), {
             completedStoryEvents: arrayUnion(storyToPlay.id)
         });
+        // Optimistically update local state so the UI changes immediately
         setCharacter(prev => prev ? ({ ...prev, completedStoryEvents: [...(prev.completedStoryEvents || []), storyToPlay.id]}) : null);
     } catch(e) {
         console.error("Error updating completed stories", e);
     } finally {
-        setStoryToPlay(null);
+        setStoryToPlay(null); // Return to the main page
     }
   };
 
@@ -76,10 +93,12 @@ export default function HomePage() {
     </div>
   );
 
+  // If a story needs to be played, render the StoryPlayer component
   if (storyToPlay) {
     return <StoryPlayer story={storyToPlay} onComplete={handleStoryComplete} />
   }
 
+  // Otherwise, render the main dashboard
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center py-12 px-6 transition-colors duration-300">
       <div className="max-w-md w-full space-y-8 text-center">

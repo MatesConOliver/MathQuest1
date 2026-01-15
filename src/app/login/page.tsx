@@ -7,7 +7,8 @@ import {
   signInWithEmailAndPassword, 
   onAuthStateChanged 
 } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+// 💡 Added onSnapshot to listen for character data changes
+import { doc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore"; 
 import { auth, db } from "@/lib/firebase";
 import { Character } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
@@ -18,7 +19,7 @@ export default function LoginPage() {
   useEffect(() => {
     // Make sure your file name is correct here!
     playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); 
-  }, []);
+  }, [playTrack]); // 💡 Added dependency to useEffect
 
   const router = useRouter();
   
@@ -30,13 +31,31 @@ export default function LoginPage() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState("");
 
+  // ✅ Redirect user based on their story progress
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
-        router.push("/character");
+        // If a user is logged in, listen for their character data
+        const unsubSnapshot = onSnapshot(doc(db, "characters", user.uid), (charDoc) => {
+          if (charDoc.exists()) {
+            const character = charDoc.data() as Character;
+            // If the intro story is NOT completed, go to the homepage to see it
+            if (!character.completedStoryEvents?.includes("intro_story_complete")) {
+              router.push("/"); 
+            } else {
+              // Otherwise, they've seen it, so go to the character page
+              router.push("/character");
+            }
+          }
+          // If charDoc doesn't exist yet (e.g., during registration), 
+          // this listener will pick it up once the document is created.
+        });
+        
+        return () => unsubSnapshot(); // Cleanup snapshot listener
       }
     });
-    return () => unsub();
+
+    return () => unsubAuth(); // Cleanup auth listener
   }, [router]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -79,15 +98,18 @@ export default function LoginPage() {
           equipment: { mainHand: null, offHand: null, armor: null, head: null },
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-          completedStoryEvents: [],
+          // New characters start with no completed story events
+          completedStoryEvents: [], 
           unlockedContinents: ["bSL1XkrzgqQxqtCLNumD"]
         };
 
         await setDoc(doc(db, "characters", uid), starter);
+        // Redirection is now handled by the onAuthStateChanged listener
         
       } else {
         // --- LOGIN ---
         await signInWithEmailAndPassword(auth, cleanEmail, password);
+        // Redirection is also handled by the onAuthStateChanged listener
       }
     } catch (err: any) {
         // Helpful error handling
