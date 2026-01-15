@@ -284,10 +284,10 @@ export default function PlayClient() {
         setIsLoading(true);
         setMsg('');
         try {
-          const foeData = (await getDoc('foes', enc.foeId)) as FoeDoc;
-          const questionData = (await getAllDocs(
+          const foeData = await getDoc<FoeDoc>('foes', enc.foeId);
+          const questionData = await getAllDocs<QuestionDoc>(
             `foes/${enc.foeId}/questions`
-          )) as QuestionDoc[];
+          );
 
           if (!foeData || questionData.length === 0) {
             setMsg('Failed to load battle data.');
@@ -343,9 +343,9 @@ export default function PlayClient() {
     const fetchGameData = async () => {
       try {
         const [charData, encs, items] = await Promise.all([
-          getDoc('characters', user.uid) as Promise<Character>,
-          getAllDocs('encounters') as Promise<EncounterDoc[]>,
-          getAllDocs('items') as Promise<GameItem[]>,
+          getDoc<Character>('characters', user.uid),
+          getAllDocs<EncounterDoc>('encounters'),
+          getAllDocs<GameItem>('items'),
         ]);
 
         if (charData) {
