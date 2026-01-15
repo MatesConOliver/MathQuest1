@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, db } from "@/lib/firebase"; 
+import { auth, db, functions } from "@/lib/firebase"; 
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StoryEvent, Character } from "@/types/game";
 import { StoryPlayer } from "@/components/StoryPlayer";
 
+const checkAndGetLoginStory = httpsCallable(functions, 'checkAndGetLoginStory');
 
 export default function HomePage() {
   const router = useRouter();
@@ -17,44 +19,33 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [storyToPlay, setStoryToPlay] = useState<StoryEvent | null>(null);
 
-
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
-        router.push("/login"); // Redirect if not logged in
+        router.push("/login");
         return;
       }
       setUser(u);
       
       try {
-        // --- Fetch character and stories ---
         const charSnap = await getDoc(doc(db, "characters", u.uid));
         if (!charSnap.exists()) {
             router.push("/character/new");
             return;
         }
-        const charData = charSnap.data() as Character;
-        setCharacter(charData);
+        setCharacter(charSnap.data() as Character);
 
-        // --- Check for an ON_LOGIN story to play ---
-        const storiesSnap = await getDocs(collection(db, "stories"));
-        const allStories = storiesSnap.docs.map(d => ({ ...d.data(), id: d.id })) as StoryEvent[];
-        
-        const loginStory = allStories.find(s => 
-            s.triggerType === "ON_LOGIN" &&
-            s.oneTime &&
-            !(charData.completedStoryEvents || []).includes(s.id)
-        );
-
-        if (loginStory) {
-            setStoryToPlay(loginStory);
+        // --- Check for a story using the cloud function ---
+        const storyResult = await checkAndGetLoginStory();
+        if (storyResult.data) {
+            setStoryToPlay(storyResult.data as StoryEvent);
         }
 
       } catch (e) {
-        console.error("Error fetching char/stories", e);
+        console.error("Error during initial load:", e);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     });
     return () => unsub();
   }, [router]);
@@ -66,12 +57,11 @@ export default function HomePage() {
         await updateDoc(doc(db, "characters", user.uid), {
             completedStoryEvents: arrayUnion(storyToPlay.id)
         });
-        // Optimistically update local state
         setCharacter(prev => prev ? ({ ...prev, completedStoryEvents: [...(prev.completedStoryEvents || []), storyToPlay.id]}) : null);
     } catch(e) {
         console.error("Error updating completed stories", e);
     } finally {
-        setStoryToPlay(null); // Hide the story player
+        setStoryToPlay(null);
     }
   };
 
