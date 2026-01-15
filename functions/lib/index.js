@@ -7,12 +7,12 @@ const firestore_1 = require("firebase-admin/firestore");
 (0, app_1.initializeApp)();
 const db = (0, firestore_1.getFirestore)();
 // Callable function to check for and return an ON_LOGIN story
-exports.checkAndGetLoginStory = firebase_functions_1.https.onCall(async (request) => {
+exports.checkAndGetLoginStory = firebase_functions_1.https.onCall(async (data, context) => {
     // Check for authentication
-    if (!request.auth) {
+    if (!context.auth) {
         throw new firebase_functions_1.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
-    const uid = request.auth.uid;
+    const uid = context.auth.uid;
     try {
         // 1. Get the character document
         const charDocRef = db.collection("characters").doc(uid);
