@@ -8,16 +8,16 @@ initializeApp();
 const db = getFirestore();
 
 // Callable function to check for and return an ON_LOGIN story
-export const checkAndGetLoginStory = https.onCall(async (request) => {
+export const checkAndGetLoginStory = https.onCall(async (data, context) => {
   // Check for authentication
-  if (!request.auth) {
+  if (!context.auth) {
     throw new https.HttpsError(
       "unauthenticated",
       "The function must be called while authenticated."
     );
   }
 
-  const uid = request.auth.uid;
+  const uid = context.auth.uid;
 
   try {
     // 1. Get the character document
