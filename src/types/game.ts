@@ -148,6 +148,14 @@ export type EncounterDoc = {
   emoji?: string;            
 };
 
+// This is a simplified version for displaying a story screen.
+// The full story data is represented by StoryEvent.
+export interface Story {
+    id: string;
+    title: string;
+    text: string;
+}
+
 // =========================================
 // 📖 STORY ENGINE TYPES
 // =========================================

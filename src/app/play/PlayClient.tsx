@@ -11,6 +11,7 @@ import {
   GameItem,
   InventoryItem,
   Story,
+  StoryEvent,
 } from '@/types/game';
 import { useRouter, useSearchParams } from 'next/navigation';
 import 'katex/dist/katex.min.css';
@@ -369,10 +370,16 @@ export default function PlayClient() {
         // Check for a login story
         const checkStory = httpsCallable(functions, 'checkAndGetLoginStory');
         const result = await checkStory();
-        const story = result.data as Story | null;
+        const storyEvent = result.data as StoryEvent | null;
 
-        if (story) {
-            setActiveStory(story);
+        if (storyEvent && storyEvent.scenes && storyEvent.scenes.length > 0) {
+            const firstScene = storyEvent.scenes[0];
+            const storyToShow: Story = {
+                id: storyEvent.id,
+                title: storyEvent.title,
+                text: firstScene.text,
+            };
+            setActiveStory(storyToShow);
         }
 
       } catch (error) {
