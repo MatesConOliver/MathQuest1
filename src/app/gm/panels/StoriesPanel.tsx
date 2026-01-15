@@ -101,9 +101,9 @@ export function StoriesPanel() {
         oneTime,
         scenes,
         rewards: {
-          xp: rewardXp,
-          gold: rewardGold,
-          unlockMapId: unlockMapId || undefined
+          xp: rewardXp || 0,
+          gold: rewardGold || 0,
+          ...(unlockMapId && { unlockMapId })
         }
       };
   
