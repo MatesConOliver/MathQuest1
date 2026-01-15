@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { auth, getAllDocs, getDoc, updateDoc } from '@/lib/firebase';
+import { auth, getAllDocs, getDoc, updateDoc, functions } from '@/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import {
   Character,
@@ -10,6 +10,7 @@ import {
   QuestionDoc,
   GameItem,
   InventoryItem,
+  Story,
 } from '@/types/game';
 import { useRouter, useSearchParams } from 'next/navigation';
 import 'katex/dist/katex.min.css';
@@ -20,6 +21,8 @@ import { BattleIntro } from './components/BattleIntro';
 import { BattleScreen } from './components/BattleScreen';
 import { VictoryScreen } from './components/VictoryScreen';
 import { DefeatScreen } from './components/DefeatScreen';
+import { StoryDisplay } from './components/StoryDisplay'; // Import the new StoryDisplay component
+import { httpsCallable } from 'firebase/functions';
 
 // Main game content component
 export default function PlayClient() {
@@ -40,6 +43,7 @@ export default function PlayClient() {
   const [playerHp, setPlayerHp] = useState(100);
   const [foeHp, setFoeHp] = useState(50);
   const [msg, setMsg] = useState('');
+  const [activeStory, setActiveStory] = useState<Story | null>(null);
 
   // Battle mechanics state
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
@@ -179,11 +183,11 @@ export default function PlayClient() {
     let xpToNextLevel = 100 * Math.pow(1.1, newLvl - 1);
 
     while (newXp >= xpToNextLevel) {
-      newXp -= xpToNextLevel; // Subtract XP needed for this level
+      newXp -= xpToNextLevel;
       newLvl++;
       hpGain += 10; // 10 HP per level
       pointsGain += 1; // 1 point per level
-      xpToNextLevel = 100 * Math.pow(1.1, newLvl - 1); // Calculate XP for the *next* level
+      xpToNextLevel = 100 * Math.pow(1.1, newLvl - 1);
     }
 
     if (currentEncounter.winRewardItems) {
@@ -361,8 +365,18 @@ export default function PlayClient() {
           {}
         );
         setGameItems(itemsMap);
+
+        // Check for a login story
+        const checkStory = httpsCallable(functions, 'checkAndGetLoginStory');
+        const result = await checkStory();
+        const story = result.data as Story | null;
+
+        if (story) {
+            setActiveStory(story);
+        }
+
       } catch (error) {
-        console.error('Error fetching game data:', error);
+        console.error('Error fetching game data or story:', error);
         setMsg('Failed to load game data. Please refresh.');
       } finally {
         setIsLoading(false);
@@ -404,6 +418,20 @@ export default function PlayClient() {
       clearInterval(timer);
     }
   }, [mode, isPaused, timeLeft, showInventory, handleAnswer]);
+
+  const handleFinishStory = async () => {
+    if (!user || !activeStory) return;
+    try {
+        await updateDoc('characters', user.uid, {
+            completedStoryEvents: [...(character?.completedStoryEvents || []), activeStory.id]
+        });
+        setActiveStory(null);
+    } catch (error) {
+        console.error("Failed to update completed stories: ", error);
+        // Still hide the story, but log the error
+        setActiveStory(null);
+    }
+  };
 
   const handleStartBattle = () => setMode('battle');
 
@@ -459,6 +487,10 @@ export default function PlayClient() {
         Loading Your Adventure...
       </div>
     );
+  }
+  
+  if (activeStory) {
+    return <StoryDisplay story={activeStory} onFinish={handleFinishStory} />;
   }
 
   switch (mode) {
