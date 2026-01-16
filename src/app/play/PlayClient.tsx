@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { auth, getAllDocs, getDoc, updateDoc, functions } from '@/lib/firebase';
+import { auth, getAllDocs, getDoc, updateDoc, functions, db } from '@/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { collection, getDocs as getFirebaseDocs } from 'firebase/firestore';
 import {
   Character,
   EncounterDoc,
@@ -290,9 +291,14 @@ export default function PlayClient() {
         setMsg('');
         try {
           const foeData = await getDoc<FoeDoc>('foes', enc.foeId);
-          const questionData = await getAllDocs<QuestionDoc>(
-            `foes/${enc.foeId}/questions`
-          );
+          
+          // --- THE FIX ---
+          // The old `getAllDocs` doesn't work for subcollections.
+          // We use the native firebase functions here instead.
+          const questionsCollectionRef = collection(db, 'foes', enc.foeId, 'questions');
+          const questionSnap = await getFirebaseDocs(questionsCollectionRef);
+          const questionData = questionSnap.docs.map(d => ({ ...d.data(), id: d.id } as QuestionDoc));
+          // --- END OF FIX ---
 
           if (!foeData || questionData.length === 0) {
             setMsg('Failed to load battle data.');
