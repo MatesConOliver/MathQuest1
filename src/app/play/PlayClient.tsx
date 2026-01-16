@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { auth, getAllDocs, getDoc, updateDoc, functions, db } from '@/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, getDocs as getFirebaseDocs } from 'firebase/firestore';
+import { collection, getDocs as getFirebaseDocs, query, where } from 'firebase/firestore';
 import {
   Character,
   EncounterDoc,
@@ -290,18 +290,51 @@ export default function PlayClient() {
         setIsLoading(true);
         setMsg('');
         try {
-          const foeData = await getDoc<FoeDoc>('foes', enc.foeId);
-          
-          // --- THE FIX ---
-          // The old `getAllDocs` doesn't work for subcollections.
-          // We use the native firebase functions here instead.
-          const questionsCollectionRef = collection(db, 'foes', enc.foeId, 'questions');
-          const questionSnap = await getFirebaseDocs(questionsCollectionRef);
-          const questionData = questionSnap.docs.map(d => ({ ...d.data(), id: d.id } as QuestionDoc));
-          // --- END OF FIX ---
+          const foeToLoad = enc.foes && enc.foes.length > 0 ? enc.foes[0] : enc.foeId;
+          if (!foeToLoad) {
+            setMsg('Encounter has no foe assigned.');
+            setMode('lobby');
+            return;
+          }
+          const foeData = await getDoc<FoeDoc>('foes', foeToLoad);
+
+          let questionData: QuestionDoc[] = [];
+          const tagsToFetch =
+            enc.questionTags && enc.questionTags.length > 0
+              ? enc.questionTags
+              : enc.questionTag
+              ? [enc.questionTag]
+              : [];
+
+          if (tagsToFetch.length > 0) {
+            const questionsQuery = query(
+              collection(db, 'questions'),
+              where('tags', 'array-contains-any', tagsToFetch)
+            );
+            const questionSnap = await getFirebaseDocs(questionsQuery);
+            questionData = questionSnap.docs.map(
+              (d) => ({ ...d.data(), id: d.id } as QuestionDoc)
+            );
+          }
+
+          if (enc.shuffleQuestions) {
+            for (let i = questionData.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [questionData[i], questionData[j]] = [
+                questionData[j],
+                questionData[i],
+              ];
+            }
+          }
 
           if (!foeData || questionData.length === 0) {
-            setMsg('Failed to load battle data.');
+            let errorMsg = 'Failed to load battle data.';
+            if (!foeData) {
+              errorMsg = `Foe with ID '${foeToLoad}' not found.`;
+            } else if (questionData.length === 0) {
+              errorMsg = `No questions found for tags: ${tagsToFetch.join(', ')}.`;
+            }
+            setMsg(errorMsg);
             setMode('lobby');
             return;
           }
@@ -312,7 +345,9 @@ export default function PlayClient() {
           setFoeHp(foeData.maxHp);
           if (character) {
             const currentCharacterHp =
-              character.hp > battleStats.maxHp ? battleStats.maxHp : character.hp;
+              character.hp > battleStats.maxHp
+                ? battleStats.maxHp
+                : character.hp;
             setPlayerHp(currentCharacterHp);
           }
 
