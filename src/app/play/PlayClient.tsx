@@ -164,12 +164,20 @@ export default function PlayClient() {
   );
 
   const nextQuestion = useCallback(() => {
-    setIsPaused(false);
-    setSelectedChoice(null);
-    setCurrentQIndex((prev) => prev + 1);
-    setTimeLeft(totalTime);
-    setMsg('');
-  }, [totalTime]);
+    if (foeHp <= 0) {
+      handleWin();
+    } else if (playerHp <= 0) {
+      handleLoss('You were defeated in battle!');
+    } else if (currentQIndex === questions.length - 1) {
+      handleLoss('You ran out of turns!');
+    } else {
+      setIsPaused(false);
+      setSelectedChoice(null);
+      setCurrentQIndex((prev) => prev + 1);
+      setTimeLeft(questions[currentQIndex + 1]?.timeLimit || 30);
+      setMsg('');
+    }
+  }, [foeHp, playerHp, currentQIndex, questions, handleWin, handleLoss]);
 
   const handleWin = useCallback(async () => {
     if (!user || !character || !currentEncounter) return;
@@ -252,18 +260,6 @@ export default function PlayClient() {
         setMsg(`Incorrect! The enemy dealt ${playerDamage} damage.`);
         setPlayerHp(newPlayerHp);
       }
-
-      setTimeout(() => {
-        if (newFoeHp <= 0) {
-          handleWin();
-        } else if (newPlayerHp <= 0) {
-          handleLoss('You were defeated in battle!');
-        } else if (currentQIndex === questions.length - 1) {
-          handleLoss('You ran out of turns!');
-        } else {
-          nextQuestion();
-        }
-      }, 1200);
     },
     [
       isPaused,
@@ -273,9 +269,6 @@ export default function PlayClient() {
       playerHp,
       calculatePlayerDamage,
       foe,
-      handleWin,
-      handleLoss,
-      nextQuestion,
     ]
   );
 
@@ -493,7 +486,8 @@ export default function PlayClient() {
 
   const executeEscape = () => {
     setShowEscapeConfirm(false);
-    handleLoss('You successfully escaped!');
+    setMode('lobby');
+    setMsg('You successfully escaped!');
   };
 
   const usePotion = async (item: InventoryItem) => {

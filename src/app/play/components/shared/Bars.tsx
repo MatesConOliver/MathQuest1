@@ -46,7 +46,7 @@ export function TimeBar({ current, max }: { current: number; max: number }) {
       
       <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 relative shadow-inner">
         <div 
-          className={`h-full ${colorClass} transition-all duration-500 ease-out`} 
+          className={`h-full ${colorClass} transition-all duration-1000 ease-linear`} 
           style={{ width: `${pct}%` }} 
         />
       </div>

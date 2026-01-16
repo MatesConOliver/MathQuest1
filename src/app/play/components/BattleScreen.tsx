@@ -96,7 +96,7 @@ export function BattleScreen(props: BattleScreenProps) {
                 <span className="block w-full text-center">{renderMixedText(choice)}</span>
               </button>
           ))}
-          {isPaused && questions[selectedChoice !== null ? selectedChoice : 0].choices.map((choice, idx) => {
+          {isPaused && currentQ.choices.map((choice, idx) => {
             const isSelected = selectedChoice === idx;
             const isCorrectChoice = idx === currentQ.correctIndex;
             let highlightClass = "opacity-30 border-gray-200 dark:border-gray-800 text-gray-400 dark:text-gray-600";
@@ -133,7 +133,7 @@ export function BattleScreen(props: BattleScreenProps) {
 
       {showInventory && (
         <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border dark:border-gray-700">
+           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-.full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border dark:border-gray-700">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold">🎒 Backpack</h3>
                 <button onClick={() => setShowInventory(false)} className="text-gray-400 hover:text-black dark:hover:text-white">✕</button>
