@@ -401,7 +401,7 @@ export default function PlayClient() {
   }, [character, battleStats]);
 
   useEffect(() => {
-    const encounterId = searchParams.get('encounterId');
+    const encounterId = searchParams.get('id');
     if (encounterId && encounters.length > 0 && character) {
       const selectedEncounter = encounters.find((e) => e.id === encounterId);
       if (selectedEncounter) {
