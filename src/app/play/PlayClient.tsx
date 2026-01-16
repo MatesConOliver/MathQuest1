@@ -145,40 +145,6 @@ export default function PlayClient() {
     [battleStats]
   );
 
-  const handleLoss = useCallback(
-    async (reason: string) => {
-      if (!user) return;
-      try {
-        await updateDoc('characters', user.uid, {
-          hp: playerHp > 0 ? playerHp : 0,
-        });
-        setMsg(reason);
-        setMode('lose');
-      } catch (e) {
-        console.error('Error updating character on loss: ', e);
-        setMsg('Error saving character state.');
-        setMode('lobby');
-      }
-    },
-    [user, playerHp]
-  );
-
-  const nextQuestion = useCallback(() => {
-    if (foeHp <= 0) {
-      handleWin();
-    } else if (playerHp <= 0) {
-      handleLoss('You were defeated in battle!');
-    } else if (currentQIndex === questions.length - 1) {
-      handleLoss('You ran out of turns!');
-    } else {
-      setIsPaused(false);
-      setSelectedChoice(null);
-      setCurrentQIndex((prev) => prev + 1);
-      setTimeLeft(questions[currentQIndex + 1]?.timeLimit || 30);
-      setMsg('');
-    }
-  }, [foeHp, playerHp, currentQIndex, questions, handleWin, handleLoss]);
-
   const handleWin = useCallback(async () => {
     if (!user || !character || !currentEncounter) return;
 
@@ -235,6 +201,40 @@ export default function PlayClient() {
       setMode('lobby');
     }
   }, [user, character, currentEncounter, gameItems, playerHp]);
+
+  const handleLoss = useCallback(
+    async (reason: string) => {
+      if (!user) return;
+      try {
+        await updateDoc('characters', user.uid, {
+          hp: playerHp > 0 ? playerHp : 0,
+        });
+        setMsg(reason);
+        setMode('lose');
+      } catch (e) {
+        console.error('Error updating character on loss: ', e);
+        setMsg('Error saving character state.');
+        setMode('lobby');
+      }
+    },
+    [user, playerHp]
+  );
+
+  const nextQuestion = useCallback(() => {
+    if (foeHp <= 0) {
+      handleWin();
+    } else if (playerHp <= 0) {
+      handleLoss('You were defeated in battle!');
+    } else if (currentQIndex === questions.length - 1) {
+      handleLoss('You ran out of turns!');
+    } else {
+      setIsPaused(false);
+      setSelectedChoice(null);
+      setCurrentQIndex((prev) => prev + 1);
+      setTimeLeft(questions[currentQIndex + 1]?.timeLimit || 30);
+      setMsg('');
+    }
+  }, [foeHp, playerHp, currentQIndex, questions, handleWin, handleLoss]);
 
   const handleAnswer = useCallback(
     async (choiceIndex: number) => {
