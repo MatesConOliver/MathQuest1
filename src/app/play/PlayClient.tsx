@@ -55,6 +55,7 @@ export default function PlayClient() {
     [questions, currentQIndex]
   );
   const [isPaused, setIsPaused] = useState(false);
+  const [isEscaping, setIsEscaping] = useState(false);
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
   const [levelUpData, setLevelUpData] = useState<{
     oldLvl: number;
@@ -244,19 +245,17 @@ export default function PlayClient() {
       setSelectedChoice(choiceIndex);
 
       const correct = choiceIndex === questions[currentQIndex].correctIndex;
-      let newFoeHp = foeHp;
-      let newPlayerHp = playerHp;
 
       if (correct) {
         const foeDamage = calculatePlayerDamage(
           questions[currentQIndex].difficulty || 1
         );
-        newFoeHp = Math.max(0, foeHp - foeDamage);
+        const newFoeHp = Math.max(0, foeHp - foeDamage);
         setMsg(`Correct! You dealt ${foeDamage} damage.`);
         setFoeHp(newFoeHp);
       } else {
         const playerDamage = foe?.attackDamage || 5;
-        newPlayerHp = Math.max(0, playerHp - playerDamage);
+        const newPlayerHp = Math.max(0, playerHp - playerDamage);
         setMsg(`Incorrect! The enemy dealt ${playerDamage} damage.`);
         setPlayerHp(newPlayerHp);
       }
@@ -486,8 +485,12 @@ export default function PlayClient() {
 
   const executeEscape = () => {
     setShowEscapeConfirm(false);
-    setMode('lobby');
+    setIsPaused(true);
     setMsg('You successfully escaped!');
+    setIsEscaping(true);
+    setTimeout(() => {
+        router.push('/map');
+    }, 2000);
   };
 
   const usePotion = async (item: InventoryItem) => {
@@ -558,6 +561,7 @@ export default function PlayClient() {
           timeLeft={timeLeft}
           totalTime={totalTime}
           isPaused={isPaused}
+          isEscaping={isEscaping}
           selectedChoice={selectedChoice}
           gameItems={gameItems}
           showInventory={showInventory}

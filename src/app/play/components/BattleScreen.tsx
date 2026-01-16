@@ -13,6 +13,7 @@ interface BattleScreenProps {
   timeLeft: number;
   totalTime: number;
   isPaused: boolean;
+  isEscaping: boolean;
   selectedChoice: number | null;
   gameItems: Record<string, GameItem>;
   showInventory: boolean;
@@ -30,7 +31,7 @@ interface BattleScreenProps {
 export function BattleScreen(props: BattleScreenProps) {
   const {
     character, foe, questions, currentQIndex, playerHp, foeHp, msg, timeLeft, totalTime, 
-    isPaused, selectedChoice, gameItems, showInventory, setShowInventory, showEscapeConfirm, 
+    isPaused, isEscaping, selectedChoice, gameItems, showInventory, setShowInventory, showEscapeConfirm, 
     setShowEscapeConfirm, handleAnswer, nextQuestion, skipQuestion, executeEscape, usePotion, renderMixedText
   } = props;
 
@@ -52,7 +53,8 @@ export function BattleScreen(props: BattleScreenProps) {
             </div>
           <button 
             onClick={() => setShowInventory(true)}
-            className="mt-2 text-[10px] md:text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 py-1.5 rounded-lg font-bold flex items-center justify-center gap-2 border dark:border-gray-600 w-full transition-colors"
+            disabled={isPaused}
+            className="mt-2 text-[10px] md:text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 py-1.5 rounded-lg font-bold flex items-center justify-center gap-2 border dark:border-gray-600 w-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             🎒 Items ({character?.inventory.filter(i => gameItems[i.itemId]?.type === 'potion').length || 0})
           </button>
@@ -96,7 +98,7 @@ export function BattleScreen(props: BattleScreenProps) {
                 <span className="block w-full text-center">{renderMixedText(choice)}</span>
               </button>
           ))}
-          {isPaused && currentQ.choices.map((choice, idx) => {
+          {isPaused && !isEscaping && currentQ.choices.map((choice, idx) => {
             const isSelected = selectedChoice === idx;
             const isCorrectChoice = idx === currentQ.correctIndex;
             let highlightClass = "opacity-30 border-gray-200 dark:border-gray-800 text-gray-400 dark:text-gray-600";
@@ -116,10 +118,16 @@ export function BattleScreen(props: BattleScreenProps) {
           })}
         </div>
 
-        {isPaused && (
+        {isPaused && !isEscaping && (
             <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in mb-2">
               <div className="text-lg font-bold bg-white dark:bg-gray-700 dark:text-white p-3 rounded-xl border-2 border-black dark:border-gray-500 w-full text-center shadow-md">{msg || "Round Over"}</div>
               <button onClick={nextQuestion} className="w-full py-3 rounded-xl text-lg font-black shadow-lg transition-all duration-200 hover:scale-[1.02] bg-blue-600 text-white hover:bg-blue-800 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500 dark:shadow-blue-900/30 dark:ring-1 dark:ring-blue-500/50">NEXT ➡️</button>
+            </div>
+        )}
+
+        {isEscaping && (
+            <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in mb-2">
+                <div className="text-lg font-bold bg-white dark:bg-gray-700 dark:text-white p-3 rounded-xl border-2 border-black dark:border-gray-500 w-full text-center shadow-md">{msg}</div>
             </div>
         )}
 
@@ -133,7 +141,7 @@ export function BattleScreen(props: BattleScreenProps) {
 
       {showInventory && (
         <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-.full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border dark:border-gray-700">
+           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border dark:border-gray-700">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold">🎒 Backpack</h3>
                 <button onClick={() => setShowInventory(false)} className="text-gray-400 hover:text-black dark:hover:text-white">✕</button>
