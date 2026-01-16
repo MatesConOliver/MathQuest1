@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function isGM() {
+      return request.auth != null && request.auth.token.email == "oliveru1996@gmail.com";
+    }
+
+    // --- CHARACTERS ---
+    match /characters/{uid} {
+      allow read, create, update: if isOwner(uid);
+      allow delete: if false;
+    }
+    
+    // --- STORIES ---
+    match /stories/{storyId} {
+      allow read: if signedIn();
+  		allow write: if isGM();
+    }
+    
+    // --- SHOP RULES ---
+    match /items/{itemId} {
+      allow read: if signedIn();
+      allow write: if isGM(); 
+    }
+
+    // --- GAME CONTENT ---
+    match /foes/{foeId} {
+      allow read: if signedIn();
+      allow write: if isGM();
+
+      // Rule for the questions SUBSCALECTION inside a foe
+      match /questions/{questionId} {
+        allow read: if signedIn();
+        allow write: if isGM();
+      }
+    }
+
+    match /encounters/{encounterId} {
+      allow read: if signedIn();
+      allow write: if isGM();
+    }
+
+    match /activeEncounters/{uid} {
+      allow read, create, update: if isOwner(uid);
+      allow delete: if false;
+    }
+
+    // Rule for the TOP-LEVEL questions collection
+    match /questions/{questionId} {
+      allow read: if signedIn();
+      allow write: if isGM();
+    }
+
+    match /submissions/{submissionId} {
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    
+    match /locations/{docId} {
+      allow read: if true;
+      allow write: if isGM();
+    }
+
+    // Deny all other reads/writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
