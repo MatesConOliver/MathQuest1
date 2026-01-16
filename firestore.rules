@@ -10,7 +10,8 @@ service cloud.firestore {
 
     // --- CHARACTERS ---
     match /characters/{uid} {
-      allow read, create, update: if isOwner(uid);
+      allow read: if signedIn();
+      allow create, update: if isOwner(uid);
       allow delete: if false;
     }
     
@@ -63,11 +64,6 @@ service cloud.firestore {
     match /locations/{docId} {
       allow read: if true;
       allow write: if isGM();
-    }
-
-    // Deny all other reads/writes by default
-    match /{document=**} {
-      allow read, write: if false;
     }
   }
 }
