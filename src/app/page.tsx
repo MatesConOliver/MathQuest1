@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged, signOut, User, deleteUser } from "firebase/auth";
-import { doc, getDoc, updateDoc, arrayUnion, onSnapshot, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { auth, db, functions } from "@/lib/firebase";
+import { onAuthStateChanged, signOut, User } from "firebase/auth";
+import { doc, getDoc, updateDoc, arrayUnion, onSnapshot } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StoryEvent, Character } from "@/types/game";
 import { StoryPlayer } from "@/components/StoryPlayer";
 
 const LOGIN_STORY_ID = "login";
+
+const deleteUserAccount = httpsCallable(functions, 'deleteUserAccount');
+const newGame = httpsCallable(functions, 'newGame');
 
 export default function HomePage() {
   const router = useRouter();
@@ -82,19 +86,7 @@ export default function HomePage() {
     if (!user) return;
     if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
       try {
-        // Now also deletes the active encounter
-        await deleteDoc(doc(db, "activeEncounters", user.uid));
-        // Delete all submissions by the user
-        const submissionsRef = collection(db, "submissions");
-        const q = query(submissionsRef, where("ownerUid", "==", user.uid));
-        const querySnapshot = await getDocs(q);
-        const deletePromises: Promise<void>[] = [];
-        querySnapshot.forEach((doc) => {
-          deletePromises.push(deleteDoc(doc.ref));
-        });
-        await Promise.all(deletePromises);
-        
-        await deleteDoc(doc(db, "characters", user.uid));
+        await newGame();
         router.push('/login'); // Redirect to login to re-trigger character creation
       } catch (error) {
         console.error("Error starting a new game:", error);
@@ -107,23 +99,7 @@ export default function HomePage() {
     if (!user) return;
     if (window.confirm("Are you sure you want to delete your account? This action is irreversible.")) {
       try {
-        // Now also deletes the active encounter
-        await deleteDoc(doc(db, "activeEncounters", user.uid));
-        
-        // Delete all submissions by the user
-        const submissionsRef = collection(db, "submissions");
-        const q = query(submissionsRef, where("ownerUid", "==", user.uid));
-        const querySnapshot = await getDocs(q);
-        const deletePromises: Promise<void>[] = [];
-        querySnapshot.forEach((doc) => {
-          deletePromises.push(deleteDoc(doc.ref));
-        });
-        await Promise.all(deletePromises);
-        
-        await deleteDoc(doc(db, "characters", user.uid));
-        if (auth.currentUser) {
-          await deleteUser(auth.currentUser);
-        }
+        await deleteUserAccount();
         router.push("/login");
       } catch (error) {
         console.error("Error deleting account:", error);

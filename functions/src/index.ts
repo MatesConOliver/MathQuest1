@@ -1,11 +1,13 @@
 
 import { https } from "firebase-functions";
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, WriteBatch } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 
 initializeApp();
 
 const db = getFirestore();
+const adminAuth = getAuth();
 
 // Callable function to check for and return an ON_LOGIN story
 export const checkAndGetLoginStory = https.onCall(async (data, context) => {
@@ -63,6 +65,93 @@ export const checkAndGetLoginStory = https.onCall(async (data, context) => {
     throw new https.HttpsError(
       "internal",
       "An error occurred while fetching the story.",
+      error
+    );
+  }
+});
+
+export const deleteUserAccount = https.onCall(async (_, context) => {
+  if (!context.auth) {
+    throw new https.HttpsError(
+      "unauthenticated",
+      "The function must be called while authenticated."
+    );
+  }
+
+  const uid = context.auth.uid;
+
+  try {
+    const batch = db.batch();
+
+    // 1. Delete character
+    const characterRef = db.collection("characters").doc(uid);
+    batch.delete(characterRef);
+
+    // 2. Delete active encounter
+    const activeEncounterRef = db.collection("activeEncounters").doc(uid);
+    batch.delete(activeEncounterRef);
+
+    // 3. Delete submissions
+    const submissionsQuery = db.collection("submissions").where("ownerUid", "==", uid);
+    const submissionsSnap = await submissionsQuery.get();
+    submissionsSnap.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+
+    // Commit the batch
+    await batch.commit();
+
+    // 4. Delete user from auth
+    await adminAuth.deleteUser(uid);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting user account:", error);
+    throw new https.HttpsError(
+      "internal",
+      "An error occurred while deleting the user account.",
+      error
+    );
+  }
+});
+
+export const newGame = https.onCall(async (_, context) => {
+  if (!context.auth) {
+    throw new https.HttpsError(
+      "unauthenticated",
+      "The function must be called while authenticated."
+    );
+  }
+
+  const uid = context.auth.uid;
+
+  try {
+    const batch = db.batch();
+
+    // 1. Delete character
+    const characterRef = db.collection("characters").doc(uid);
+    batch.delete(characterRef);
+
+    // 2. Delete active encounter
+    const activeEncounterRef = db.collection("activeEncounters").doc(uid);
+    batch.delete(activeEncounterRef);
+
+    // 3. Delete submissions
+    const submissionsQuery = db.collection("submissions").where("ownerUid", "==", uid);
+    const submissionsSnap = await submissionsQuery.get();
+    submissionsSnap.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+
+    // Commit the batch
+    await batch.commit();
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error starting new game:", error);
+    throw new https.HttpsError(
+      "internal",
+      "An error occurred while starting a new game.",
       error
     );
   }
