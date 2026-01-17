@@ -26,6 +26,7 @@ export function LocationsPanel() {
     const [name, setName] = useState("");
     const [desc, setDesc] = useState("");
     const [order, setOrder] = useState(1);
+    const [imageUrl, setImageUrl] = useState("");
   
     useEffect(() => { loadLocs(); }, []);
   
@@ -45,12 +46,13 @@ export function LocationsPanel() {
         setName(l.name);
         setDesc(l.description);
         setOrder(l.order);
+        setImageUrl(l.imageUrl || "");
         setMsg(`✏️ Editing: ${l.name}`);
     }
   
     async function saveLocation() {
       if (!name) return;
-      const data = { name, description: desc, order: Number(order) };
+      const data = { name, description: desc, order: Number(order), imageUrl };
   
       if (editingId) {
           await setDoc(doc(db, "locations", editingId), data, { merge: true });
@@ -59,7 +61,7 @@ export function LocationsPanel() {
           await addDoc(collection(db, "locations"), data);
           setMsg("✅ Created New Location");
       }
-      setName(""); setDesc(""); setEditingId(""); loadLocs();
+      setName(""); setDesc(""); setEditingId(""); setImageUrl(""); loadLocs();
     }
     
     async function deleteLoc(id: string) {
@@ -78,13 +80,14 @@ export function LocationsPanel() {
           <Input label="Location Name" value={name} onChange={(e:any)=>setName(e.target.value)} />
           <Input label="Description" value={desc} onChange={(e:any)=>setDesc(e.target.value)} />
           <Input type="number" label="Order (1, 2, 3...)" value={order} onChange={(e:any)=>setOrder(e.target.value)} />
+          <Input label="Image URL" value={imageUrl} onChange={(e:any)=>setImageUrl(e.target.value)} />
           
           <div className="flex gap-2">
               <button onClick={saveLocation} className="btn-primary flex-1 bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 py-2 rounded-lg font-bold">
                   {editingId ? "Update" : "Save"}
               </button>
               {editingId && (
-                  <button onClick={() => { setEditingId(""); setName(""); setDesc(""); }} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 dark:text-white rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-600">
+                  <button onClick={() => { setEditingId(""); setName(""); setDesc(""); setImageUrl(""); }} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 dark:text-white rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-600">
                       Cancel
                   </button>
               )}

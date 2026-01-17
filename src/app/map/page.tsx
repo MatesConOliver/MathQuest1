@@ -67,14 +67,17 @@ export default function MapPage() {
 
   // --- MAIN RENDER (Combined Map + Popup) ---
   return (
-    <main className="min-h-screen bg-slate-100 dark:bg-gray-900 p-4 md:p-8 transition-colors duration-300">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <main 
+      className="min-h-screen bg-cover bg-center p-4 md:p-8 transition-colors duration-300"
+      style={{ backgroundImage: "url('https://i.imgur.com/g0LhT6i.jpeg')" }}
+    >
+      <div className="max-w-4xl mx-auto space-y-6 bg-black/50 p-5 rounded-xl">
         
         {/* HEADER */}
         <header className="flex justify-between items-end pb-4 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h1 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white">World Map</h1>
-            <p className="text-gray-500 dark:text-gray-400 font-medium">Select a region to explore</p>
+            <h1 className="text-3xl md:text-4xl font-black text-white">World Map</h1>
+            <p className="text-gray-200 font-medium">Select a region to explore</p>
           </div>
           <Link href="/" className="px-4 py-2 bg-white dark:bg-gray-800 dark:text-gray-100 text-gray-700 font-bold rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm transition-all">
             🏠 Home
@@ -87,17 +90,18 @@ export default function MapPage() {
             <button
               key={loc.id}
               onClick={() => setSelectedLocation(loc)}
-              className="group relative text-left bg-white dark:bg-gray-800 p-6 rounded-3xl border-2 border-transparent dark:border-gray-700 hover:border-blue-500 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden"
+              className="group relative text-left bg-white dark:bg-gray-800 p-6 rounded-3xl border-2 border-transparent dark:border-gray-700 hover:border-blue-500 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden bg-cover bg-center"
+              style={{ backgroundImage: `url(${loc.imageUrl})` }}
             >
-              <div className="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="absolute inset-0 bg-black/50" />
               <div className="relative z-10 flex items-start gap-4">
-                <div className="text-5xl group-hover:scale-110 transition-transform duration-300">
+                <div className="text-5xl group-hover:scale-110 transition-transform duration-300 bg-black/50 p-2 rounded-lg">
                    {loc.name.includes("Forest") ? "🌲" : loc.name.includes("Cave") ? "🦇" : "📍"}
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-blue-700 dark:group-hover:text-blue-400">{loc.name}</h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">{loc.description}</p>
-                  <div className="mt-3 inline-flex items-center text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                  <h2 className="text-xl font-bold text-white group-hover:text-blue-400">{loc.name}</h2>
+                  <p className="text-sm text-gray-300 mt-1 leading-relaxed">{loc.description}</p>
+                  <div className="mt-3 inline-flex items-center text-xs font-black text-blue-400 uppercase tracking-wider">
                     View Area <span className="ml-1 group-hover:translate-x-1 transition-transform">➜</span>
                   </div>
                 </div>

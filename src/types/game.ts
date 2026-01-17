@@ -127,6 +127,7 @@ export type GameLocation = {
   name: string;
   description: string;
   order: number; // To sort them (1. Forest, 2. Caves...)
+  imageUrl?: string;
 };
 
 export type EncounterDoc = {
