@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { auth, getAllDocs, getDoc, updateDoc, functions, db } from '@/lib/firebase';
+import { auth, getAllDocs, getDoc, updateDoc, callApi, db } from '@/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, getDocs as getFirebaseDocs, query, where } from 'firebase/firestore';
 import {
@@ -24,7 +24,6 @@ import { BattleScreen } from './components/BattleScreen';
 import { VictoryScreen } from './components/VictoryScreen';
 import { DefeatScreen } from './components/DefeatScreen';
 import { StoryDisplay } from './components/StoryDisplay'; // Import the new StoryDisplay component
-import { httpsCallable } from 'firebase/functions';
 
 // Main game content component
 export default function PlayClient() {
@@ -400,10 +399,8 @@ export default function PlayClient() {
         );
         setGameItems(itemsMap);
 
-        // Check for a login story
-        const checkStory = httpsCallable(functions, 'checkAndGetLoginStory');
-        const result = await checkStory();
-        const storyEvent = result.data as StoryEvent | null;
+        // Check for a login story using the new callApi function
+        const storyEvent = await callApi<StoryEvent | null>('checkAndGetLoginStory');
 
         if (storyEvent && storyEvent.scenes && storyEvent.scenes.length > 0) {
             const firstScene = storyEvent.scenes[0];

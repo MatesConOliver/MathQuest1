@@ -1,19 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, db, functions } from "@/lib/firebase";
+import { auth, db, callApi } from "@/lib/firebase";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { doc, getDoc, updateDoc, arrayUnion, onSnapshot } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StoryEvent, Character } from "@/types/game";
 import { StoryPlayer } from "@/components/StoryPlayer";
 
 const LOGIN_STORY_ID = "login";
-
-const deleteUserAccount = httpsCallable(functions, 'deleteUserAccount');
-const newGame = httpsCallable(functions, 'newGame');
 
 export default function HomePage() {
   const router = useRouter();
@@ -86,7 +82,7 @@ export default function HomePage() {
     if (!user) return;
     if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
       try {
-        await newGame();
+        await callApi('newGame');
         router.push('/login'); // Redirect to login to re-trigger character creation
       } catch (error) {
         console.error("Error starting a new game:", error);
@@ -99,7 +95,7 @@ export default function HomePage() {
     if (!user) return;
     if (window.confirm("Are you sure you want to delete your account? This action is irreversible.")) {
       try {
-        await deleteUserAccount();
+        await callApi('deleteUserAccount');
         router.push("/login");
       } catch (error) {
         console.error("Error deleting account:", error);
