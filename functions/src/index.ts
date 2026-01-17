@@ -3,6 +3,7 @@ import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import * as cors from "cors";
+import { Response } from "express";
 
 // Initialize Firebase Admin SDK
 initializeApp();
@@ -13,7 +14,7 @@ const adminAuth = getAuth();
 const corsHandler = cors({ origin: "https://dungeonsandpapers.vercel.app" });
 
 // Helper function to verify the Firebase ID token and attach user to request
-const authenticate = async (req: https.Request, res: https.Response, next: Function) => {
+const authenticate = async (req: https.Request, res: Response, next: Function) => {
   if (!req.headers.authorization || !req.headers.authorization.startsWith('Bearer ')) {
     res.status(403).send('Unauthorized');
     return;
