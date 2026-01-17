@@ -69,7 +69,7 @@ export default function MapPage() {
   return (
     <main 
       className="min-h-screen bg-cover bg-center p-4 md:p-8 transition-colors duration-300"
-      style={{ backgroundImage: "url('https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Backgrounds%2Fmap%20background.png?alt=media&token=9d290d1c-476e-452c-b993-4c81073b3f95')" }}
+      style={{ backgroundImage: "url('https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Backgrounds%2Fmap%20background%201.png?alt=media&token=38144b3f-4abf-475f-81f6-96030d482d38')" }}
     >
       <div className="max-w-4xl mx-auto space-y-6 bg-black/50 p-5 rounded-xl">
         
