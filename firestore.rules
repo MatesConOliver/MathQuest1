@@ -12,7 +12,7 @@ service cloud.firestore {
     match /characters/{uid} {
       allow read: if signedIn();
       allow create, update: if isOwner(uid);
-      allow delete: if false;
+      allow delete: if isOwner(uid);
     }
     
     // --- STORIES ---
