@@ -1,6 +1,6 @@
 import { https } from "firebase-functions";
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, serverTimestamp } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import * as cors from "cors";
 import { Response } from "express";
@@ -13,7 +13,7 @@ const adminAuth = getAuth();
 // CORS handler
 const corsHandler = cors({ origin: true });
 
-// Helper to create a new character object
+// Helper to create a new character object, based on the source of truth in login/page.tsx
 const createNewCharacter = (name: string, uid: string) => {
   return {
     ownerUid: uid,
@@ -22,12 +22,14 @@ const createNewCharacter = (name: string, uid: string) => {
     level: 1,
     xp: 0,
     gold: 0,
-    maxHp: 100,
-    hp: 100,
+    maxHp: 15,
+    hp: 15,
     stats: { a: 0, b: 0, c: 0, d: 0 },
     unspentPoints: 0,
     inventory: [],
     equipment: { mainHand: null, offHand: null, armor: null, head: null },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
     completedStoryEvents: [],
     unlockedContinents: ["bSL1XkrzgqQxqtCLNumD"]
   };
@@ -133,8 +135,7 @@ export const newGame = https.onRequest((req, res) => {
       try {
         // Atomically delete old data
         const batch = db.batch();
-        batch.delete(db.collection("characters
-.doc(uid));
+        batch.delete(db.collection("characters").doc(uid));
         batch.delete(db.collection("activeEncounters").doc(uid));
         const subsSnap = await db.collection("submissions").where("ownerUid", "==", uid).get();
         subsSnap.forEach(doc => batch.delete(doc.ref));
