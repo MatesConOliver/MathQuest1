@@ -18,6 +18,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [storyToPlay, setStoryToPlay] = useState<StoryEvent | null>(null);
   const [isGM, setIsGM] = useState(false);
+  const [isCreatingNewGame, setIsCreatingNewGame] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -79,28 +81,34 @@ export default function HomePage() {
   };
 
   const handleNewGame = async () => {
-    if (!user) return;
+    if (!user || isCreatingNewGame) return;
     if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
+      setIsCreatingNewGame(true);
       try {
         await callApi('newGame');
-        // Reload the page to apply the new character data and re-trigger the login story
-        window.location.reload();
+        // The onSnapshot listener will automatically pick up the new character data
+        // and trigger the login story flow. No reload needed.
       } catch (error) {
         console.error("Error starting a new game:", error);
         alert("There was an error starting a new game. Please try again.");
+      } finally {
+        setIsCreatingNewGame(false);
       }
     }
   };
 
   const handleDeleteAccount = async () => {
-    if (!user) return;
+    if (!user || isDeletingAccount) return;
     if (window.confirm("Are you sure you want to delete your account? This action is irreversible.")) {
+      setIsDeletingAccount(true);
       try {
         await callApi('deleteUserAccount');
         router.push("/login");
       } catch (error) {
         console.error("Error deleting account:", error);
         alert("There was an error deleting your account. You might need to log in again to complete this action.");
+      } finally {
+        setIsDeletingAccount(false);
       }
     }
   };
@@ -172,15 +180,17 @@ export default function HomePage() {
       <div className="fixed bottom-4 right-4 flex flex-col items-end space-y-2">
         <button
           onClick={handleNewGame}
-          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          disabled={isCreatingNewGame}
+          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-50"
         >
-          New Game
+          {isCreatingNewGame ? "Creating..." : "New Game"}
         </button>
         <button
           onClick={handleDeleteAccount}
-          className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200"
+          disabled={isDeletingAccount}
+          className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 disabled:opacity-50"
         >
-          Delete Account
+          {isDeletingAccount ? "Deleting..." : "Delete Account"}
         </button>
       </div>
     </main>
