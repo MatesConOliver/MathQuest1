@@ -1,3 +1,4 @@
+
 import { https } from "firebase-functions";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, serverTimestamp } from "firebase-admin/firestore";
@@ -62,22 +63,11 @@ export const checkAndGetLoginStory = https.onRequest((req, res) => {
         const charSnap = await charDocRef.get();
 
         if (!charSnap.exists) {
-          // Create character since one doesn't exist
-          const userRecord = await adminAuth.getUser(uid);
-          const name = userRecord.displayName || "Adventurer";
-          const newCharacter = createNewCharacter(name, uid);
-          await db.collection("characters").doc(uid).set(newCharacter);
-
-          // Now, find and send the login story.
-          const storiesQuery = db.collection("stories").where("triggerType", "==", "ON_LOGIN").limit(1);
-          const storiesSnap = await storiesQuery.get();
-          if (storiesSnap.empty) {
-            res.status(200).send(null); // No login story configured
-          } else {
-            const loginStory = { id: storiesSnap.docs[0].id, ...storiesSnap.docs[0].data() };
-            res.status(200).send(loginStory);
-          }
-          return;
+            // If character doesn't exist, it might be a new user or a new game.
+            // The client-side logic handles character creation, so we just wait.
+            // Sending a specific status or message could be useful for debugging.
+            res.status(404).send({ error: "Character not found. Waiting for creation..." });
+            return;
         }
 
         const character = charSnap.data();
@@ -114,7 +104,7 @@ export const deleteUserAccount = https.onRequest((req, res) => {
         const batch = db.batch();
         batch.delete(db.collection("characters").doc(uid));
         batch.delete(db.collection("activeEncounters").doc(uid));
-        const subsSnap = await db.collection("submissions").where("ownerUid", "==", uid).get();
+        const subsSnap = await db.collection("submissions").where("ownerUid", "===", uid).get();
         subsSnap.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
         await adminAuth.deleteUser(uid);
@@ -138,7 +128,7 @@ export const newGame = https.onRequest((req, res) => {
         const batch = db.batch();
         batch.delete(db.collection("characters").doc(uid));
         batch.delete(db.collection("activeEncounters").doc(uid));
-        const subsSnap = await db.collection("submissions").where("ownerUid", "==", uid).get();
+        const subsSnap = await db.collection("submissions").where("ownerUid", "===", uid).get();
         subsSnap.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
 
