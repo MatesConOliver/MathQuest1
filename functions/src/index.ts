@@ -62,9 +62,6 @@ export const checkAndGetLoginStory = https.onRequest((req, res) => {
         const charSnap = await charDocRef.get();
 
         if (!charSnap.exists) {
-            // If character doesn't exist, it might be a new user or a new game.
-            // The client-side logic handles character creation, so we just wait.
-            // Sending a specific status or message could be useful for debugging.
             res.status(404).send({ error: "Character not found. Waiting for creation..." });
             return;
         }
@@ -121,32 +118,30 @@ export const newGame = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
-      console.log("[newGame] Triggered. Request body:", req.body);
       const newName = req.body.name;
-      console.log("[newGame] Extracted newName:", newName);
       try {
-        // Atomically delete old data
+        // Delete old data
         const batch = db.batch();
-        const charRef = db.collection("characters").doc(uid);
-        batch.delete(charRef);
-        const encounterRef = db.collection("activeEncounters").doc(uid);
-        batch.delete(encounterRef);
+        batch.delete(db.collection("characters").doc(uid));
+        batch.delete(db.collection("activeEncounters").doc(uid));
         const subsSnap = await db.collection("submissions").where("ownerUid", "==", uid).get();
         subsSnap.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
-        console.log("[newGame] Old data deleted successfully.");
 
         // Create a new character
         const userRecord = await adminAuth.getUser(uid);
         const name = newName || userRecord.displayName || "Adventurer";
-        console.log("[newGame] Final character name:", name);
-        const newCharacter = createNewCharacter(name, uid);
-        await db.collection("characters").doc(uid).set(newCharacter);
-        console.log("[newGame] New character created successfully.");
+        const newCharacterData = createNewCharacter(name, uid);
+        await db.collection("characters").doc(uid).set(newCharacterData);
+
+        // The `createdAt` and `updatedAt` fields are ServerTimestamps.
+        // We need to fetch the document again to get the actual date values.
+        const newCharDoc = await db.collection("characters").doc(uid).get();
+        const finalCharacter = newCharDoc.data();
         
-        res.status(200).send({ success: true });
+        res.status(200).send(finalCharacter);
       } catch (error) {
-        console.error("[newGame] Error starting new game:", error);
+        console.error("Error starting new game:", error);
         res.status(500).send({ error: "An error occurred." });
       }
     });
