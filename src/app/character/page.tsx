@@ -156,9 +156,8 @@ function StatUpgradeBox({
   canAfford, onIncrement, onDecrement, color 
 }: any) {
   
-  // LOGIC: 'value' (from derivedStats) already includes Base + Gear.
-  // We just add pending to it for the PREVIEW.
-  const totalValue = value + pending; 
+  // Corrected logic to prevent double-counting
+  const baseValue = value - pending;
   const isChanged = pending > 0;
 
   return (
@@ -169,22 +168,29 @@ function StatUpgradeBox({
       }`}>
       
       {/* Pending Indicator */}
-      {isChanged && <div className="absolute top-0 right-0 w-8 h-8 bg-yellow-400/30 dark:bg-yellow-400/20 rounded-bl-full z-0"></div>}
+      {isChanged && <div className="absolute top-0 right-0 w-8 h-8 bg-yellow-400/30 dark:bg-yellow-400/20 rounded-bl-full z-0\"></div>}
 
       <div className="flex justify-between items-start z-10">
         <div>
            <span className="text-[10px] font-black uppercase tracking-tighter block text-gray-700 dark:text-gray-300">{label}</span>
-           {locked && <span className="text-[9px] text-red-500 dark:text-red-400 font-bold">Unlocks Lvl {unlockLevel}</span>}
+           {/* THIS IS THE FLAVOR TEXT, NOW ADDED BACK IN */}
+           <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">{flavor}</p>
         </div>
+        
         <div className="text-right">
-           <span className={`text-xl font-black ${color}`}>{totalValue}</span>
-           {isChanged && <div className="text-[9px] text-green-600 dark:text-green-400 font-bold">+{pending} Pending</div>}
+           <span className={`text-xl font-black ${color}`}>
+             {baseValue}
+             {isChanged && (
+               <span className="text-green-500 ml-1">+{pending}</span>
+             )}
+           </span>
+           {isChanged && <div className="text-[9px] text-green-600 dark:text-green-400 font-bold\">Pending</div>}
         </div>
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-2 z-10">
         {locked ? (
-           <div className="w-full text-center text-[10px] bg-gray-200 dark:bg-gray-800 rounded py-1 font-bold text-gray-500 dark:text-gray-400">LOCKED</div>
+           <div className="w-full text-center text-[10px] bg-gray-200 dark:bg-gray-800 rounded py-1 font-bold text-gray-500 dark:text-gray-400\">LOCKED AT LVL {unlockLevel}</div>
         ) : (
           <>
             <button 
@@ -208,6 +214,7 @@ function StatUpgradeBox({
     </div>
   );
 }
+
 
 function EquipRow({ slotName, equippedId, gameItems, inventory, onUnequip }: any) {
   const instance = equippedId && inventory 
