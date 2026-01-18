@@ -14,8 +14,9 @@ const adminAuth = getAuth();
 const corsHandler = cors({ origin: true });
 
 // Helper to create a new character object
-const createNewCharacter = (name: string) => {
+const createNewCharacter = (name: string, uid: string) => {
   return {
+    ownerUid: uid,
     name: name,
     className: "Apprentice",
     level: 1,
@@ -62,7 +63,7 @@ export const checkAndGetLoginStory = https.onRequest((req, res) => {
           // Create character since one doesn't exist
           const userRecord = await adminAuth.getUser(uid);
           const name = userRecord.displayName || "Adventurer";
-          const newCharacter = createNewCharacter(name);
+          const newCharacter = createNewCharacter(name, uid);
           await db.collection("characters").doc(uid).set(newCharacter);
 
           // Now, find and send the login story.
@@ -132,7 +133,8 @@ export const newGame = https.onRequest((req, res) => {
       try {
         // Atomically delete old data
         const batch = db.batch();
-        batch.delete(db.collection("characters").doc(uid));
+        batch.delete(db.collection("characters
+.doc(uid));
         batch.delete(db.collection("activeEncounters").doc(uid));
         const subsSnap = await db.collection("submissions").where("ownerUid", "==", uid).get();
         subsSnap.forEach(doc => batch.delete(doc.ref));
@@ -141,7 +143,7 @@ export const newGame = https.onRequest((req, res) => {
         // Create a new character
         const userRecord = await adminAuth.getUser(uid);
         const name = userRecord.displayName || "Adventurer";
-        const newCharacter = createNewCharacter(name);
+        const newCharacter = createNewCharacter(name, uid);
         await db.collection("characters").doc(uid).set(newCharacter);
         
         res.status(200).send({ success: true });
