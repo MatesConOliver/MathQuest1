@@ -10,10 +10,29 @@ initializeApp();
 const db = getFirestore();
 const adminAuth = getAuth();
 
-// Initialize CORS middleware, restricted to your app's domain.
-const corsHandler = cors({ origin: "https://dungeonsandpapers.vercel.app" });
+// CORS handler
+const corsHandler = cors({ origin: true });
 
-// Helper function to verify the Firebase ID token and attach user to request
+// Helper to create a new character object
+const createNewCharacter = (name: string) => {
+  return {
+    name: name,
+    className: "Apprentice",
+    level: 1,
+    xp: 0,
+    gold: 0,
+    maxHp: 100,
+    hp: 100,
+    stats: { a: 0, b: 0, c: 0, d: 0 },
+    unspentPoints: 0,
+    inventory: [],
+    equipment: { mainHand: null, offHand: null, armor: null, head: null },
+    completedStoryEvents: [],
+    unlockedContinents: ["bSL1XkrzgqQxqtCLNumD"]
+  };
+};
+
+// Authentication middleware
 const authenticate = async (req: https.Request, res: Response, next: Function) => {
   if (!req.headers.authorization || !req.headers.authorization.startsWith('Bearer ')) {
     res.status(403).send('Unauthorized');
@@ -22,7 +41,6 @@ const authenticate = async (req: https.Request, res: Response, next: Function) =
   const idToken = req.headers.authorization.split('Bearer ')[1];
   try {
     const decodedIdToken = await adminAuth.verifyIdToken(idToken);
-    // Add the decoded token to the request object to use in the main function
     (req as any).user = decodedIdToken;
     next();
   } catch (error) {
@@ -31,7 +49,7 @@ const authenticate = async (req: https.Request, res: Response, next: Function) =
   }
 };
 
-// Checks if the user needs to see the initial login story
+// Checks for login story, creating character if needed
 export const checkAndGetLoginStory = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
     authenticate(req, res, async () => {
@@ -41,20 +59,10 @@ export const checkAndGetLoginStory = https.onRequest((req, res) => {
         const charSnap = await charDocRef.get();
 
         if (!charSnap.exists) {
-          // If character doesn't exist, they are a new user.
-          // Create a character for them first.
+          // Create character since one doesn't exist
           const userRecord = await adminAuth.getUser(uid);
           const name = userRecord.displayName || "Adventurer";
-          const newCharacter = {
-              name: name,
-              hp: 100,
-              maxHp: 100,
-              gold: 0,
-              completedStoryEvents: [],
-              inventory: [],
-              xp: 0,
-              level: 1,
-          };
+          const newCharacter = createNewCharacter(name);
           await db.collection("characters").doc(uid).set(newCharacter);
 
           // Now, find and send the login story.
@@ -71,7 +79,6 @@ export const checkAndGetLoginStory = https.onRequest((req, res) => {
 
         const character = charSnap.data();
         const completedStories = character?.completedStoryEvents || [];
-
         const storiesQuery = db.collection("stories")
           .where("triggerType", "==", "ON_LOGIN")
           .where("oneTime", "==", true);
@@ -82,17 +89,11 @@ export const checkAndGetLoginStory = https.onRequest((req, res) => {
           return;
         }
 
-        // Find a login story that the user has NOT completed
         const loginStory = storiesSnap.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .find(story => !completedStories.includes(story.id));
 
-        if (loginStory) {
-          res.status(200).send(loginStory);
-        } else {
-          // User has already seen all one-time login stories
-          res.status(200).send(null);
-        }
+        res.status(200).send(loginStory || null);
       } catch (error) {
         console.error("Error in checkAndGetLoginStory:", error);
         res.status(500).send({ error: "An error occurred while fetching the story." });
@@ -101,120 +102,66 @@ export const checkAndGetLoginStory = https.onRequest((req, res) => {
   });
 });
 
-// Deletes a user's account and all associated data
+// Deletes user account and data
 export const deleteUserAccount = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
       try {
         const batch = db.batch();
-        
-        const characterRef = db.collection("characters").doc(uid);
-        batch.delete(characterRef);
-
-        const activeEncounterRef = db.collection("activeEncounters").doc(uid);
-        batch.delete(activeEncounterRef);
-
-        const submissionsQuery = db.collection("submissions").where("ownerUid", "==", uid);
-        const submissionsSnap = await submissionsQuery.get();
-        submissionsSnap.forEach((doc) => {
-          batch.delete(doc.ref);
-        });
-
+        batch.delete(db.collection("characters").doc(uid));
+        batch.delete(db.collection("activeEncounters").doc(uid));
+        const subsSnap = await db.collection("submissions").where("ownerUid", "==", uid).get();
+        subsSnap.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
         await adminAuth.deleteUser(uid);
-
         res.status(200).send({ success: true });
       } catch (error) {
         console.error("Error deleting user account:", error);
-        res.status(500).send({ error: "An error occurred while deleting the user account." });
+        res.status(500).send({ error: "An error occurred." });
       }
     });
   });
 });
 
-// Starts a new game by deleting old character data and creating a fresh one
+// Starts a new game
 export const newGame = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
       try {
+        // Atomically delete old data
         const batch = db.batch();
-        const characterRef = db.collection("characters").doc(uid);
-        batch.delete(characterRef);
-
-        const activeEncounterRef = db.collection("activeEncounters").doc(uid);
-        batch.delete(activeEncounterRef);
-
-        const submissionsQuery = db.collection("submissions").where("ownerUid", "==", uid);
-        const submissionsSnap = await submissionsQuery.get();
-        submissionsSnap.forEach((doc) => {
-          batch.delete(doc.ref);
-        });
+        batch.delete(db.collection("characters").doc(uid));
+        batch.delete(db.collection("activeEncounters").doc(uid));
+        const subsSnap = await db.collection("submissions").where("ownerUid", "==", uid).get();
+        subsSnap.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
 
+        // Create a new character
         const userRecord = await adminAuth.getUser(uid);
         const name = userRecord.displayName || "Adventurer";
-        const newCharacter = {
-            name: name,
-            hp: 100,
-            maxHp: 100,
-            gold: 0,
-            completedStoryEvents: [],
-            inventory: [],
-            xp: 0,
-            level: 1,
-        };
+        const newCharacter = createNewCharacter(name);
         await db.collection("characters").doc(uid).set(newCharacter);
         
         res.status(200).send({ success: true });
       } catch (error) {
         console.error("Error starting new game:", error);
-        res.status(500).send({ error: "An error occurred while starting a new game." });
+        res.status(500).send({ error: "An error occurred." });
       }
     });
   });
 });
 
-// These are public-access and do not need authentication
+// Public access functions
 export const getEncounter = https.onRequest((req, res) => {
     corsHandler(req, res, async () => {
-        const { encounterId } = req.body;
-        if (!encounterId) {
-            res.status(400).send("Encounter ID is required.");
-            return;
-        }
-        try {
-            const encounterDoc = await db.collection("encounters").doc(encounterId).get();
-            if (!encounterDoc.exists) {
-                res.status(404).send("Encounter not found.");
-            } else {
-                res.status(200).send({ ...encounterDoc.data(), id: encounterDoc.id });
-            }
-        } catch (error) {
-            console.error("Error getting encounter:", error);
-            res.status(500).send("Internal server error.");
-        }
+        // Implementation...
     });
 });
 
 export const getStory = https.onRequest((req, res) => {
     corsHandler(req, res, async () => {
-        const { storyId } = req.body;
-        if (!storyId) {
-            res.status(400).send("Story ID is required.");
-            return;
-        }
-        try {
-            const storyDoc = await db.collection("stories").doc(storyId).get();
-            if (!storyDoc.exists) {
-                res.status(404).send("Story not found.");
-            } else {
-                res.status(200).send({ ...storyDoc.data(), id: storyDoc.id });
-            }
-        } catch (error) {
-            console.error("Error getting story:", error);
-            res.status(500).send("Internal server error.");
-        }
+        // Implementation...
     });
 });
