@@ -90,30 +90,32 @@ export default function PlayClient() {
     let hpFlat = baseHp;
     let hpMult = 0;
 
-    Object.values(character.equipment).forEach((equippedInstanceId) => {
-      if (!equippedInstanceId) return;
-      const instance = character.inventory.find(
-        (i) => i.instanceId === equippedInstanceId
-      );
-      if (!instance) return;
-      const def = gameItems[instance.itemId];
-      if (!def || !def.stats) return;
-
-      const isBroken =
-        (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
-      if (isBroken) return;
-
-      const s = def.stats;
-
-      if (s.a) totalA += s.a;
-      if (s.b) totalB += s.b;
-      if (s.c) totalC += s.c;
-      if (s.d) totalD += s.d;
-      if (s.xBonus) totalXBonus += s.xBonus;
-      if (s.damage?.mult) totalK += s.damage.mult;
-      if (s.maxHp?.flat) hpFlat += s.maxHp.flat;
-      if (s.maxHp?.mult) hpMult += s.maxHp.mult;
-    });
+    if (character.equipment) {
+        Object.values(character.equipment).forEach((equippedInstanceId) => {
+          if (!equippedInstanceId) return;
+          const instance = character.inventory.find(
+            (i) => i.instanceId === equippedInstanceId
+          );
+          if (!instance) return;
+          const def = gameItems[instance.itemId];
+          if (!def || !def.stats) return;
+    
+          const isBroken =
+            (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
+          if (isBroken) return;
+    
+          const s = def.stats;
+    
+          if (s.a) totalA += s.a;
+          if (s.b) totalB += s.b;
+          if (s.c) totalC += s.c;
+          if (s.d) totalD += s.d;
+          if (s.xBonus) totalXBonus += s.xBonus;
+          if (s.damage?.mult) totalK += s.damage.mult;
+          if (s.maxHp?.flat) hpFlat += s.maxHp.flat;
+          if (s.maxHp?.mult) hpMult += s.maxHp.mult;
+        });
+    }
 
     const finalMaxHp = Math.floor(hpFlat * (1 + hpMult));
 
