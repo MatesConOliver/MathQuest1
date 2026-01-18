@@ -1,4 +1,3 @@
-
 import { https } from "firebase-functions";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, serverTimestamp } from "firebase-admin/firestore";
@@ -104,7 +103,7 @@ export const deleteUserAccount = https.onRequest((req, res) => {
         const batch = db.batch();
         batch.delete(db.collection("characters").doc(uid));
         batch.delete(db.collection("activeEncounters").doc(uid));
-        const subsSnap = await db.collection("submissions").where("ownerUid", "===", uid).get();
+        const subsSnap = await db.collection("submissions").where("ownerUid", "==", uid).get();
         subsSnap.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
         await adminAuth.deleteUser(uid);
@@ -122,25 +121,32 @@ export const newGame = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
-      const { name: newName } = req.body;
+      console.log("[newGame] Triggered. Request body:", req.body);
+      const newName = req.body.name;
+      console.log("[newGame] Extracted newName:", newName);
       try {
         // Atomically delete old data
         const batch = db.batch();
-        batch.delete(db.collection("characters").doc(uid));
-        batch.delete(db.collection("activeEncounters").doc(uid));
-        const subsSnap = await db.collection("submissions").where("ownerUid", "===", uid).get();
+        const charRef = db.collection("characters").doc(uid);
+        batch.delete(charRef);
+        const encounterRef = db.collection("activeEncounters").doc(uid);
+        batch.delete(encounterRef);
+        const subsSnap = await db.collection("submissions").where("ownerUid", "==", uid).get();
         subsSnap.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
+        console.log("[newGame] Old data deleted successfully.");
 
         // Create a new character
         const userRecord = await adminAuth.getUser(uid);
         const name = newName || userRecord.displayName || "Adventurer";
+        console.log("[newGame] Final character name:", name);
         const newCharacter = createNewCharacter(name, uid);
         await db.collection("characters").doc(uid).set(newCharacter);
+        console.log("[newGame] New character created successfully.");
         
         res.status(200).send({ success: true });
       } catch (error) {
-        console.error("Error starting new game:", error);
+        console.error("[newGame] Error starting new game:", error);
         res.status(500).send({ error: "An error occurred." });
       }
     });
