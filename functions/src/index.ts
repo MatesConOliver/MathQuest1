@@ -132,6 +132,7 @@ export const newGame = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
+      const { name: newName } = req.body;
       try {
         // Atomically delete old data
         const batch = db.batch();
@@ -143,7 +144,7 @@ export const newGame = https.onRequest((req, res) => {
 
         // Create a new character
         const userRecord = await adminAuth.getUser(uid);
-        const name = userRecord.displayName || "Adventurer";
+        const name = newName || userRecord.displayName || "Adventurer";
         const newCharacter = createNewCharacter(name, uid);
         await db.collection("characters").doc(uid).set(newCharacter);
         

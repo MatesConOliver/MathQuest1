@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useEffect, useState } from "react";
 import { auth, db, callApi } from "@/lib/firebase";
@@ -82,18 +82,21 @@ export default function HomePage() {
 
   const handleNewGame = async () => {
     if (!user || isCreatingNewGame) return;
-    if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
-      setIsCreatingNewGame(true);
-      try {
-        await callApi('newGame');
-        // The onSnapshot listener will automatically pick up the new character data
-        // and trigger the login story flow. No reload needed.
-      } catch (error) {
-        console.error("Error starting a new game:", error);
-        alert("There was an error starting a new game. Please try again.");
-      } finally {
-        setIsCreatingNewGame(false);
-      }
+
+    const newName = prompt("Enter a new name for your character:");
+
+    if (newName && newName.trim() !== "") {
+        if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
+            setIsCreatingNewGame(true);
+            try {
+                await callApi('newGame', { name: newName });
+            } catch (error) {
+                console.error("Error starting a new game:", error);
+                alert("There was an error starting a new game. Please try again.");
+            } finally {
+                setIsCreatingNewGame(false);
+            }
+        }
     }
   };
 
@@ -114,7 +117,7 @@ export default function HomePage() {
   };
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 animate-pulse font-bold">
+    <div className=\"min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 animate-pulse font-bold\">
       Loading World...
     </div>
   );
@@ -124,46 +127,46 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center py-12 px-6 transition-colors duration-300">
-      <div className="max-w-md w-full space-y-8 text-center">
+    <main className=\"min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center py-12 px-6 transition-colors duration-300\">
+      <div className=\"max-w-md w-full space-y-8 text-center\">
 
-        <div className="space-y-2">
-          <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">The Primordial Equation</h1>
-          <p className="text-gray-600 dark:text-gray-300">
-            Welcome back, <span className="font-bold text-blue-600 dark:text-blue-400">{character?.name || "Hero"}</span>.
+        <div className=\"space-y-2\">
+          <h1 className=\"text-4xl font-extrabold text-gray-900 dark:text-white\">The Primordial Equation</h1>
+          <p className=\"text-gray-600 dark:text-gray-300\">
+            Welcome back, <span className=\"font-bold text-blue-600 dark:text-blue-400\">{character?.name || "Hero"}</span>.
           </p>
         </div>
 
-        <div className="grid gap-4">
+        <div className=\"grid gap-4\">
 
           <Link
-            href="/map"
-            className="group relative p-6 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-500 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all"
+            href=\"/map\"
+            className=\"group relative p-6 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-500 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all\"
           >
-            <div className="text-3xl mb-2 group-hover:scale-110 transition-transform duration-300">🗺️</div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">World Map</h3>
+            <div className=\"text-3xl mb-2 group-hover:scale-110 transition-transform duration-300\">🗺️</div>
+            <h3 className=\"text-xl font-bold text-gray-900 dark:text-white\">World Map</h3>
           </Link>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className=\"grid grid-cols-2 gap-4\">
             <Link
-              href="/character"
-              className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              href=\"/character\"
+              className=\"p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition\"
             >
-              <div className="text-2xl mb-1">🦉</div>
-              <div className="font-bold text-gray-900 dark:text-gray-200">Character</div>
+              <div className=\"text-2xl mb-1\">🦉</div>
+              <div className=\"font-bold text-gray-900 dark:text-gray-200\">Character</div>
             </Link>
 
             <Link
-              href="/shop"
-              className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              href=\"/shop\"
+              className=\"p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition\"
             >
-              <div className="text-2xl mb-1">🔮</div>
-              <div className="font-bold text-gray-900 dark:text-gray-200">Store</div>
+              <div className=\"text-2xl mb-1\">🔮</div>
+              <div className=\"font-bold text-gray-900 dark:text-gray-200\">Store</div>
             </Link>
           </div>
 
           {isGM && (
-            <Link href="/gm" className="p-3 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <Link href=\"/gm\" className=\"p-3 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors\">
                (GM Panel)
             </Link>
           )}
@@ -171,24 +174,24 @@ export default function HomePage() {
 
         <button
           onClick={handleLogout}
-          className="text-red-500 dark:text-red-400 text-sm font-bold hover:underline mt-8"
+          className=\"text-red-500 dark:text-red-400 text-sm font-bold hover:underline mt-8\"
         >
           Logout
         </button>
 
       </div>
-      <div className="fixed bottom-4 right-4 flex flex-col items-end space-y-2">
+      <div className=\"fixed bottom-4 right-4 flex flex-col items-end space-y-2\">
         <button
           onClick={handleNewGame}
           disabled={isCreatingNewGame}
-          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-50"
+          className=\"text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-50\"
         >
           {isCreatingNewGame ? "Creating..." : "New Game"}
         </button>
         <button
           onClick={handleDeleteAccount}
           disabled={isDeletingAccount}
-          className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 disabled:opacity-50"
+          className=\"text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 disabled:opacity-50\"
         >
           {isDeletingAccount ? "Deleting..." : "Delete Account"}
         </button>
