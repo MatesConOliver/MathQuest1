@@ -83,7 +83,8 @@ export default function HomePage() {
     if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
       try {
         await callApi('newGame');
-        router.push('/login'); // Redirect to login to re-trigger character creation
+        // Reload the page to apply the new character data and re-trigger the login story
+        window.location.reload();
       } catch (error) {
         console.error("Error starting a new game:", error);
         alert("There was an error starting a new game. Please try again.");

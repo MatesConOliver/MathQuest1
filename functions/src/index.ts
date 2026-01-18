@@ -41,7 +41,23 @@ export const checkAndGetLoginStory = https.onRequest((req, res) => {
         const charSnap = await charDocRef.get();
 
         if (!charSnap.exists) {
-          // If character doesn't exist, they are a new user. Find and send the login story.
+          // If character doesn't exist, they are a new user.
+          // Create a character for them first.
+          const userRecord = await adminAuth.getUser(uid);
+          const name = userRecord.displayName || "Adventurer";
+          const newCharacter = {
+              name: name,
+              hp: 100,
+              maxHp: 100,
+              gold: 0,
+              completedStoryEvents: [],
+              inventory: [],
+              xp: 0,
+              level: 1,
+          };
+          await db.collection("characters").doc(uid).set(newCharacter);
+
+          // Now, find and send the login story.
           const storiesQuery = db.collection("stories").where("triggerType", "==", "ON_LOGIN").limit(1);
           const storiesSnap = await storiesQuery.get();
           if (storiesSnap.empty) {
