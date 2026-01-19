@@ -254,6 +254,14 @@ export function StoriesPanel() {
                   </button>
                 </div>
                 
+                <Input
+                  label='Scene ID'
+                  value={scene.id}
+                  onChange={(e: any) =>
+                    updateScene(idx, 'id', e.target.value)
+                  }
+                />
+
                 <label className='flex items-center gap-2 text-sm cursor-pointer'>
                     <input
                       type='checkbox'
