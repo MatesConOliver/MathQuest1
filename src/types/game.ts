@@ -1,5 +1,3 @@
-// src/types/game.ts
-
 export type ItemType = 'weapon' | 'armor' | 'potion' | 'misc';
 export type EquipmentSlot = 'mainHand' | 'offHand' | 'armor' | 'head';
 
@@ -163,6 +161,7 @@ export interface Story {
 
 export type StoryTrigger = 
   | "ON_LOGIN"           // Plays immediately when opening the game
+  | "ON_FIRST_MAP_ENTER" // Plays when the player clicks the map for the first time
   | "ON_ENTER_MAP"       // Plays when entering a specific map/continent
   | "ON_VICTORY"         // Plays after winning a specific encounter
   | "ON_DEFEAT"          // Plays after losing a specific encounter
@@ -190,6 +189,8 @@ export interface StoryEvent {
   oneTime: boolean; 
 }
 
+export type SceneCommand = "PROMPT_NAME";
+
 export interface StoryScene {
   id: string;
   speakerName?: string;    // e.g., "Wise Wizard"
@@ -201,6 +202,7 @@ export interface StoryScene {
   loopVideo?: boolean;   // Should the video loop?
   fadeIn?: boolean;
   fadeOut?: boolean;
+  command?: SceneCommand;
   
   // Interaction (Simple Version)
   choices?: {

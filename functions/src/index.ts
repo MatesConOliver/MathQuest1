@@ -13,7 +13,7 @@ const adminAuth = getAuth();
 // CORS handler
 const corsHandler = cors({ origin: true });
 
-// Helper to create a new character object, based on the source of truth in login/page.tsx
+// Helper to create a new character object
 const createNewCharacter = (name: string, uid: string) => {
   return {
     ownerUid: uid,
@@ -52,24 +52,32 @@ const authenticate = async (req: https.Request, res: Response, next: Function) =
   }
 };
 
-// Checks for login story, creating character if needed
-export const checkAndGetLoginStory = https.onRequest((req, res) => {
+// Gets a story for a given trigger, if available
+export const getStoryForTrigger = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
+      const { trigger } = req.body;
+
+      if (!trigger) {
+        res.status(400).send({ error: "Trigger not specified." });
+        return;
+      }
+
       try {
         const charDocRef = db.collection("characters").doc(uid);
         const charSnap = await charDocRef.get();
 
         if (!charSnap.exists) {
-            res.status(404).send({ error: "Character not found. Waiting for creation..." });
-            return;
+          res.status(404).send({ error: "Character not found." });
+          return;
         }
 
         const character = charSnap.data();
         const completedStories = character?.completedStoryEvents || [];
+        
         const storiesQuery = db.collection("stories")
-          .where("triggerType", "==", "ON_LOGIN")
+          .where("triggerType", "==", trigger)
           .where("oneTime", "==", true);
         
         const storiesSnap = await storiesQuery.get();
@@ -78,18 +86,20 @@ export const checkAndGetLoginStory = https.onRequest((req, res) => {
           return;
         }
 
-        const loginStory = storiesSnap.docs
+        // Find the first story that hasn't been completed yet
+        const storyToDo = storiesSnap.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .find(story => !completedStories.includes(story.id));
 
-        res.status(200).send(loginStory || null);
+        res.status(200).send(storyToDo || null);
       } catch (error) {
-        console.error("Error in checkAndGetLoginStory:", error);
+        console.error(`Error in getStoryForTrigger for trigger ${trigger}:`, error);
         res.status(500).send({ error: "An error occurred while fetching the story." });
       }
     });
   });
 });
+
 
 // Deletes user account and data
 export const deleteUserAccount = https.onRequest((req, res) => {
@@ -118,7 +128,6 @@ export const newGame = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
-      const newName = req.body.name;
       try {
         // Delete old data
         const batch = db.batch();
@@ -128,14 +137,10 @@ export const newGame = https.onRequest((req, res) => {
         subsSnap.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
 
-        // Create a new character
-        const userRecord = await adminAuth.getUser(uid);
-        const name = newName || userRecord.displayName || "Adventurer";
-        const newCharacterData = createNewCharacter(name, uid);
+        // Create a new character with a default name
+        const newCharacterData = createNewCharacter("Nameless", uid);
         await db.collection("characters").doc(uid).set(newCharacterData);
 
-        // The `createdAt` and `updatedAt` fields are ServerTimestamps.
-        // We need to fetch the document again to get the actual date values.
         const newCharDoc = await db.collection("characters").doc(uid).get();
         const finalCharacter = newCharDoc.data();
         
@@ -147,6 +152,33 @@ export const newGame = https.onRequest((req, res) => {
     });
   });
 });
+
+// Updates a character's name
+export const updateCharacterName = https.onRequest((req, res) => {
+  corsHandler(req, res, () => {
+    authenticate(req, res, async () => {
+      const uid = (req as any).user.uid;
+      const { name } = req.body;
+
+      if (!name || typeof name !== 'string' || name.trim().length === 0 || name.length > 50) {
+        res.status(400).send({ error: "Invalid name provided." });
+        return;
+      }
+
+      try {
+        await db.collection("characters").doc(uid).update({
+          name: name,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        res.status(200).send({ success: true });
+      } catch (error) {
+        console.error("Error updating character name:", error);
+        res.status(500).send({ error: "An error occurred." });
+      }
+    });
+  });
+});
+
 
 // Public access functions
 export const getEncounter = https.onRequest((req, res) => {

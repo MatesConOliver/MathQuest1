@@ -11,7 +11,7 @@ import {
   deleteDoc,
   query,
 } from 'firebase/firestore';
-import { StoryEvent, StoryTrigger, StoryScene } from '@/types/game';
+import { StoryEvent, StoryTrigger, StoryScene, SceneCommand } from '@/types/game';
 import { Input } from '@/app/gm/components/Input';
 
 export function StoriesPanel() {
@@ -199,6 +199,7 @@ export function StoriesPanel() {
                 onChange={(e: any) => setTriggerType(e.target.value)}
               >
                 <option value='ON_LOGIN'>ON_LOGIN (Start of game)</option>
+                <option value='ON_FIRST_MAP_ENTER'>ON_FIRST_MAP_ENTER</option>
                 <option value='ON_ENTER_MAP'>
                   ON_ENTER_MAP (Specific Location)
                 </option>
@@ -252,6 +253,17 @@ export function StoriesPanel() {
                     ✕
                   </button>
                 </div>
+                
+                <label className='flex items-center gap-2 text-sm cursor-pointer'>
+                    <input
+                      type='checkbox'
+                      checked={scene.command === 'PROMPT_NAME'}
+                      onChange={(e) =>
+                        updateScene(idx, 'command', e.target.checked ? 'PROMPT_NAME' : undefined)
+                      }
+                    />
+                    <span>Is this a Name-Prompt scene?</span>
+                  </label>
 
                 <div className='grid grid-cols-3 gap-2'>
                   <Input
@@ -417,8 +429,7 @@ export function StoriesPanel() {
               <div
                 key={s.id}
                 onClick={() => loadStoryToEdit(s)}
-                className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
-                  editingId === s.id
+                className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${                  editingId === s.id
                     ? 'border-black ring-1 ring-black dark:border-white'
                     : 'dark:border-gray-600'
                 }`}>
@@ -430,8 +441,7 @@ export function StoriesPanel() {
                     </div>
                   </div>
                   <span
-                    className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${
-                      s.oneTime
+                    className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${                      s.oneTime
                         ? 'bg-purple-100 text-purple-600'
                         : 'bg-green-100 text-green-600'
                     }`}>
@@ -439,8 +449,7 @@ export function StoriesPanel() {
                   </span>
                 </div>
                 <div className='mt-2 text-xs text-gray-400'>
-                  {s.scenes?.length || 0} Scenes • Rewards:{' '}
-                  {s.rewards?.xp ? `XP` : 'None'}
+                  {s.scenes?.length || 0} Scenes • Rewards:{' '}                  {s.rewards?.xp ? `XP` : 'None'}
                 </div>
                 <button
                   onClick={(e) => {

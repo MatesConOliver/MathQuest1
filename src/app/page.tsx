@@ -9,8 +9,6 @@ import { useRouter } from "next/navigation";
 import { StoryEvent, Character } from "@/types/game";
 import { StoryPlayer } from "@/components/StoryPlayer";
 
-const LOGIN_STORY_ID = "login";
-
 export default function HomePage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -41,15 +39,11 @@ export default function HomePage() {
           const charData = charSnap.data() as Character;
           setCharacter(charData);
 
-          const hasCompletedIntro = charData.completedStoryEvents?.includes(LOGIN_STORY_ID);
-
-          if (!hasCompletedIntro) {
-            if (!storyToPlay) {
-              const storyDoc = await getDoc(doc(db, "stories", LOGIN_STORY_ID));
-              if (storyDoc.exists()) {
-                setStoryToPlay({ ...storyDoc.data(), id: storyDoc.id } as StoryEvent);
+          if (!storyToPlay) {
+              const loginStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_LOGIN' });
+              if (loginStory) {
+                  setStoryToPlay(loginStory);
               }
-            }
           }
         } else {
           console.log("Waiting for character creation...");
@@ -76,10 +70,29 @@ export default function HomePage() {
         await updateDoc(doc(db, "characters", user.uid), {
             completedStoryEvents: arrayUnion(storyToPlay.id)
         });
+        // After the name story, go to the map
+        if (storyToPlay.id === 'name') {
+            router.push('/map');
+        }
     } catch(e) {
         console.error("Error updating completed stories", e);
     } finally {
         setStoryToPlay(null);
+    }
+  };
+
+  const handleMapClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    if (character?.name === "Nameless") {
+        const nameStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_FIRST_MAP_ENTER' });
+        if (nameStory) {
+            setStoryToPlay(nameStory);
+        } else {
+            // If for some reason the name story doesn't exist, let them proceed.
+            router.push('/map');
+        }
+    } else {
+        router.push('/map');
     }
   };
 
@@ -91,39 +104,24 @@ export default function HomePage() {
   const handleNewGame = async () => {
     if (!user || isCreatingNewGame) return;
 
-    const newName = prompt("Enter a new name for your character:");
-
-    if (newName && newName.trim() !== "") {
-        if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
-            
-            if (charUnsub.current) {
-                charUnsub.current();
-                charUnsub.current = null;
-            }
-            
-            setIsCreatingNewGame(true);
-            setLoading(true); // Show loading state
-            try {
-                const newCharacter = await callApi<Character>('newGame', { name: newName });
-                if (newCharacter) {
-                    setCharacter(newCharacter);
-
-                    const storyDoc = await getDoc(doc(db, "stories", LOGIN_STORY_ID));
-                    if (storyDoc.exists()) {
-                        setStoryToPlay({ ...storyDoc.data(), id: storyDoc.id } as StoryEvent);
-                    }
-                } else {
-                    alert("Failed to create a new game. Please try again.");
-                    window.location.reload();
-                }
-            } catch (error) {
-                console.error("Error starting a new game:", error);
-                alert("There was an error starting a new game. Please try again.");
-                window.location.reload();
-            } finally {
-                setIsCreatingNewGame(false);
-                setLoading(false);
-            }
+    if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
+        if (charUnsub.current) {
+            charUnsub.current();
+            charUnsub.current = null;
+        }
+        
+        setIsCreatingNewGame(true);
+        setLoading(true);
+        try {
+            const newCharacter = await callApi<Character>('newGame', {});
+            setCharacter(newCharacter);
+        } catch (error) {
+            console.error("Error starting a new game:", error);
+            alert("There was an error starting a new game. Please try again.");
+            window.location.reload();
+        } finally {
+            setIsCreatingNewGame(false);
+            setLoading(false);
         }
     }
   };
@@ -143,6 +141,8 @@ export default function HomePage() {
       }
     }
   };
+
+  const needsToName = character?.name === "Nameless";
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 animate-pulse font-bold">
@@ -169,16 +169,18 @@ export default function HomePage() {
 
           <Link
             href="/map"
+            onClick={handleMapClick}
             className="group relative p-6 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-500 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all"
           >
             <div className="text-3xl mb-2 group-hover:scale-110 transition-transform duration-300">🗺️</div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white">World Map</h3>
+            {needsToName && <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center text-white font-bold">Start here!</div>}
           </Link>
 
           <div className="grid grid-cols-2 gap-4">
             <Link
               href="/character"
-              className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              className={`p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl transition ${needsToName ? 'opacity-50 pointer-events-none' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
             >
               <div className="text-2xl mb-1">🦉</div>
               <div className="font-bold text-gray-900 dark:text-gray-200">Character</div>
@@ -186,7 +188,7 @@ export default function HomePage() {
 
             <Link
               href="/shop"
-              className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              className={`p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl transition ${needsToName ? 'opacity-50 pointer-events-none' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
             >
               <div className="text-2xl mb-1">🔮</div>
               <div className="font-bold text-gray-900 dark:text-gray-200">Store</div>

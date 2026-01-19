@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -7,16 +7,13 @@ import {
   signInWithEmailAndPassword, 
   onAuthStateChanged 
 } from "firebase/auth";
-import { doc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore"; 
-import { auth, db } from "@/lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore"; 
+import { auth, db, callApi } from "@/lib/firebase";
 import { Character } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
 
-// ✅ Define a constant for the story ID to avoid magic strings
-const LOGIN_STORY_ID = "login";
-
 export default function LoginPage() {
-  const { playTrack } = useAudio()!; 
+  const { playTrack } = useAudio()!;
 
   useEffect(() => {
     playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); 
@@ -24,95 +21,57 @@ export default function LoginPage() {
 
   const router = useRouter();
   
-  // State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [characterName, setCharacterName] = useState("");
-  
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // Listen for the character document to be created or updated.
-        // This solves the race condition for new sign-ups.
         const unsubSnapshot = onSnapshot(doc(db, "characters", user.uid), (charDoc) => {
           if (charDoc.exists()) {
-            const character = charDoc.data() as Character;
-            
-            // ✅ CORRECTED: Check for the actual story ID
-            if (!character.completedStoryEvents?.includes(LOGIN_STORY_ID)) {
-              router.push("/"); 
-            } else {
-              router.push("/character");
-            }
+            router.push("/");
           }
-          // If the document doesn't exist yet, we wait. The listener will
-          // fire again as soon as it's created by the handleAuth function.
         });
-        
-        return () => unsubSnapshot(); // Cleanup snapshot listener
+        return () => unsubSnapshot();
       }
     });
-
-    return () => unsubAuth(); // Cleanup auth listener
+    return () => unsubAuth();
   }, [router]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setError("");
+    setLoading(true);
 
     const cleanEmail = email.trim();
 
     try {
       if (isRegistering) {
-        if (!characterName.trim()) {
-            setError("Please enter a character name.");
-            return;
-        }
-
-        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-        const uid = cred.user.uid;
-
-        const starter: Character = {
-          ownerUid: uid,
-          name: characterName.trim(), 
-          className: "Apprentice",
-          level: 1,
-          xp: 0,
-          gold: 0,
-          maxHp: 15,
-          hp: 15,
-          stats: { a: 0, b: 0, c: 0, d: 0 },
-          unspentPoints: 0,
-          inventory: [],
-          equipment: { mainHand: null, offHand: null, armor: null, head: null },
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          completedStoryEvents: [], 
-          unlockedContinents: ["bSL1XkrzgqQxqtCLNumD"]
-        };
-
-        // Create the character doc. The onSnapshot listener will then handle redirection.
-        await setDoc(doc(db, "characters", uid), starter);
-        
+        await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        // After creating the user, we immediately call the cloud function to create the character data.
+        // This avoids race conditions and keeps character creation logic on the server.
+        await callApi('newGame', {});
+        // The onSnapshot listener will then redirect the user to the main page.
       } else {
-        // For login, the onSnapshot listener will also handle redirection.
         await signInWithEmailAndPassword(auth, cleanEmail, password);
+        // For existing users, the onSnapshot listener will also handle the redirection.
       }
     } catch (err: any) {
-        if (err.code === 'auth/email-already-in-use') {
-            setError("This email is already registered. Please log in.");
-        } else {
-            setError(err.message || "Authentication Error");
-        }
+      if (err.code === 'auth/email-already-in-use') {
+        setError("This email is already registered. Please log in.");
+      } else {
+        setError(err.message || "Authentication Error");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <main className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
-      
       <video
         autoPlay
         loop
@@ -128,24 +87,10 @@ export default function LoginPage() {
 
       <div className="relative z-10 w-full max-w-md bg-white/90 backdrop-blur-sm dark:bg-gray-900/90 dark:text-gray-100 p-6 rounded-2xl shadow-2xl border border-white/20">
         <h1 className="text-2xl font-bold mb-2 text-center">
-          {isRegistering ? "Create Hero" : "Welcome Back"}
+          {isRegistering ? "Create Account" : "Welcome Back"}
         </h1>
 
         <form onSubmit={handleAuth} className="space-y-4">
-          {isRegistering && (
-            <label className="block animate-in fade-in slide-in-from-top-2 duration-300">
-                <span className="text-sm font-medium">Character Name</span>
-                <input
-                type="text"
-                required={isRegistering} 
-                className="mt-1 block w-full rounded-xl border p-2 bg-yellow-50/50 border-yellow-200 text-yellow-900 placeholder:text-yellow-700/50"
-                placeholder="e.g. Sir Lancelot"
-                value={characterName}
-                onChange={(e) => setCharacterName(e.target.value)}
-                />
-            </label>
-          )}
-
           <label className="block">
             <span className="text-sm font-medium">Email</span>
             <input
@@ -172,9 +117,10 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full bg-black text-white py-3 rounded-xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all dark:bg-white dark:text-black shadow-lg"
+            disabled={loading}
+            className="w-full bg-black text-white py-3 rounded-xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all dark:bg-white dark:text-black shadow-lg disabled:opacity-70"
           >
-            {isRegistering ? "Start Adventure" : "Enter World"}
+            {loading ? '...' : (isRegistering ? "Start Adventure" : "Enter World")}
           </button>
         </form>
 
