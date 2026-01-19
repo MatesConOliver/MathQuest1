@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { auth, db, callApi } from "@/lib/firebase";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, getDoc, updateDoc, arrayUnion, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayUnion, onSnapshot, Unsubscribe } from "firebase/firestore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StoryEvent, Character } from "@/types/game";
@@ -20,6 +20,7 @@ export default function HomePage() {
   const [isGM, setIsGM] = useState(false);
   const [isCreatingNewGame, setIsCreatingNewGame] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const charUnsub = useRef<Unsubscribe | null>(null);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -31,7 +32,11 @@ export default function HomePage() {
       setIsGM(u.email === "oliveru1996@gmail.com");
       setLoading(true);
 
-      const unsubChar = onSnapshot(doc(db, "characters", u.uid), async (charSnap) => {
+      if (charUnsub.current) {
+        charUnsub.current();
+      }
+
+      charUnsub.current = onSnapshot(doc(db, "characters", u.uid), async (charSnap) => {
         if (charSnap.exists()) {
           const charData = charSnap.data() as Character;
           setCharacter(charData);
@@ -54,11 +59,14 @@ export default function HomePage() {
         console.error("Error listening to character data:", error);
         setLoading(false);
       });
-
-      return () => unsubChar();
     });
 
-    return () => unsubAuth();
+    return () => {
+      unsubAuth();
+      if (charUnsub.current) {
+        charUnsub.current();
+      }
+    };
   }, [router, storyToPlay]);
 
   const handleStoryComplete = async () => {
@@ -87,30 +95,34 @@ export default function HomePage() {
 
     if (newName && newName.trim() !== "") {
         if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
+            
+            if (charUnsub.current) {
+                charUnsub.current();
+                charUnsub.current = null;
+            }
+            
             setIsCreatingNewGame(true);
             setLoading(true); // Show loading state
             try {
                 const newCharacter = await callApi<Character>('newGame', { name: newName });
                 if (newCharacter) {
-                    // Manually update the state with the new character from the API response
                     setCharacter(newCharacter);
 
-                    // Manually trigger the login story flow
                     const storyDoc = await getDoc(doc(db, "stories", LOGIN_STORY_ID));
                     if (storyDoc.exists()) {
                         setStoryToPlay({ ...storyDoc.data(), id: storyDoc.id } as StoryEvent);
                     }
                 } else {
-                    // Fallback if the API call fails to return a character
                     alert("Failed to create a new game. Please try again.");
                     window.location.reload();
                 }
             } catch (error) {
                 console.error("Error starting a new game:", error);
                 alert("There was an error starting a new game. Please try again.");
+                window.location.reload();
             } finally {
                 setIsCreatingNewGame(false);
-                setLoading(false); // Hide loading state
+                setLoading(false);
             }
         }
     }
