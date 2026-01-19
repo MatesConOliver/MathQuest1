@@ -1,6 +1,6 @@
 import { https } from "firebase-functions";
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore, serverTimestamp } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import * as cors from "cors";
 import { Response } from "express";
@@ -28,8 +28,8 @@ const createNewCharacter = (name: string, uid: string) => {
     unspentPoints: 0,
     inventory: [],
     equipment: { mainHand: null, offHand: null, armor: null, head: null },
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
     completedStoryEvents: [],
     unlockedContinents: ["bSL1XkrzgqQxqtCLNumD"]
   };
