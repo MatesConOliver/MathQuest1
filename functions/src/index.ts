@@ -11,7 +11,20 @@ const db = getFirestore();
 const adminAuth = getAuth();
 
 // CORS handler
-const corsHandler = cors({ origin: true });
+const allowedOrigins = [
+  'https://dungeonsandpapers.vercel.app',
+  'http://localhost:3000',
+];
+
+const corsHandler = cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+});
 
 // Helper to create a new character object
 const createNewCharacter = (name: string, uid: string) => {
@@ -55,6 +68,10 @@ const authenticate = async (req: https.Request, res: Response, next: Function) =
 // Gets a story for a given trigger, if available
 export const getStoryForTrigger = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
       const { trigger } = req.body;
@@ -104,6 +121,10 @@ export const getStoryForTrigger = https.onRequest((req, res) => {
 // Deletes user account and data
 export const deleteUserAccount = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
       try {
@@ -126,6 +147,10 @@ export const deleteUserAccount = https.onRequest((req, res) => {
 // Starts a new game
 export const newGame = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
       try {
@@ -156,6 +181,10 @@ export const newGame = https.onRequest((req, res) => {
 // Updates a character's name
 export const updateCharacterName = https.onRequest((req, res) => {
   corsHandler(req, res, () => {
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
       const { name } = req.body;
@@ -183,12 +212,22 @@ export const updateCharacterName = https.onRequest((req, res) => {
 // Public access functions
 export const getEncounter = https.onRequest((req, res) => {
     corsHandler(req, res, async () => {
-        // Implementation...
+        if (req.method === 'OPTIONS') {
+          res.status(204).send('');
+          return;
+        }
+        // Public implementation...
+        res.status(501).send({ error: "Not implemented" });
     });
 });
 
 export const getStory = https.onRequest((req, res) => {
     corsHandler(req, res, async () => {
-        // Implementation...
+        if (req.method === 'OPTIONS') {
+          res.status(204).send('');
+          return;
+        }
+        // Public implementation...
+        res.status(501).send({ error: "Not implemented" });
     });
 });
