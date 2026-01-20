@@ -2,37 +2,45 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // --- Helper Functions ---
     function signedIn() { return request.auth != null; }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    // The GM check is hardcoded to a specific email.
     function isGM() {
-      return request.auth != null && request.auth.token.email == "oliveru1996@gmail.com";
+      return signedIn() && request.auth.token.email == "oliveru1996@gmail.com";
     }
 
     // --- CHARACTERS ---
+    // Users can read/update their own character. GMs can read/update any character.
     match /characters/{uid} {
-      allow read: if signedIn();
-      allow create, update: if isOwner(uid);
-      allow delete: if isOwner(uid);
+      allow read, update: if isOwner(uid) || isGM();
+      allow create: if isOwner(uid);
+      allow delete: if false; // Deletion is best handled by cloud functions
     }
     
-    // --- STORIES ---
+    // --- ACTIVE ENCOUNTERS ---
+    // Users can fully control their own active encounter document.
+    match /activeEncounters/{uid} {
+      allow read, create, update: if isOwner(uid) || isGM();
+      allow delete: if false;
+    }
+
+    // --- STORIES, ITEMS, FOES, ENCOUNTERS (Game Content) ---
+    // Can be read by any signed-in player, but only written by a GM.
     match /stories/{storyId} {
       allow read: if signedIn();
   		allow write: if isGM();
     }
     
-    // --- SHOP RULES ---
     match /items/{itemId} {
       allow read: if signedIn();
       allow write: if isGM(); 
     }
 
-    // --- GAME CONTENT ---
     match /foes/{foeId} {
       allow read: if signedIn();
       allow write: if isGM();
-
-      // Rule for the questions SUBSCALECTION inside a foe
+      
       match /questions/{questionId} {
         allow read: if signedIn();
         allow write: if isGM();
@@ -44,25 +52,22 @@ service cloud.firestore {
       allow write: if isGM();
     }
 
-    match /activeEncounters/{uid} {
-      allow read, create, update: if isOwner(uid);
-      allow delete: if isOwner(uid);
+    // --- SUBMISSIONS ---
+    // Users can create submissions for themselves and read their own. GMs can also read them.
+    match /submissions/{submissionId} {
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow read: if (signedIn() && resource.data.ownerUid == request.auth.uid) || isGM();
+      allow update, delete: if false;
     }
-
-    // Rule for the TOP-LEVEL questions collection
-    match /questions/{questionId} {
+    
+    // --- LOCATIONS & QUESTIONS (Public-ish content) ---
+    match /locations/{docId} {
       allow read: if signedIn();
       allow write: if isGM();
     }
 
-    match /submissions/{submissionId} {
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow read, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
-      allow update: if false;
-    }
-    
-    match /locations/{docId} {
-      allow read: if true;
+    match /questions/{questionId} {
+      allow read: if signedIn();
       allow write: if isGM();
     }
   }
