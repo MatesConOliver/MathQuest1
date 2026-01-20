@@ -23,7 +23,7 @@ import { BattleIntro } from './components/BattleIntro';
 import { BattleScreen } from './components/BattleScreen';
 import { VictoryScreen } from './components/VictoryScreen';
 import { DefeatScreen } from './components/DefeatScreen';
-import { StoryDisplay } from './components/StoryDisplay'; // Import the new StoryDisplay component
+import { StoryPlayer } from '@/components/StoryPlayer'; // Corrected Import
 
 // Main game content component
 export default function PlayClient() {
@@ -44,7 +44,7 @@ export default function PlayClient() {
   const [playerHp, setPlayerHp] = useState(100);
   const [foeHp, setFoeHp] = useState(50);
   const [msg, setMsg] = useState('');
-  const [activeStory, setActiveStory] = useState<Story | null>(null);
+  const [activeStory, setActiveStory] = useState<StoryEvent | null>(null); // Changed to StoryEvent
 
   // Battle mechanics state
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
@@ -402,16 +402,10 @@ export default function PlayClient() {
         setGameItems(itemsMap);
 
         // Check for a login story using the new callApi function
-        const storyEvent = await callApi<StoryEvent | null>('checkAndGetLoginStory');
+        const storyEvent = await callApi<StoryEvent | null>('getStoryForTrigger', { trigger: 'LOGIN' });
 
         if (storyEvent && storyEvent.scenes && storyEvent.scenes.length > 0) {
-            const firstScene = storyEvent.scenes[0];
-            const storyToShow: Story = {
-                id: storyEvent.id,
-                title: storyEvent.title,
-                text: firstScene.text,
-            };
-            setActiveStory(storyToShow);
+            setActiveStory(storyEvent);
         }
 
       } catch (error) {
@@ -534,7 +528,7 @@ export default function PlayClient() {
   }
   
   if (activeStory) {
-    return <StoryDisplay story={activeStory} onFinish={handleFinishStory} />;
+    return <StoryPlayer story={activeStory} onComplete={handleFinishStory} />;
   }
 
   switch (mode) {
