@@ -143,12 +143,12 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
 
   return (
     <div
-      className={'fixed inset-0 bg-black z-50 flex flex-col justify-end'}
+      className={'fixed inset-0 z-50 flex flex-col justify-end'}
       style={{ transition: `opacity ${transitionDuration}ms ease-in-out`, opacity: opacity }}
       onClick={isClickableOverlay ? handleNext : undefined}
     >
       {/* Media Layer */}
-      <div className='absolute inset-0'>
+      <div className={`absolute inset-0 ${!currentScene.videoUrl ? 'bg-black' : ''}`}>
         {currentScene.videoUrl ? (
           <video
             key={currentScene.id}
