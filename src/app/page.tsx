@@ -108,14 +108,13 @@ export default function HomePage() {
 
     if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
         setIsCreatingNewGame(true);
-        setLoading(true);
+        setLoading(true); 
         try {
-            await callApi<Character>('newGame', {});
-            // The onSnapshot listener will pick up the new character data and trigger a re-render
+            setStoryToPlay(null);
+            await callApi('newGame', {});
         } catch (error) {
             console.error("Error starting a new game:", error);
             alert("There was an error starting a new game. Please try again.");
-        } finally {
             setIsCreatingNewGame(false);
             setLoading(false);
         }

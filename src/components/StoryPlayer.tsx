@@ -10,6 +10,26 @@ interface StoryPlayerProps {
   onComplete: () => void;
 }
 
+// Helper to preload a single image
+const preloadImage = (src: string) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = src;
+    img.onload = resolve;
+    img.onerror = reject;
+  });
+};
+
+// Helper to preload a single video
+const preloadVideo = (src: string) => {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.src = src;
+    video.oncanplaythrough = resolve; // This event is better than loadeddata
+    video.onerror = reject;
+  });
+};
+
 export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
   const [currentSceneId, setCurrentSceneId] = useState<string | 'END'>(
     story.scenes[0]?.id || 'END'
@@ -18,20 +38,45 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
   const [transitionDuration, setTransitionDuration] = useState(500);
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPreloading, setIsPreloading] = useState(true); // New state for preloading
+
+  // --- Preloading Effect ---
+  useEffect(() => {
+    const preloadAssets = async () => {
+      const urlsToPreload = story.scenes.flatMap(scene => 
+        [scene.videoUrl, scene.backgroundUrl, scene.speakerSprite].filter(Boolean) as string[]
+      );
+      const uniqueUrls = [...new Set(urlsToPreload)];
+      
+      const imagePromises = uniqueUrls.filter(url => url.match(/\.(jpeg|jpg|gif|png|svg)$/)).map(preloadImage);
+      const videoPromises = uniqueUrls.filter(url => url.match(/\.(mp4|webm|ogg)$/)).map(preloadVideo);
+
+      try {
+        await Promise.all([...imagePromises, ...videoPromises]);
+      } catch (error) {
+        console.warn('Asset preloading failed for some assets, continuing anyway...', error);
+      }
+      setIsPreloading(false);
+    };
+
+    preloadAssets();
+  }, [story]);
 
   const currentScene = useMemo(() => {
     return story.scenes.find((s) => s.id === currentSceneId);
   }, [currentSceneId, story.scenes]);
 
   useEffect(() => {
-    if (!currentScene) {
-      onComplete();
-      return;
+    if (isPreloading || !currentScene) {
+        if (!isPreloading && !currentScene) {
+            onComplete();
+        }
+        return;
     }
     setTransitionDuration(currentScene.fadeIn ?? true ? 500 : 0);
     const timer = setTimeout(() => setOpacity(1), 50);
     return () => clearTimeout(timer);
-  }, [currentScene, onComplete]);
+  }, [currentScene, onComplete, isPreloading]);
 
   const transitionToScene = (nextId: string) => {
     const shouldFadeOut = currentScene?.fadeOut ?? true;
@@ -83,6 +128,14 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
       handleNext();
     }
   };
+
+  if (isPreloading) {
+    return (
+      <div className="fixed inset-0 bg-black z-50 flex items-center justify-center text-white">
+        <p>Loading Story...</p>
+      </div>
+    );
+  }
 
   if (!currentScene) return null;
 
