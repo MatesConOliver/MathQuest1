@@ -14,6 +14,23 @@ import {
 import { StoryEvent, StoryTrigger, StoryScene, SceneCommand } from '@/types/game';
 import { Input } from '@/app/gm/components/Input';
 
+// Helper to remove undefined values from objects, which Firestore doesn't support.
+const sanitizeForFirestore = (obj: any): any => {
+    if (Array.isArray(obj)) {
+      return obj.map(item => sanitizeForFirestore(item));
+    }
+    if (obj !== null && typeof obj === 'object') {
+      const newObj: { [key: string]: any } = {};
+      for (const key in obj) {
+        if (obj[key] !== undefined) {
+          newObj[key] = sanitizeForFirestore(obj[key]);
+        }
+      }
+      return newObj;
+    }
+    return obj;
+  };
+
 export function StoriesPanel() {
   const [stories, setStories] = useState<StoryEvent[]>([]);
   const [msg, setMsg] = useState('');
@@ -131,9 +148,11 @@ export function StoriesPanel() {
         ...(unlockMapId && { unlockMapId }),
       },
     };
+    
+    const cleanData = sanitizeForFirestore(docData);
 
     try {
-      await setDoc(doc(db, 'stories', id), docData);
+      await setDoc(doc(db, 'stories', id), cleanData);
       setMsg('✅ Story Saved!');
       if (!editingId) resetForm();
       loadStories();
