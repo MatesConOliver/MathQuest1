@@ -14,6 +14,9 @@ const adminAuth = getAuth();
 const allowedOrigins = [
   'https://dungeonsandpapers.vercel.app',
   'http://localhost:3000',
+  'https://mathquest1.web.app',
+  'https://mathquest1.firebaseapp.com',
+  'https://math-quest1-8pmprtdfs-mates-con-olivers-projects.vercel.app',
 ];
 
 const corsHandler = cors({
