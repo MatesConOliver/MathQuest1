@@ -69,8 +69,8 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
     setIsSubmitting(true);
     try {
       await callApi('updateCharacterName', { name: name.trim() });
-      handleNext();
-    } catch (error) {
+      transitionToScene(currentScene?.nextSceneId || 'END');
+    } catch (error) { 
       console.error("Error updating name:", error);
       alert("There was an error setting your name. Please try again.");
     } finally {

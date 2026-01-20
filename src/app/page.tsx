@@ -19,6 +19,8 @@ export default function HomePage() {
   const [isCreatingNewGame, setIsCreatingNewGame] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const charUnsub = useRef<Unsubscribe | null>(null);
+  const storyToPlayRef = useRef(storyToPlay);
+  storyToPlayRef.current = storyToPlay;
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -39,7 +41,7 @@ export default function HomePage() {
           const charData = charSnap.data() as Character;
           setCharacter(charData);
 
-          if (!storyToPlay) {
+          if (!storyToPlayRef.current) {
               const loginStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_LOGIN' });
               if (loginStory) {
                   setStoryToPlay(loginStory);
@@ -61,7 +63,7 @@ export default function HomePage() {
         charUnsub.current();
       }
     };
-  }, [router, storyToPlay]);
+  }, [router]);
 
   const handleStoryComplete = async () => {
     if (!user || !storyToPlay) return;
@@ -105,20 +107,14 @@ export default function HomePage() {
     if (!user || isCreatingNewGame) return;
 
     if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
-        if (charUnsub.current) {
-            charUnsub.current();
-            charUnsub.current = null;
-        }
-        
         setIsCreatingNewGame(true);
         setLoading(true);
         try {
-            const newCharacter = await callApi<Character>('newGame', {});
-            setCharacter(newCharacter);
+            await callApi<Character>('newGame', {});
+            // The onSnapshot listener will pick up the new character data and trigger a re-render
         } catch (error) {
             console.error("Error starting a new game:", error);
             alert("There was an error starting a new game. Please try again.");
-            window.location.reload();
         } finally {
             setIsCreatingNewGame(false);
             setLoading(false);
