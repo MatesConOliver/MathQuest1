@@ -50,7 +50,6 @@ export interface CharacterStats {
 export interface Character {
   ownerUid: string;
   name: string;
-  className: string;
   level: number;
   xp: number;
   gold: number;

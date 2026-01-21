@@ -627,9 +627,42 @@ export default function CharacterPage() {
     <main className="min-h-screen p-6 max-w-4xl mx-auto space-y-8">
       {/* HEADER */}
       <header className="flex justify-between items-end border-b border-gray-200 dark:border-gray-700 pb-4">
-        <div>
-          <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white">{char.name}</h1>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Level {char.level} • {char.className || char.className}</div>
+        <div>  
+          <div>
+            <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white">{char.name}</h1>
+            <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">• Level {char.level} •</div>
+          </div>
+
+          {/* XP BAR SECTION START */}
+          {(() => {
+            // 1. Calculate XP needed based on your formula
+            const base = 3 * char.level * char.level - 3 * char.level + 1;
+            // Math.max(0, ...) ensures we don't sqrt a negative number if level gets too high
+            const modifier = Math.sqrt(Math.max(0, 1 - 0.005 * char.level)); 
+            const nextLevelXp = Math.max(1, Math.floor(base * modifier));
+            
+            // 2. Calculate percentage for the bar width
+            const xpPercent = Math.min(100, Math.max(0, (char.xp / nextLevelXp) * 100));
+
+            return (
+              <div className="w-full max-w-[220px] mt-1 group cursor-help">
+                <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-0.5 uppercase tracking-wide">
+                  <span>XP Progress</span>
+                  <span className="group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    {char.xp} / {nextLevelXp}
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+                    style={{ width: `${xpPercent}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+          {/* XP BAR SECTION END */}
+
         </div>
 
         <div className="text-right">
