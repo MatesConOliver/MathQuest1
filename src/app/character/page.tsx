@@ -645,7 +645,7 @@ export default function CharacterPage() {
             const xpPercent = Math.min(100, Math.max(0, (char.xp / nextLevelXp) * 100));
 
             return (
-              <div className="w-full max-w-[220px] mt-1 group cursor-help">
+              <div className="w-full max-w-[220px] mt-1 group">
                 <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-0.5 uppercase tracking-wide">
                   <span>XP Progress</span>
                   <span className="group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
