@@ -41,16 +41,18 @@ export default function HomePage() {
           const charData = charSnap.data() as Character;
           setCharacter(charData);
 
-          if (!storyToPlayRef.current) {
-              const loginStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_LOGIN' });
+          if (!storyToPlayRef.current && (!charData.completedStoryEvents || charData.completedStoryEvents.length === 0)) {
+            setLoading(true);  
+            const loginStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_LOGIN' });
               if (loginStory) {
                   setStoryToPlay(loginStory);
               }
           }
+          setLoading(false)
         } else {
           console.log("Waiting for character creation...");
+          setLoading(true);
         }
-        setLoading(false);
       }, (error) => {
         console.error("Error listening to character data:", error);
         setLoading(false);
