@@ -260,6 +260,49 @@ function EquipRow({ slotName, equippedId, gameItems, inventory, onUnequip }: any
   );
 }
 
+const SkillCircle = ({
+  name,
+  value,
+  color,
+}: {
+  name: string;
+  value: number;
+  color: string;
+}) => {
+  // Glow intensity will be a value from 0 to 1 as the skill value approaches 1000.
+  // It will continue to be 1 for values > 1000.
+  const glowIntensity = Math.min(value / 1000, 1);
+
+  const colorMap: { [key: string]: { base: string; glow: string } } = {
+    red: { base: "text-red-400", glow: "shadow-[0_0_15px_-3px_rgba(248,113,113,var(--tw-shadow-color))]"},
+    green: { base: "text-green-400", glow: "shadow-[0_0_15px_-3px_rgba(74,222,128,var(--tw-shadow-color))]"},
+    blue: { base: "text-blue-400", glow: "shadow-[0_0_15px_-3px_rgba(96,165,250,var(--tw-shadow-color))]"},
+    yellow: { base: "text-yellow-400", glow: "shadow-[0_0_15px_-3px_rgba(250,204,21,var(--tw-shadow-color))]"},
+    violet: { base: "text-violet-400", glow: "shadow-[0_0_15px_-3px_rgba(196,181,253,var(--tw-shadow-color))]"},
+  };
+
+  return (
+    <div className="text-center flex flex-col items-center gap-2">
+      <div
+        className={`relative w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${colorMap[color]?.glow ?? ''}`}
+        // The custom property allows us to animate the shadow color's alpha
+        style={{ '--tw-shadow-color': `rgba(255,255,255, ${glowIntensity * 0.5})`, borderColor: `rgba(255,255,255,${glowIntensity * 0.7 + 0.2})` } as React.CSSProperties}
+      >
+        <div className="absolute inset-0 rounded-full bg-black/50"></div>
+        <div className="z-10">
+          <div className={`font-black text-2xl ${colorMap[color]?.base ?? ''}`}>
+            {value}
+          </div>
+        </div>
+        <div className={`absolute -bottom-5 text-[10px] font-bold uppercase tracking-wider text-gray-400`}>
+          {name}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 // --- MAIN PAGE ---
 
 export default function CharacterPage() {
@@ -844,42 +887,78 @@ export default function CharacterPage() {
           </section>
         </div>
 
-        {/* RIGHT COL: BACKPACK INVENTORY */}
-        <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 h-fit transition-colors">
-          <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Backpack ({char.inventory.length})</h2>
-              <Link 
-                href="/shop" 
-                className="text-xs bg-black text-white dark:bg-white dark:text-black px-3 py-1 rounded-lg hover:opacity-80 transition-opacity"
-              >
-                Visit Shop
-              </Link>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-            {char.inventory.length === 0 && (
-              <p className="col-span-2 text-gray-400 text-center py-8">Your bag is empty.</p>
-            )}
-            
-            {char.inventory.map((item, index) => {
-                const def = gameItems[item.itemId];
-                if (!def) return null; 
-                const isEquipped = Object.values(char.equipment || {}).includes(item.instanceId);
+        {/* RIGHT COL: SKILLS & BACKPACK */}
+        <div className="space-y-6">
 
-                return (
-                  <InventoryItemCard 
-                    key={item.instanceId}
-                    item={item}
-                    def={def}
-                    isEquipped={isEquipped}
-                    index={index}
-                    onEquip={handleEquip}
-                    onUse={handleUse}
-                    onSell={handleSell}
-                  />
-                );
-            })}
-          </div>
+            {/* BACKPACK INVENTORY */}
+            <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 h-fit transition-colors">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">Backpack ({char.inventory.length})</h2>
+                    <Link 
+                    href="/shop" 
+                    className="text-xs bg-black text-white dark:bg-white dark:text-black px-3 py-1 rounded-lg hover:opacity-80 transition-opacity"
+                    >
+                    Visit Shop
+                    </Link>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                    {char.inventory.length === 0 && (
+                    <p className="col-span-2 text-gray-400 text-center py-8">Your bag is empty.</p>
+                    )}
+                    
+                    {char.inventory.map((item, index) => {
+                        const def = gameItems[item.itemId];
+                        if (!def) return null; 
+                        const isEquipped = Object.values(char.equipment || {}).includes(item.instanceId);
+
+                        return (
+                        <InventoryItemCard 
+                            key={item.instanceId}
+                            item={item}
+                            def={def}
+                            isEquipped={isEquipped}
+                            index={index}
+                            onEquip={handleEquip}
+                            onUse={handleUse}
+                            onSell={handleSell}
+                        />
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* SKILLS SECTION */}
+            <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-6">
+                <h2 className="text-xl font-bold">Skills</h2>
+                <div className="flex flex-wrap justify-around items-center gap-y-12 gap-x-4 pt-8">
+                    <SkillCircle
+                        name="Algebra"
+                        color="red"
+                        value={char.skills?.algebra || 0}
+                    />
+                    <SkillCircle
+                        name="Functions"
+                        color="green"
+                        value={char.skills?.functions || 0}
+                    />
+                    <SkillCircle
+                        name="Geometry"
+                        color="blue"
+                        value={char.skills?.geometry || 0}
+                    />
+                    <SkillCircle
+                        name="Stats"
+                        color="yellow"
+                        value={char.skills?.probabilityAndStatistics || 0}
+                    />
+                    <SkillCircle
+                        name="Calculus"
+                        color="violet"
+                        value={char.skills?.calculus || 0}
+                    />
+                </div>
+            </section>
         </div>
       </div>
     </main>

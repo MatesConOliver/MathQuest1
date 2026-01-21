@@ -42,6 +42,13 @@ const createNewCharacter = (name: string, uid: string) => {
     maxHp: 15,
     hp: 15,
     stats: { a: 0, b: 0, c: 0, d: 0 },
+    skills: {
+      algebra: 0,
+      functions: 0,
+      geometry: 0,
+      probabilityAndStatistics: 0,
+      calculus: 0,
+    },
     unspentPoints: 0,
     inventory: [],
     equipment: { mainHand: null, offHand: null, armor: null, head: null },

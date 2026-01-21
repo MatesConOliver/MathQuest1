@@ -13,18 +13,18 @@ export interface GameItem {
   description: string;
   type: ItemType;
   price: number;
-  imageUrl?: string;   
+  imageUrl?: string;
   stats?: {
     a?: number;
-    b?: number; 
-    c?: number; 
+    b?: number;
+    c?: number;
     d?: number;
     xBonus?: number;
-    damage?: { 
+    damage?: {
         mult?: number;
     };
-    heal?: StatModifier;   
-    maxHp?: StatModifier; 
+    heal?: StatModifier;
+    maxHp?: StatModifier;
     time?: StatModifier;
   };
   slot?: EquipmentSlot;
@@ -36,8 +36,8 @@ export interface InventoryItem {
   itemId: string;
   obtainedAt: number;
   instanceId: string;
-  durability?: number;    
-  maxDurability?: number; 
+  durability?: number;
+  maxDurability?: number;
 }
 
 export interface CharacterStats {
@@ -45,6 +45,14 @@ export interface CharacterStats {
   b: number; // Coefficient for x^2 (Unlocks Lvl 20)
   c: number; // Coefficient for x   (Linear)
   d: number; // Constant term
+}
+
+export interface CharacterSkills {
+  algebra: number;
+  functions: number;
+  geometry: number;
+  probabilityAndStatistics: number;
+  calculus: number;
 }
 
 export interface Character {
@@ -55,9 +63,10 @@ export interface Character {
   gold: number;
   maxHp: number;
   hp: number;
-  stats: CharacterStats; 
+  stats: CharacterStats;
+  skills: CharacterSkills;
   unspentPoints: number;
-  inventory: InventoryItem[]; 
+  inventory: InventoryItem[];
   equipment: {
     mainHand: string | null;
     offHand: string | null;
@@ -73,16 +82,16 @@ export interface Character {
 export interface Monster {
   id?: string;
   name: string;
-  description?: string; 
+  description?: string;
   emoji?: string;
-  attackDamage?: number; 
+  attackDamage?: number;
   level?: number;
   maxHp: number;
-  hp: number;     
+  hp: number;
 }
 
 export interface Question {
-  id: string;
+  id:string;
   text: string;
   answer: number;
   difficulty: number;
@@ -105,8 +114,8 @@ export type QuestionDoc = {
   rewardGold: number;
   difficulty?: number;
   tags: string[];
-  packId?: string; 
-  order?: number; 
+  packId?: string;
+  order?: number;
   timeLimit: number;
   imageUrl?: string;
 };
@@ -141,9 +150,9 @@ export type EncounterDoc = {
   winRewardGold?: number;
   timeMultiplier?: number;
   winRewardItems?: string[];
-  shuffleQuestions?: boolean; 
-  imageUrl?: string;         
-  emoji?: string;            
+  shuffleQuestions?: boolean;
+  imageUrl?: string;
+  emoji?: string;
 };
 
 // This is a simplified version for displaying a story screen.
@@ -158,7 +167,7 @@ export interface Story {
 // 📖 STORY ENGINE TYPES
 // =========================================
 
-export type StoryTrigger = 
+export type StoryTrigger =
   | "ON_LOGIN"           // Plays immediately when opening the game
   | "ON_FIRST_MAP_ENTER" // Plays when the player clicks the map for the first time
   | "ON_ENTER_MAP"       // Plays when entering a specific map/continent
@@ -172,10 +181,10 @@ export interface StoryEvent {
   title: string;         // Internal name
   triggerType: StoryTrigger;
   triggerCondition: string; // The ID of the thing that triggers it (e.g., "encounter_rat_king")
-  
+
   // The actual visual novel sequence
   scenes: StoryScene[];
-  
+
   // What happens when the story finishes?
   rewards?: {
     xp?: number;
@@ -183,9 +192,9 @@ export interface StoryEvent {
     unlockMapId?: string; // Unlocks a new continent
     unlockEncounterId?: string; // Unlocks a new fight
   };
-  
+
   // Is it repeatable? Usually stories play once.
-  oneTime: boolean; 
+  oneTime: boolean;
 }
 
 export type SceneCommand = "PROMPT_NAME";
@@ -202,13 +211,13 @@ export interface StoryScene {
   fadeIn?: boolean;
   fadeOut?: boolean;
   command?: SceneCommand;
-  
+
   // Interaction (Simple Version)
   choices?: {
     text: string;          // "I am ready!"
     nextSceneId: string;   // Jumps to specific scene
   }[];
-  
+
   // If no choices, where does the "Next" button go?
-  nextSceneId?: string | "END"; 
+  nextSceneId?: string | "END";
 }
