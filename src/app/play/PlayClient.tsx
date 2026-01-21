@@ -155,7 +155,7 @@ export default function PlayClient() {
     const xpGain = currentEncounter.winRewardXp || 0;
     const goldGain = currentEncounter.winRewardGold || 0;
     const skillsGained = currentEncounter.winRewardSkills || {};
-    setSkillGains(skillsGained); // <-- Set state for the victory screen
+    setSkillGains(skillsGained);
 
     // --- Level Up Logic ---
     const oldLvl = character.level;
@@ -163,82 +163,101 @@ export default function PlayClient() {
     let newLvl = oldLvl;
     let hpGain = 0;
     let pointsGain = 0;
-    let xpToNextLevel = 100 * Math.pow(1.1, newLvl - 1);
+    let xpToNextLevel = Math.floor(100 * Math.pow(1.1, newLvl - 1));
 
     while (newXp >= xpToNextLevel) {
-      newXp -= xpToNextLevel;
-      newLvl++;
-      hpGain += 10;
-      pointsGain += 1;
-      xpToNextLevel = 100 * Math.pow(1.1, newLvl - 1);
+        newXp -= xpToNextLevel;
+        newLvl++;
+        hpGain += 10;
+        pointsGain += 1;
+        xpToNextLevel = Math.floor(100 * Math.pow(1.1, newLvl - 1));
     }
 
     // --- Loot Drop Logic ---
     if (currentEncounter.winRewardItems) {
-      const lootNames = currentEncounter.winRewardItems.map(
-        (id) => gameItems[id]?.name || 'Unknown Item'
-      );
-      setLootDrops(lootNames);
+        setLootDrops(currentEncounter.winRewardItems.map(id => gameItems[id]?.name || 'Unknown Item'));
     }
 
     try {
-      // --- Prepare DB Update Payload ---
-      const updates: { [key: string]: any } = {
-        hp: playerHp,
-        xp: newXp,
-        level: newLvl,
-        maxHp: increment(hpGain),
-        unspentPoints: increment(pointsGain),
-        gold: increment(goldGain),
-        inventory: [
-          ...character.inventory,
-          ...(currentEncounter.winRewardItems || []).map((itemId) => ({
-            itemId,
-            instanceId: Date.now().toString() + Math.random(),
-            obtainedAt: Date.now()
-          })),
-        ],
-      };
+        // --- Prepare DB Update Payload ---
+        const updates: { [key:string]: any } = {
+            hp: playerHp,
+            xp: newXp,
+            level: newLvl,
+            gold: increment(goldGain),
+            maxHp: increment(hpGain),
+            unspentPoints: increment(pointsGain),
+            inventory: [
+                ...character.inventory,
+                ...(currentEncounter.winRewardItems || []).map(itemId => ({
+                    itemId,
+                    instanceId: Date.now().toString() + Math.random(),
+                    obtainedAt: Date.now()
+                })),
+            ],
+        };
 
-      // --- Add Skill Updates to Payload ---
-      for (const [skill, amount] of Object.entries(skillsGained)) {
-          if (amount && amount > 0) {
-              updates[`skills.${skill}`] = increment(amount);
-          }
-      }
+        for (const [skill, amount] of Object.entries(skillsGained)) {
+            if (amount && amount > 0) {
+                updates[`skills.${skill}`] = increment(amount);
+            }
+        }
+        
+        await updateDoc('characters', user.uid, updates);
 
-      // --- Execute DB Update ---
-      await updateDoc('characters', user.uid, updates);
+        // --- Optimistically update local character state ---
+        setCharacter(prev => prev ? ({
+            ...prev,
+            xp: newXp,
+            level: newLvl,
+            gold: prev.gold + goldGain,
+            maxHp: prev.maxHp + hpGain,
+            unspentPoints: prev.unspentPoints + pointsGain,
+            skills: {
+                algebra: (prev.skills.algebra || 0) + (skillsGained.algebra || 0),
+                functions: (prev.skills.functions || 0) + (skillsGained.functions || 0),
+                geometry: (prev.skills.geometry || 0) + (skillsGained.geometry || 0),
+                probabilityAndStatistics: (prev.skills.probabilityAndStatistics || 0) + (skillsGained.probabilityAndStatistics || 0),
+                calculus: (prev.skills.calculus || 0) + (skillsGained.calculus || 0),
+            },
+            inventory: updates.inventory,
+        }) : null);
 
-      if (newLvl > oldLvl) {
-        setLevelUpData({ oldLvl, newLvl, hpGain, pointsGain });
-      }
+        if (newLvl > oldLvl) {
+            setLevelUpData({ oldLvl, newLvl, hpGain, pointsGain });
+        }
+        setMode('win');
 
-      setMode('win');
     } catch (error) {
-      console.error('Error updating character on win:', error);
-      setMsg('Could not save your victory progress. Please try again.');
-      setMode('lobby');
+        console.error('Error updating character on win:', error);
+        setMsg('Could not save victory progress.');
+        setMode('lobby');
     }
   }, [user, character, currentEncounter, gameItems, playerHp]);
 
-  const handleLoss = useCallback(
-    async (reason: string) => {
-      if (!user) return;
-      try {
+  const handleLoss = useCallback(async (reason: string) => {
+    if (!user || !character) return;
+    
+    const goldLoss = Math.floor((character.gold || 0) * 0.20);
+    const finalReason = `${reason} You lost ${goldLoss} gold.`;
+
+    try {
         await updateDoc('characters', user.uid, {
-          hp: playerHp > 0 ? playerHp : 0,
+            hp: battleStats.maxHp, // Restore to full health
+            gold: increment(-goldLoss)
         });
-        setMsg(reason);
+        
+        // Optimistically update local state
+        setCharacter(p => p ? ({ ...p, hp: battleStats.maxHp, gold: p.gold - goldLoss }) : null);
+
+        setMsg(finalReason);
         setMode('lose');
-      } catch (e) {
+    } catch (e) {
         console.error('Error updating character on loss: ', e);
         setMsg('Error saving character state.');
         setMode('lobby');
-      }
-    },
-    [user, playerHp]
-  );
+    }
+  }, [user, character, battleStats]);
 
   const nextQuestion = useCallback(() => {
     if (foeHp <= 0) {
