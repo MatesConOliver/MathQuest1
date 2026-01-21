@@ -148,6 +148,13 @@ export type EncounterDoc = {
   damagePerCorrect?: number;
   winRewardXp?: number;
   winRewardGold?: number;
+  winRewardSkills?: {
+    algebra?: number;
+    functions?: number;
+    geometry?: number;
+    probabilityAndStatistics?: number;
+    calculus?: number;
+  };
   timeMultiplier?: number;
   winRewardItems?: string[];
   shuffleQuestions?: boolean;

@@ -41,6 +41,14 @@ export function EncountersPanel() {
     const [imageUrl, setImageUrl] = useState("");
     const [emoji, setEmoji] = useState("👹");
     const [shuffle, setShuffle] = useState(false);
+
+    // Skill Rewards
+    const [rewardAlgebra, setRewardAlgebra] = useState(0);
+    const [rewardFunctions, setRewardFunctions] = useState(0);
+    const [rewardGeometry, setRewardGeometry] = useState(0);
+    const [rewardStats, setRewardStats] = useState(0);
+    const [rewardCalculus, setRewardCalculus] = useState(0);
+
   
     useEffect(() => { loadEncounters(); }, []);
   
@@ -54,14 +62,19 @@ export function EncountersPanel() {
   
     function resetForm() {
       setEditingId(""); setTitle(""); setDesc("");
-      setQuestionTag("level1"); setFoesText(""); 
+      setQuestionTag(""); setFoesText(""); 
       
       // Stats Defaults
-      setXp(100); setGold(50); setTimeMult(1.0);
+      setXp(0); setGold(0); setTimeMult(1.0);
       setLocationId("");
+      setRewardAlgebra(0);
+      setRewardFunctions(0);
+      setRewardGeometry(0);
+      setRewardStats(0);
+      setRewardCalculus(0);
   
       // Visuals Defaults
-      setImageUrl(""); setEmoji("👹"); setShuffle(false);
+      setImageUrl(""); setEmoji(""); setShuffle(false);
       setMsg("");
     }
   
@@ -83,14 +96,20 @@ export function EncountersPanel() {
           setFoesText(enc.foeId || ""); 
       }
   
-      setXp(enc.winRewardXp || 100);
-      setGold(enc.winRewardGold || 50);          
+      setXp(enc.winRewardXp || 0);
+      setGold(enc.winRewardGold || 0);          
       setTimeMult(enc.timeMultiplier !== undefined ? enc.timeMultiplier : 1.0);
       setLocationId(enc.locationId || "");       
       
       setImageUrl(enc.imageUrl || "");
-      setEmoji(enc.emoji || "👹");
+      setEmoji(enc.emoji || "");
       setShuffle(enc.shuffleQuestions || false);
+
+      setRewardAlgebra(enc.winRewardSkills?.algebra || 0);
+      setRewardFunctions(enc.winRewardSkills?.functions || 0);
+      setRewardGeometry(enc.winRewardSkills?.geometry || 0);
+      setRewardStats(enc.winRewardSkills?.probabilityAndStatistics || 0);
+      setRewardCalculus(enc.winRewardSkills?.calculus || 0);
       
       setMsg(`✏️ Editing: ${enc.title}`);
     }
@@ -101,6 +120,18 @@ export function EncountersPanel() {
   
       const foeIds = foesText.split(",").map(s => s.trim()).filter(Boolean);
   
+      const skillsReward = {
+        algebra: Number(rewardAlgebra),
+        functions: Number(rewardFunctions),
+        geometry: Number(rewardGeometry),
+        probabilityAndStatistics: Number(rewardStats),
+        calculus: Number(rewardCalculus),
+      };
+  
+      const finalSkillsReward = Object.fromEntries(
+        Object.entries(skillsReward).filter(([, value]) => value > 0)
+      );
+      
       const docData: EncounterDoc = {
         title,
         description: desc,
@@ -122,6 +153,10 @@ export function EncountersPanel() {
         emoji: emoji || "👹",
         shuffleQuestions: shuffle
       };
+
+      if (Object.keys(finalSkillsReward).length > 0) {
+        (docData as any).winRewardSkills = finalSkillsReward;
+      }
   
       try {
         if (editingId) {
@@ -164,6 +199,19 @@ export function EncountersPanel() {
              <Input type="number" label="XP Reward" value={xp} onChange={(e:any) => setXp(Number(e.target.value))} />
              <Input type="number" label="Gold Reward" value={gold} onChange={(e:any) => setGold(Number(e.target.value))} />
              <Input type="number" step="0.01" min="0.1" label="Time Speed (x)" value={timeMult} onChange={(e:any) => setTimeMult(Number(e.target.value))} />
+          </div>
+
+          <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border dark:border-gray-600">
+            <h3 className="text-xs font-bold uppercase text-gray-500 dark:text-gray-300 mb-2">Skill Point Rewards</h3>
+            <div className="grid grid-cols-3 gap-2">
+                <Input type="number" label="Algebra" value={rewardAlgebra} onChange={(e:any) => setRewardAlgebra(Number(e.target.value))} />
+                <Input type="number" label="Functions" value={rewardFunctions} onChange={(e:any) => setRewardFunctions(Number(e.target.value))} />
+                <Input type="number" label="Geometry" value={rewardGeometry} onChange={(e:any) => setRewardGeometry(Number(e.target.value))} />
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+                <Input type="number" label="Stats/Prob" value={rewardStats} onChange={(e:any) => setRewardStats(Number(e.target.value))} />
+                <Input type="number" label="Calculus" value={rewardCalculus} onChange={(e:any) => setRewardCalculus(Number(e.target.value))} />
+            </div>
           </div>
   
           {/* VISUALS SECTION */}
