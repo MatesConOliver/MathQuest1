@@ -110,7 +110,6 @@ export default function HomePage() {
 
     if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
         setIsCreatingNewGame(true);
-        setLoading(true); 
         try {
             setStoryToPlay(null);
             await callApi('newGame', {});
