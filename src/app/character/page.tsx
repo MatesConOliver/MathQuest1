@@ -269,39 +269,54 @@ const SkillCircle = ({
   value: number;
   color: string;
 }) => {
-  // Glow intensity will be a value from 0 to 1 as the skill value approaches 1000.
-  // It will continue to be 1 for values > 1000.
   const glowIntensity = Math.min(value / 1000, 1);
 
-  const colorMap: { [key: string]: { base: string; glow: string } } = {
-    red: { base: "text-red-400", glow: "shadow-[0_0_15px_-3px_rgba(248,113,113,var(--tw-shadow-color))]"},
-    green: { base: "text-green-400", glow: "shadow-[0_0_15px_-3px_rgba(74,222,128,var(--tw-shadow-color))]"},
-    blue: { base: "text-blue-400", glow: "shadow-[0_0_15px_-3px_rgba(96,165,250,var(--tw-shadow-color))]"},
-    yellow: { base: "text-yellow-400", glow: "shadow-[0_0_15px_-3px_rgba(250,204,21,var(--tw-shadow-color))]"},
-    violet: { base: "text-violet-400", glow: "shadow-[0_0_15px_-3px_rgba(196,181,253,var(--tw-shadow-color))]"},
+  // Define HSL colors for easier programmatic manipulation
+  const colorConfig: { [key: string]: { hsl: string } } = {
+    red:    { hsl: '0, 84%, 60%' },    // approx. text-red-500
+    green:  { hsl: '142, 71%, 45%' },  // approx. text-green-500
+    blue:   { hsl: '217, 91%, 60%' },  // approx. text-blue-500
+    yellow: { hsl: '48, 96%, 50%' },   // approx. text-yellow-500
+    violet: { hsl: '255, 90%, 68%' },  // approx. text-violet-400
   };
 
+  const { hsl } = colorConfig[color as keyof typeof colorConfig];
+
+  // Dynamically calculate colors based on skill value
+  const circleBgColor = `hsla(${hsl}, ${0.05 + glowIntensity * 0.2})`; // alpha from 5% -> 25%
+  const borderColor   = `hsla(${hsl}, ${0.1 + glowIntensity * 0.3})`;   // alpha from 10% -> 40%
+  const textColor     = `hsla(${hsl}, ${0.7 + glowIntensity * 0.3})`;   // lightness from 70% -> 100%
+  const shadowColor   = `hsla(${hsl}, ${glowIntensity * 0.6})`;         // alpha from 0% -> 60%
+
   return (
-    <div className="text-center flex flex-col items-center gap-2">
+    <div className="relative text-center flex flex-col items-center gap-2">
       <div
-        className={`relative w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${colorMap[color]?.glow ?? ''}`}
-        // The custom property allows us to animate the shadow color's alpha
-        style={{ '--tw-shadow-color': `rgba(255,255,255, ${glowIntensity * 0.5})`, borderColor: `rgba(255,255,255,${glowIntensity * 0.7 + 0.2})` } as React.CSSProperties}
+        className="relative w-24 h-24 rounded-full flex items-center justify-center transition-all duration-500"
+        style={{
+          backgroundColor: circleBgColor,
+          borderColor: borderColor,
+          borderWidth: '2px',
+          boxShadow: `0 0 18px 2px ${shadowColor}, inset 0 0 12px 1px hsla(${hsl}, 0.15)`,
+        }}
       >
-        <div className="absolute inset-0 rounded-full bg-black/50"></div>
         <div className="z-10">
-          <div className={`font-black text-2xl ${colorMap[color]?.base ?? ''}`}>
+          <div
+            className="font-black text-3xl"
+            style={{
+              color: textColor,
+              textShadow: `0 0 8px hsla(0, 0%, 100%, ${0.3 * glowIntensity})`
+            }}
+          >
             {value}
           </div>
         </div>
-        <div className={`absolute -bottom-5 text-[10px] font-bold uppercase tracking-wider text-gray-400`}>
+        <div className="absolute -bottom-6 text-xs font-bold uppercase tracking-wider text-gray-400">
           {name}
         </div>
       </div>
     </div>
   );
 };
-
 
 // --- MAIN PAGE ---
 
