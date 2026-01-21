@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { auth, getAllDocs, getDoc, updateDoc, callApi, db } from '@/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, getDocs as getFirebaseDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs as getFirebaseDocs, query, where, increment } from 'firebase/firestore';
 import {
   Character,
   EncounterDoc,
@@ -63,6 +63,7 @@ export default function PlayClient() {
     pointsGain: number;
   } | null>(null);
   const [lootDrops, setLootDrops] = useState<string[]>([]);
+  const [skillGains, setSkillGains] = useState<{[key: string]: number} | null>(null);
 
   // UI state
   const [isLoading, setIsLoading] = useState(true);
@@ -150,9 +151,13 @@ export default function PlayClient() {
   const handleWin = useCallback(async () => {
     if (!user || !character || !currentEncounter) return;
 
+    // --- Standard Rewards ---
     const xpGain = currentEncounter.winRewardXp || 0;
     const goldGain = currentEncounter.winRewardGold || 0;
+    const skillsGained = currentEncounter.winRewardSkills || {};
+    setSkillGains(skillsGained); // <-- Set state for the victory screen
 
+    // --- Level Up Logic ---
     const oldLvl = character.level;
     let newXp = (character.xp || 0) + xpGain;
     let newLvl = oldLvl;
@@ -163,11 +168,12 @@ export default function PlayClient() {
     while (newXp >= xpToNextLevel) {
       newXp -= xpToNextLevel;
       newLvl++;
-      hpGain += 10; // 10 HP per level
-      pointsGain += 1; // 1 point per level
+      hpGain += 10;
+      pointsGain += 1;
       xpToNextLevel = 100 * Math.pow(1.1, newLvl - 1);
     }
 
+    // --- Loot Drop Logic ---
     if (currentEncounter.winRewardItems) {
       const lootNames = currentEncounter.winRewardItems.map(
         (id) => gameItems[id]?.name || 'Unknown Item'
@@ -176,21 +182,33 @@ export default function PlayClient() {
     }
 
     try {
-      await updateDoc('characters', user.uid, {
+      // --- Prepare DB Update Payload ---
+      const updates: { [key: string]: any } = {
         hp: playerHp,
         xp: newXp,
         level: newLvl,
-        maxHp: (character.maxHp || 100) + hpGain,
-        unspentPoints: (character.unspentPoints || 0) + pointsGain,
-        gold: (character.gold || 0) + goldGain,
+        maxHp: increment(hpGain),
+        unspentPoints: increment(pointsGain),
+        gold: increment(goldGain),
         inventory: [
           ...character.inventory,
           ...(currentEncounter.winRewardItems || []).map((itemId) => ({
             itemId,
             instanceId: Date.now().toString() + Math.random(),
+            obtainedAt: Date.now()
           })),
         ],
-      });
+      };
+
+      // --- Add Skill Updates to Payload ---
+      for (const [skill, amount] of Object.entries(skillsGained)) {
+          if (amount && amount > 0) {
+              updates[`skills.${skill}`] = increment(amount);
+          }
+      }
+
+      // --- Execute DB Update ---
+      await updateDoc('characters', user.uid, updates);
 
       if (newLvl > oldLvl) {
         setLevelUpData({ oldLvl, newLvl, hpGain, pointsGain });
@@ -350,6 +368,7 @@ export default function PlayClient() {
           setSelectedChoice(null);
           setLevelUpData(null);
           setLootDrops([]);
+          setSkillGains(null);
           setMode('intro');
         } catch (error) {
           console.error('Error setting up battle:', error);
