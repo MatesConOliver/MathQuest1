@@ -96,7 +96,7 @@ export default function MapPage() {
               <div className="absolute inset-0 bg-black/50" />
               <div className="relative z-10 flex items-start gap-4">
                 <div className="text-5xl group-hover:scale-110 transition-transform duration-300 bg-black/50 p-2 rounded-lg">
-                   {loc.name.includes("Forest") ? "🌲" : loc.name.includes("Cave") ? "🦇" : "📍"}
+                   {loc.name.includes("Forest") ? "🌲" : loc.name.includes("Library") ? "📚" : loc.name.includes("Cave") ? "🦇" : "📍"}
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-white group-hover:text-blue-400">{loc.name}</h2>

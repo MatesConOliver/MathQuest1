@@ -11,7 +11,24 @@ const db = getFirestore();
 const adminAuth = getAuth();
 
 // CORS handler
-const corsHandler = cors({ origin: true });
+const allowedOrigins = [
+  'https://dungeonsandpapers.vercel.app',
+  'http://localhost:3000',
+  'https://mathquest1.web.app',
+  'https://mathquest1.firebaseapp.com',
+  'https://math-quest1-8pmprtdfs-mates-con-olivers-projects.vercel.app',
+  'https://9000-firebase-mathquest1-1768313495270.cluster-fbfjltn375c6wqxlhoehbz44sk.cloudworkstations.dev',
+];
+
+const corsHandler = cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+});
 
 // Helper to create a new character object
 const createNewCharacter = (name: string, uid: string) => {
