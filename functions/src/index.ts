@@ -17,6 +17,7 @@ const allowedOrigins = [
   'https://mathquest1.web.app',
   'https://mathquest1.firebaseapp.com',
   'https://math-quest1-8pmprtdfs-mates-con-olivers-projects.vercel.app',
+  'https://9000-firebase-mathquest1-1768313495270.cluster-fbfjltn375c6wqxlhoehbz44sk.cloudworkstations.dev',
 ];
 
 const corsHandler = cors({
