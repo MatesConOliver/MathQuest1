@@ -35,6 +35,11 @@ export default function MapPage() {
     null
   );
 
+  // Find the metadata (like x,y coordinates) for the selected location.
+  const selectedLocationMeta = selectedLocation
+    ? getMapMetaForLocation(selectedLocation.id)
+    : null;
+
   // Story-based fog gating
   const worldUnlocked = false; // TODO: replace with real story flag driven by encounter with id "l8o4lYWfiyUm2qpqWn2U" having counter >= 1
 
@@ -119,6 +124,19 @@ export default function MapPage() {
             style={{
               backgroundImage:
                 "url('https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Backgrounds%2Fmap%20background%201.png?alt=media&token=38144b3f-4abf-475f-81f6-96030d482d38')",
+                transition: "transform 600ms cubic-bezier(0.22, 1, 0.36, 1), transform-origin 600ms ease-out",
+              // When a location is selected, we want to zoom into it.
+              // A scale of 1.15 gives a slight zoom effect.
+              transform: selectedLocation ? "scale(1.15)" : "scale(1)",
+              // The transform-origin is key to the focus effect. By setting it to the
+              // location's coordinates (as percentages), we make the scale
+              // transformation zoom in on that specific point of the map.
+              // If no location is selected, we default to the center.
+              transformOrigin: selectedLocationMeta
+                ? `${selectedLocationMeta.x * 100}% ${
+                    selectedLocationMeta.y * 100
+                  }%`
+                : "50% 50%",
             }}
           >
             {locations.map((loc) => {
