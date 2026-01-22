@@ -128,10 +128,13 @@ export function EncountersPanel() {
         calculus: Number(rewardCalculus),
       };
   
+      // Create a clean object with only the skills that have a value > 0
       const finalSkillsReward = Object.fromEntries(
         Object.entries(skillsReward).filter(([, value]) => value > 0)
       );
       
+      // Construct the document, ALWAYS including the winRewardSkills field.
+      // If finalSkillsReward is empty, it will save an empty map, clearing the old data.
       const docData: EncounterDoc = {
         title,
         description: desc,
@@ -142,6 +145,7 @@ export function EncountersPanel() {
         winRewardXp: Number(xp),
         winRewardGold: Number(gold),
         timeMultiplier: Number(timeMult) || 1.0,
+        winRewardSkills: finalSkillsReward, // The fix is here
         
         // Logic
         locationId: locationId || "world-map",
@@ -153,23 +157,24 @@ export function EncountersPanel() {
         emoji: emoji || "👹",
         shuffleQuestions: shuffle
       };
-
-      if (Object.keys(finalSkillsReward).length > 0) {
-        (docData as any).winRewardSkills = finalSkillsReward;
-      }
   
       try {
         if (editingId) {
+          // setDoc with merge will now correctly overwrite the skills field
           await setDoc(doc(db, "encounters", editingId), docData, { merge: true });
           setMsg("✅ Updated Encounter!");
         } else {
           await addDoc(collection(db, "encounters"), docData);
           setMsg("✅ Created New Encounter!");
         }
-        if (!editingId) resetForm();
+        // Reload encounters to show the updated data in the list
         loadEncounters();
+        // Only reset the form if we are creating a new item
+        if (!editingId) resetForm();
+
       } catch (e: any) { setMsg("Error: " + e.message); }
     }
+
   
     async function deleteEnc(id: string) {
       if (!confirm("Delete this encounter?")) return;
