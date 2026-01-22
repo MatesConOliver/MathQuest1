@@ -247,9 +247,6 @@ export default function PlayClient() {
     }
 }, [user, character, currentEncounter, gameItems, playerHp, router]); // Added "router" to the dependency array
 
-
-
-
   const handleLoss = useCallback(async (reason: string) => {
     if (!user || !character) return;
     
