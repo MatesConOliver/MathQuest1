@@ -168,14 +168,21 @@ export default function PlayClient() {
     let newLvl = oldLvl;
     let hpGain = 0;
     let pointsGain = 0;
-    let xpToNextLevel = Math.floor(100 * Math.pow(1.1, newLvl - 1));
+
+    const calculateXpToNextLevel = (level: number) => {
+      const base = 3 * level * level - 3 * level + 1;
+      const modifier = Math.sqrt(Math.max(0, 1 - 0.005 * level));
+      return Math.max(1, Math.floor(base * modifier));
+    };
+
+    let xpToNextLevel = calculateXpToNextLevel(newLvl);
 
     while (newXp >= xpToNextLevel) {
         newXp -= xpToNextLevel;
         newLvl++;
-        hpGain += 10;
+        hpGain += 5;
         pointsGain += 1;
-        xpToNextLevel = Math.floor(100 * Math.pow(1.1, newLvl - 1));
+        xpToNextLevel = calculateXpToNextLevel(newLvl);
     }
 
     // --- Loot Drop Logic ---
