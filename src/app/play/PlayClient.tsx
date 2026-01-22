@@ -148,11 +148,8 @@ export default function PlayClient() {
   );
 
   const handleWin = useCallback(async () => {
-    // The check is here, and it's correct.
     if (!user || !character || !currentEncounter || !currentEncounter.id) return;
-
-    // We store the ID in a constant immediately after the check.
-    const encounterId = currentEncounter.id; 
+    const encounterId = currentEncounter.id;
 
     // --- Standard Rewards ---
     const xpGain = currentEncounter.winRewardXp || 0;
@@ -198,7 +195,6 @@ export default function PlayClient() {
                     obtainedAt: Date.now()
                 })),
             ],
-            // Use the new constant here
             [`encounterWins.${encounterId}`]: increment(1)
         };
 
@@ -210,14 +206,14 @@ export default function PlayClient() {
         
         await updateDoc('characters', user.uid, updates);
 
+        // --- FIX: Clear the URL to prevent the game from looping ---
+        router.replace('/play', { scroll: false });
+
         // --- Optimistically update local character state ---
         setCharacter(prev => {
             if (!prev) return null;
-
             const newWins = { ...(prev.encounterWins || {}) };
-            // And use the new constant here, which removes the error
             newWins[encounterId] = (newWins[encounterId] || 0) + 1;
-
             return {
                 ...prev,
                 xp: newXp,
@@ -240,6 +236,8 @@ export default function PlayClient() {
         if (newLvl > oldLvl) {
             setLevelUpData({ oldLvl, newLvl, hpGain, pointsGain });
         }
+
+        // This will now correctly show the victory screen without interruption.
         setMode('win');
 
     } catch (error) {
@@ -247,7 +245,8 @@ export default function PlayClient() {
         setMsg('Could not save victory progress.');
         setMode('lobby');
     }
-  }, [user, character, currentEncounter, gameItems, playerHp]);
+}, [user, character, currentEncounter, gameItems, playerHp, router]); // Added "router" to the dependency array
+
 
 
 
