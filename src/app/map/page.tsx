@@ -124,6 +124,7 @@ export default function MapPage() {
         >
           {locations.map((loc) => {
             const mapMeta = getMapMetaForLocation(loc.id);
+            console.log(loc.id, mapMeta);
             if (!mapMeta) return null;
 
             const isLibrary = loc.id === "library";
@@ -138,7 +139,7 @@ export default function MapPage() {
                 className={`absolute w-10 h-10 rounded-full transition-all duration-300 ease-in-out 
                            flex items-center justify-center
                            focus:ring-4 focus:ring-blue-400 focus:outline-none
-                           ${isFogged ? 'pointer-events-none' : 'hover:bg-white/20 opacity-0 hover:opacity-100 focus:opacity-100'}`}
+                           ${isFogged ? 'pointer-events-none' : 'hover:bg-white/20 opacity-80 hover:opacity-100 focus:opacity-100'}`}
                 style={{
                   left: `${mapMeta.x * 100}%`,
                   top: `${mapMeta.y * 100}%`,
