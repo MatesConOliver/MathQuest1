@@ -7,9 +7,12 @@ interface VictoryScreenProps {
   levelUpData: { oldLvl: number, newLvl: number, hpGain: number, pointsGain: number } | null;
   lootDrops: string[];
   onFightAgain: () => void;
+  xpReward: number;
+  goldReward: number;
+  skillGains: {[key: string]: number} | null;
 }
 
-export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain }: VictoryScreenProps) {
+export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain, xpReward, goldReward, skillGains }: VictoryScreenProps) {
   const router = useRouter();
   const data = levelUpData as any;
 
@@ -22,6 +25,29 @@ export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain 
         <div className="text-center">
           <h1 className="text-4xl font-black text-yellow-600 dark:text-yellow-400 uppercase tracking-widest drop-shadow-sm">Victory!</h1>
           <p className="text-gray-500 dark:text-gray-400 font-bold mt-2 uppercase text-sm tracking-tighter">Level {character?.level || 1}</p>
+        </div>
+
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4 border border-yellow-200 dark:border-yellow-700/50 space-y-2 text-left">
+            <div className="font-bold text-yellow-800 dark:text-yellow-200 uppercase text-xs tracking-wider mb-2 text-center">Rewards</div>
+            <div className="flex justify-between items-center px-2">
+                <span className="font-bold text-gray-600 dark:text-gray-400">XP Gained</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400 text-lg">+{xpReward}</span>
+            </div>
+            <div className="flex justify-between items-center px-2">
+                <span className="font-bold text-gray-600 dark:text-gray-400">Gold Found</span>
+                <span className="font-bold text-yellow-600 dark:text-yellow-400 text-lg">+{goldReward} 🪙</span>
+            </div>
+            {skillGains && Object.keys(skillGains).length > 0 && (
+                <div className="pt-1">
+                    <div className="font-bold text-gray-500 dark:text-gray-400 text-xs px-2">Skill Gains</div>
+                    {Object.entries(skillGains).map(([skill, value]) => (
+                        <div className="flex justify-between items-center px-2 text-sm" key={skill}>
+                            <span className="text-gray-500 dark:text-gray-300 capitalize">{skill.replace(/([A-Z])/g, ' $1')}</span>
+                            <span className="font-semibold text-purple-500 dark:text-purple-400">+{value}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
 
         {data?.newLvl > data?.oldLvl && (

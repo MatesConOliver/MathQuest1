@@ -22,7 +22,7 @@ import { BattleIntro } from './components/BattleIntro';
 import { BattleScreen } from './components/BattleScreen';
 import { VictoryScreen } from './components/VictoryScreen';
 import { DefeatScreen } from './components/DefeatScreen';
-import { StoryPlayer } from '@/components/StoryPlayer'; // Corrected Import
+import { StoryPlayer } from '@/components/StoryPlayer';
 
 // Main game content component
 export default function PlayClient() {
@@ -64,6 +64,8 @@ export default function PlayClient() {
   } | null>(null);
   const [lootDrops, setLootDrops] = useState<string[]>([]);
   const [skillGains, setSkillGains] = useState<{[key: string]: number} | null>(null);
+  const [xpReward, setXpReward] = useState(0);
+  const [goldReward, setGoldReward] = useState(0);
 
   // UI state
   const [isLoading, setIsLoading] = useState(true);
@@ -156,6 +158,8 @@ export default function PlayClient() {
     const xpGain = currentEncounter.winRewardXp || 0;
     const goldGain = currentEncounter.winRewardGold || 0;
     const skillsGained = currentEncounter.winRewardSkills || {};
+    setXpReward(xpGain);
+    setGoldReward(goldGain);
     setSkillGains(skillsGained);
 
     // --- Level Up Logic ---
@@ -630,6 +634,9 @@ export default function PlayClient() {
           levelUpData={levelUpData}
           lootDrops={lootDrops}
           onFightAgain={handleFightAgain}
+          xpReward={xpReward}
+          goldReward={goldReward}
+          skillGains={skillGains}
         />
       );
     case 'lose':
