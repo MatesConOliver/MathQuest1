@@ -193,7 +193,7 @@ export default function PlayClient() {
     try {
         // --- Prepare DB Update Payload ---
         const updates: { [key:string]: any } = {
-            hp: playerHp,
+            hp: playerHp + hpGain,
             xp: newXp,
             level: newLvl,
             gold: increment(goldGain),
@@ -225,6 +225,7 @@ export default function PlayClient() {
             newWins[encounterId] = (newWins[encounterId] || 0) + 1;
             return {
                 ...prev,
+                hp: playerHp + hpGain,
                 xp: newXp,
                 level: newLvl,
                 gold: prev.gold + goldGain,
