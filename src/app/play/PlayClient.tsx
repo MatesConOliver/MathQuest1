@@ -44,6 +44,7 @@ export default function PlayClient() {
   const [foeHp, setFoeHp] = useState(50);
   const [msg, setMsg] = useState('');
   const [activeStory, setActiveStory] = useState<StoryEvent | null>(null); // Changed to StoryEvent
+  const [isBattleOver, setIsBattleOver] = useState(false);
 
   // Battle mechanics state
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
@@ -234,6 +235,8 @@ export default function PlayClient() {
             setLevelUpData({ oldLvl, newLvl, hpGain, pointsGain });
         }
 
+        setIsBattleOver(true);
+
         // This will now correctly show the victory screen without interruption.
         setMode('win');
 
@@ -260,6 +263,7 @@ export default function PlayClient() {
         setCharacter(p => p ? ({ ...p, hp: battleStats.maxHp, gold: p.gold - goldLoss }) : null);
 
         setMsg(finalReason);
+        setIsBattleOver(true);
         setMode('lose');
     } catch (e) {
         console.error('Error updating character on loss: ', e);
@@ -324,6 +328,8 @@ export default function PlayClient() {
         setMsg('You must heal before starting a new battle!');
         return;
       }
+
+      setIsBattleOver(false);
 
       const setupBattle = async (enc: EncounterDoc) => {
         setIsLoading(true);
@@ -475,6 +481,7 @@ export default function PlayClient() {
 
   useEffect(() => {
     const encounterId = searchParams.get('id');
+    if (isBattleOver) return;
     if (encounterId && encounters.length > 0 && character) {
       const selectedEncounter = encounters.find((e) => e.id === encounterId);
       if (selectedEncounter) {
