@@ -206,9 +206,6 @@ export default function PlayClient() {
         
         await updateDoc('characters', user.uid, updates);
 
-        // --- FIX: Clear the URL to prevent the game from looping ---
-        router.replace('/play', { scroll: false });
-
         // --- Optimistically update local character state ---
         setCharacter(prev => {
             if (!prev) return null;
@@ -245,7 +242,7 @@ export default function PlayClient() {
         setMsg('Could not save victory progress.');
         setMode('lobby');
     }
-}, [user, character, currentEncounter, gameItems, playerHp, router]); // Added "router" to the dependency array
+}, [user, character, currentEncounter, gameItems, playerHp]); // Added "router" to the dependency array
 
   const handleLoss = useCallback(async (reason: string) => {
     if (!user || !character) return;
