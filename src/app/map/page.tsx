@@ -126,8 +126,8 @@ export default function MapPage() {
             const mapMeta = getMapMetaForLocation(loc.id);
             if (!mapMeta) return null;
 
-            const isLibrary = loc.id === "library";
-            const isFogged = !worldUnlocked && !isLibrary;
+            const isFogged =
+              mapMeta.initiallyHidden && !worldUnlocked;
 
             return (
               <button
@@ -135,32 +135,53 @@ export default function MapPage() {
                 onClick={() => !isFogged && setSelectedLocation(loc)}
                 title={isFogged ? "The world is still obscured…" : loc.name}
                 disabled={isFogged}
-                className={`absolute w-10 h-10 rounded-full transition-all duration-300 ease-in-out 
-                           flex items-center justify-center
-                           focus:ring-4 focus:ring-blue-400 focus:outline-none
-                           ${isFogged
-                             ? 'pointer-events-none'
-                             : 'opacity-80 hover:opacity-100 focus:opacity-100 hover:bg-white/20'
-                           }`}
+                className={`
+                  group absolute w-12 h-12 rounded-full
+                  flex items-center justify-center
+                  transition-all duration-300 ease-out
+                  focus:outline-none
+              
+                  ${isFogged
+                    ? "opacity-90 cursor-not-allowed"
+                    : `
+                      opacity-90
+                      hover:opacity-100
+                      hover:scale-110
+                      hover:ring-4
+                      hover:ring-blue-300/60
+                      cursor-pointer
+                    `
+                  }
+                `}
                 style={{
                   left: `${mapMeta.x * 100}%`,
                   top: `${mapMeta.y * 100}%`,
                   transform: 'translate(-50%, -50%)',
                 }}
               >
-                <div className="w-full h-full rounded-full ring-2 ring-white/50 backdrop-blur-sm group-hover:scale-110 transition-transform duration-300 flex items-center justify-center bg-black/20">
-                    <span className="text-2xl">
-                        {loc.name.includes("Forest")
-                          ? "🌲"
-                          : loc.name.includes("Library")
-                          ? "📚"
-                          : loc.name.includes("Cave")
-                          ? "🦇"
-                          : "📍"}
-                      </span>
+                <div
+                  className="
+                    w-full h-full rounded-full
+                    ring-2 ring-white/50
+                    backdrop-blur-sm
+                    bg-black/30
+                    flex items-center justify-center
+                    transition-transform duration-300 ease-out
+                    group-hover:scale-110
+                  "
+                >
+                  <span className="text-2xl select-none">
+                    {loc.name.includes("Forest")
+                      ? "🌲"
+                      : loc.name.includes("Library")
+                      ? "📚"
+                      : loc.name.includes("Cave")
+                      ? "🦇"
+                      : "📍"}
+                  </span>
                 </div>
                 {isFogged && (
-                  <div className="absolute inset-0 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center transition-opacity duration-300">
+                  <div className="absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center transition-opacity duration-300">
                     <span className="text-xl">
                       {mapMeta.fogType === 'clouds' ? '☁️' : '🌫️'}
                     </span>
