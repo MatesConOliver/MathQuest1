@@ -35,6 +35,9 @@ export default function MapPage() {
     null
   );
 
+  // Story-based fog gating
+  const worldUnlocked = false; // TODO: replace with real story flag driven by encounter with id "l8o4lYWfiyUm2qpqWn2U" having counter >= 1
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
@@ -123,16 +126,19 @@ export default function MapPage() {
             const mapMeta = getMapMetaForLocation(loc.id);
             if (!mapMeta) return null;
 
+            const isLibrary = loc.id === "library";
+            const isFogged = !worldUnlocked && !isLibrary;
+
             return (
               <button
                 key={loc.id}
-                onClick={() => setSelectedLocation(loc)}
-                title={loc.name}
-                className="absolute w-10 h-10 rounded-full transition-all duration-200 ease-in-out 
+                onClick={() => !isFogged && setSelectedLocation(loc)}
+                title={isFogged ? "The world is still obscured…" : loc.name}
+                disabled={isFogged}
+                className={`absolute w-10 h-10 rounded-full transition-all duration-300 ease-in-out 
                            flex items-center justify-center
-                           opacity-0 hover:opacity-100 
-                           focus:opacity-100 focus:ring-4 focus:ring-blue-400 focus:outline-none
-                           hover:bg-white/20"
+                           focus:ring-4 focus:ring-blue-400 focus:outline-none
+                           ${isFogged ? 'pointer-events-none' : 'hover:bg-white/20 opacity-0 hover:opacity-100 focus:opacity-100'}`}
                 style={{
                   left: `${mapMeta.x * 100}%`,
                   top: `${mapMeta.y * 100}%`,
@@ -150,6 +156,13 @@ export default function MapPage() {
                           : "📍"}
                       </span>
                 </div>
+                {isFogged && (
+                  <div className="absolute inset-0 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center transition-opacity duration-300">
+                    <span className="text-xl">
+                      {mapMeta.fogType === 'clouds' ? '☁️' : '🌫️'}
+                    </span>
+                  </div>
+                )}
               </button>
             );
           })}
