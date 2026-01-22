@@ -89,23 +89,20 @@ export default function MapPage() {
   }, []);
 
   useEffect(() => {
-    // When the world becomes unlocked, we want to trigger the reveal animation.
-    if (worldUnlocked) {
-      // Find all locations that are meant to be hidden initially
-      const newlyRevealedIds = MAP_LOCATIONS
-        .filter(meta => meta.initiallyHidden)
-        .map(meta => meta.locationId);
+    if (!worldUnlocked) return;
   
-      // Add these IDs to our 'revealedLocations' state set.
-      if (newlyRevealedIds.length > 0) {
-        setRevealedLocations(prev => {
-          const newSet = new Set(prev);
-          newlyRevealedIds.forEach(id => newSet.add(id));
-          return newSet;
-        });
-      }
-    }
-  }, [worldUnlocked]);    
+    setRevealedLocations(prev => {
+      const next = new Set(prev);
+  
+      MAP_LOCATIONS.forEach(meta => {
+        if (meta.initiallyHidden && !next.has(meta.locationId)) {
+          next.add(meta.locationId);
+        }
+      });
+  
+      return next;
+    });
+  }, [worldUnlocked]);   
 
   const locationEncounters = selectedLocation
     ? encounters.filter((e) => e.locationId === selectedLocation.id)
@@ -190,21 +187,24 @@ export default function MapPage() {
               const mapMeta = getMapMetaForLocation(loc.id);
               if (!mapMeta) return null;
 
-              const isFogged = mapMeta.initiallyHidden && !worldUnlocked;
+              const isInitiallyFogged = mapMeta.initiallyHidden;
+              const shouldShowFog =
+                isInitiallyFogged && !revealedLocations.has(loc.id);
+              const isClickable = !shouldShowFog;
 
               return (
                 <button
                   key={loc.id}
-                  onClick={() => !isFogged && setSelectedLocation(loc)}
-                  title={isFogged ? "The world is still obscured…" : loc.name}
-                  disabled={isFogged}
+                  onClick={() => isClickable && setSelectedLocation(loc)}
+                  title={isClickable ? loc.name : "The world is still obscured…"}
+                  disabled={!isClickable}
                   className={`
                     group absolute w-12 h-12 rounded-full
                     flex items-center justify-center
                     transition-all duration-300 ease-out
                     focus:outline-none
                     ${
-                      isFogged
+                      isClickable
                         ? "opacity-90 cursor-not-allowed"
                         : "opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-blue-300/60 cursor-pointer"
                     }
@@ -233,18 +233,24 @@ export default function MapPage() {
                         ? "📚"
                         : loc.name.includes("Cave")
                         ? "🦇"
+                        : loc.name.includes("Mountain")
+                        ? "⛰️"
+                        : loc.name.includes("Peak")
+                        ? "🏔️"
+                        : loc.name.includes("polis")
+                        ? "🏙️"
                         : "📍"}
                     </span>
                   </div>
-                  {isFogged && (
+                  {shouldShowFog && (
                     <div
                       className={classNames(
                         "absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none",
                         {
-                          "animate-fog-reveal": revealedLocations.has(loc.id),
-                          "opacity-0": revealedLocations.has(loc.id),
+                          "animate-fog-reveal": worldUnlocked,
                         }
                       )}
+                      style={worldUnlocked ? { animationDelay: "100ms" } : undefined}
                     >
                       <span className="text-xl">
                         {mapMeta.fogType === "clouds" ? "☁️" : "🌫️"}
