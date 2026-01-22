@@ -204,7 +204,7 @@ export default function MapPage() {
                     transition-all duration-300 ease-out
                     focus:outline-none
                     ${
-                      isClickable
+                      !isClickable
                         ? "opacity-90 cursor-not-allowed"
                         : "opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-blue-300/60 cursor-pointer"
                     }
