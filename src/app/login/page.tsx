@@ -33,6 +33,14 @@ export default function LoginPage() {
         const unsubSnapshot = onSnapshot(doc(db, "characters", user.uid), (charDoc) => {
           if (charDoc.exists()) {
             router.push("/");
+          } else {
+            // If character data doesn't exist, create it.
+            // This handles cases where registration was incomplete or data was lost.
+            callApi('newGame', {}).catch(err => {
+              console.error("Error creating character data for logged in user:", err);
+              setError("There was a problem setting up your character. Please log out and try again.");
+              auth.signOut(); // Sign out to prevent potential loops
+            });
           }
         });
         return () => unsubSnapshot();
@@ -62,8 +70,11 @@ export default function LoginPage() {
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
         setError("This email is already registered. Please log in.");
+      } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError("Incorrect email or password. Please try again.");
       } else {
-        setError(err.message || "Authentication Error");
+        setError("An authentication error occurred. Please try again.");
+        console.error("Authentication error:", err);
       }
     } finally {
       setLoading(false);
