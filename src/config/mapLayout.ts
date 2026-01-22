@@ -11,14 +11,14 @@ export const MAP_LOCATIONS: MapLocationMeta[] = [
   {
     locationId: "bSL1XkrzgqQxqtCLNumD", //library
     x: 0.51,
-    y: 0.51,
+    y: 0.5,
     initiallyHidden: false,
     fogType: "mist",
   },
   {
     locationId: "NNaAatxu2L25wWhKHc6Z", //algebra
     x: 0.23,
-    y: 0.45,
+    y: 0.5,
     initiallyHidden: true,
     fogType: "clouds",
   },
@@ -31,22 +31,22 @@ export const MAP_LOCATIONS: MapLocationMeta[] = [
   },
   {
     locationId: "2qsVAsgI3VhpfZ091h1c", //geometry
-    x: 0.6,
-    y: 0.5,
+    x: 0.61,
+    y: 0.44,
     initiallyHidden: true,
     fogType: "clouds",
   },
   {
     locationId: "MYknm1xkQq7kWF2UTcNJ", //prob and statistics
     x: 0.2,
-    y: 0.8,
+    y: 0.85,
     initiallyHidden: true,
     fogType: "clouds",
   },
   {
     locationId: "Y78ufmYJvaCc0ZPE1UfW", //calculus
-    x: 0.7,
-    y: 0.1,
+    x: 0.68,
+    y: 0.07,
     initiallyHidden: true,
     fogType: "clouds",
   },
