@@ -130,7 +130,7 @@ export type FoeDoc = {
 };
 
 export type GameLocation = {
-  id?: string;
+  id: string;
   name: string;
   description: string;
   order: number; // To sort them (1. Forest, 2. Caves...)

@@ -7,40 +7,59 @@ import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import Link from "next/link";
 import { GameLocation, EncounterDoc } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
+import { MAP_LOCATIONS, MapLocationMeta } from "@/config/mapLayout";
+
+function getMapMetaForLocation(locationId: string): MapLocationMeta | null {
+  const meta = MAP_LOCATIONS.find((m) => m.locationId === locationId);
+  return meta || null;
+}
 
 export default function MapPage() {
-  const { playTrack } = useAudio()!; 
+  const { playTrack } = useAudio()!;
 
   useEffect(() => {
-    playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3");
+    playTrack(
+      "/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"
+    );
   }, []);
 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   // Data
   const [locations, setLocations] = useState<GameLocation[]>([]);
   const [encounters, setEncounters] = useState<EncounterDoc[]>([]);
 
   // Navigation State
-  const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(
+    null
+  );
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
-      if (!u) { setLoading(false); return; }
+      if (!u) {
+        setLoading(false);
+        return;
+      }
 
       setLoading(true);
       try {
         // 1. Fetch Locations
-        const locSnap = await getDocs(query(collection(db, "locations"), orderBy("order")));
-        setLocations(locSnap.docs.map(d => ({ ...d.data(), id: d.id } as GameLocation)));
+        const locSnap = await getDocs(
+          query(collection(db, "locations"), orderBy("order"))
+        );
+        setLocations(
+          locSnap.docs.map((d) => ({ ...d.data(), id: d.id } as GameLocation))
+        );
 
         // 2. Fetch ALL Encounters
         const encSnap = await getDocs(
-           query(collection(db, "encounters"), orderBy("title"))
+          query(collection(db, "encounters"), orderBy("title"))
         );
-        setEncounters(encSnap.docs.map(d => ({ ...d.data(), id: d.id } as EncounterDoc)));
+        setEncounters(
+          encSnap.docs.map((d) => ({ ...d.data(), id: d.id } as EncounterDoc))
+        );
       } catch (err) {
         console.error("Error loading map:", err);
       } finally {
@@ -51,79 +70,107 @@ export default function MapPage() {
   }, []);
 
   // --- LOGIC: Filter battles for the popup ---
-  const locationEncounters = selectedLocation 
-    ? encounters.filter(e => e.locationId === selectedLocation.id)
+  const locationEncounters = selectedLocation
+    ? encounters.filter((e) => e.locationId === selectedLocation.id)
     : [];
 
   // --- LOADING SCREEN ---
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900">
-      <div className="animate-pulse flex flex-col items-center gap-2">
-        <span className="text-4xl">🗺️</span>
-        <span className="text-gray-400 font-bold tracking-widest">LOADING MAP...</span>
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900">
+        <div className="animate-pulse flex flex-col items-center gap-2">
+          <span className="text-4xl">🗺️</span>
+          <span className="text-gray-400 font-bold tracking-widest">
+            LOADING MAP...
+          </span>
+        </div>
       </div>
-    </div>
-  );
+    );
 
   // --- MAIN RENDER (Combined Map + Popup) ---
   return (
-    <main 
-      className="min-h-screen bg-cover bg-center p-4 md:p-8 transition-colors duration-300"
-      style={{ backgroundImage: "url('https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Backgrounds%2Fmap%20background%201.png?alt=media&token=38144b3f-4abf-475f-81f6-96030d482d38')" }}
+    <main
+      className="min-h-screen bg-gray-900 p-4 md:p-8 transition-colors duration-300"
     >
-      <div className="max-w-4xl mx-auto space-y-6 bg-black/50 p-5 rounded-xl">
-        
+      <div className="max-w-7xl mx-auto">
         {/* HEADER */}
-        <header className="flex justify-between items-end pb-4 border-b border-gray-200 dark:border-gray-700">
+        <header className="flex justify-between items-end pb-4 border-b border-gray-700">
           <div>
-            <h1 className="text-3xl md:text-4xl font-black text-white">World Map</h1>
-            <p className="text-gray-200 font-medium">Select a region to explore</p>
+            <h1 className="text-3xl md:text-4xl font-black text-white">
+              World Map
+            </h1>
+            <p className="text-gray-200 font-medium">
+              Select a region to explore
+            </p>
           </div>
-          <Link href="/" className="px-4 py-2 bg-white dark:bg-gray-800 dark:text-gray-100 text-gray-700 font-bold rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm transition-all">
+          <Link
+            href="/"
+            className="px-4 py-2 bg-gray-800 text-gray-100 font-bold rounded-xl border-2 border-gray-700 hover:bg-gray-700 text-sm transition-all"
+          >
             🏠 Home
           </Link>
         </header>
 
-        {/* LOCATIONS GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {locations.map((loc) => (
-            <button
-              key={loc.id}
-              onClick={() => setSelectedLocation(loc)}
-              className="group relative text-left bg-white dark:bg-gray-800 p-6 rounded-3xl border-2 border-transparent dark:border-gray-700 hover:border-blue-500 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden bg-cover bg-center"
-              style={{ backgroundImage: `url(${loc.imageUrl})` }}
-            >
-              <div className="absolute inset-0 bg-black/50" />
-              <div className="relative z-10 flex items-start gap-4">
-                <div className="text-5xl group-hover:scale-110 transition-transform duration-300 bg-black/50 p-2 rounded-lg">
-                   {loc.name.includes("Forest") ? "🌲" : loc.name.includes("Library") ? "📚" : loc.name.includes("Cave") ? "🦇" : "📍"}
+        {/* MAP AREA */}
+        <div
+          className="relative w-full aspect-[16/9] rounded-xl overflow-hidden mt-6 bg-cover bg-center"
+          style={{
+            backgroundImage:
+              "url('https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Backgrounds%2Fmap%20background%201.png?alt=media&token=38144b3f-4abf-475f-81f6-96030d482d38')",
+          }}
+        >
+          {locations.map((loc) => {
+            const mapMeta = getMapMetaForLocation(loc.id);
+            if (!mapMeta) return null;
+
+            return (
+              <button
+                key={loc.id}
+                onClick={() => setSelectedLocation(loc)}
+                title={loc.name}
+                className="absolute w-10 h-10 rounded-full transition-all duration-200 ease-in-out 
+                           flex items-center justify-center
+                           opacity-0 hover:opacity-100 
+                           focus:opacity-100 focus:ring-4 focus:ring-blue-400 focus:outline-none
+                           hover:bg-white/20"
+                style={{
+                  left: `${mapMeta.x * 100}%`,
+                  top: `${mapMeta.y * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                <div className="w-full h-full rounded-full ring-2 ring-white/50 backdrop-blur-sm group-hover:scale-110 transition-transform duration-300 flex items-center justify-center bg-black/20">
+                    <span className="text-2xl">
+                        {loc.name.includes("Forest")
+                          ? "🌲"
+                          : loc.name.includes("Library")
+                          ? "📚"
+                          : loc.name.includes("Cave")
+                          ? "🦇"
+                          : "📍"}
+                      </span>
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-white group-hover:text-blue-400">{loc.name}</h2>
-                  <p className="text-sm text-gray-300 mt-1 leading-relaxed">{loc.description}</p>
-                  <div className="mt-3 inline-flex items-center text-xs font-black text-blue-400 uppercase tracking-wider">
-                    View Area <span className="ml-1 group-hover:translate-x-1 transition-transform">➜</span>
-                  </div>
-                </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* --- THE POPUP OVERLAY --- */}
       {selectedLocation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          
           <div className="bg-white dark:bg-gray-800 w-full max-w-lg max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-            
             {/* Popup Header */}
             <div className="p-6 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700 flex justify-between items-start shrink-0">
               <div>
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white">{selectedLocation.name}</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Available Battles</p>
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white">
+                  {selectedLocation.name}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                  Available Battles
+                </p>
               </div>
-              <button 
+              <button
                 onClick={() => setSelectedLocation(null)}
                 className="w-8 h-8 flex items-center justify-center bg-gray-200 dark:bg-gray-700 dark:text-gray-200 hover:bg-red-100 hover:text-red-600 rounded-full transition-colors"
               >
@@ -139,8 +186,8 @@ export default function MapPage() {
                 </div>
               ) : (
                 locationEncounters.map((enc) => (
-                  <div 
-                    key={enc.id} 
+                  <div
+                    key={enc.id}
                     title={enc.description}
                     className="flex items-center justify-between p-4 bg-white dark:bg-gray-700/50 border-2 border-gray-100 dark:border-gray-600 rounded-2xl hover:border-blue-400 hover:shadow-md transition-all group"
                   >
@@ -154,10 +201,16 @@ export default function MapPage() {
                         </h3>
                         <div className="text-xs text-gray-500 dark:text-gray-400 font-medium flex items-center gap-3">
                           <span>
-                            XP: <span className="text-purple-600 dark:text-purple-400 font-bold">+{enc.winRewardXp || 0}</span>
+                            XP:{" "}
+                            <span className="text-purple-600 dark:text-purple-400 font-bold">
+                              +{enc.winRewardXp || 0}
+                            </span>
                           </span>
                           <span>
-                            Gold: <span className="text-yellow-600 dark:text-yellow-400 font-bold">+{enc.winRewardGold || 0}</span>
+                            Gold:{" "}
+                            <span className="text-yellow-600 dark:text-yellow-400 font-bold">
+                              +{enc.winRewardGold || 0}
+                            </span>
                           </span>
                         </div>
                       </div>
@@ -176,15 +229,13 @@ export default function MapPage() {
 
             {/* Popup Footer */}
             <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 text-center shrink-0">
-               <span className="text-xs text-gray-400 uppercase tracking-widest font-bold">
-                 Good Luck!
-               </span>
+              <span className="text-xs text-gray-400 uppercase tracking-widest font-bold">
+                Good Luck!
+              </span>
             </div>
-
           </div>
         </div>
       )}
-
     </main>
   );
 }
