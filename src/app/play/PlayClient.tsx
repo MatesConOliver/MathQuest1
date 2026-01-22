@@ -11,7 +11,6 @@ import {
   QuestionDoc,
   GameItem,
   InventoryItem,
-  Story,
   StoryEvent,
 } from '@/types/game';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -149,7 +148,11 @@ export default function PlayClient() {
   );
 
   const handleWin = useCallback(async () => {
-    if (!user || !character || !currentEncounter) return;
+    // The check is here, and it's correct.
+    if (!user || !character || !currentEncounter || !currentEncounter.id) return;
+
+    // We store the ID in a constant immediately after the check.
+    const encounterId = currentEncounter.id; 
 
     // --- Standard Rewards ---
     const xpGain = currentEncounter.winRewardXp || 0;
@@ -195,6 +198,8 @@ export default function PlayClient() {
                     obtainedAt: Date.now()
                 })),
             ],
+            // Use the new constant here
+            [`encounterWins.${encounterId}`]: increment(1)
         };
 
         for (const [skill, amount] of Object.entries(skillsGained)) {
@@ -206,22 +211,31 @@ export default function PlayClient() {
         await updateDoc('characters', user.uid, updates);
 
         // --- Optimistically update local character state ---
-        setCharacter(prev => prev ? ({
-            ...prev,
-            xp: newXp,
-            level: newLvl,
-            gold: prev.gold + goldGain,
-            maxHp: prev.maxHp + hpGain,
-            unspentPoints: prev.unspentPoints + pointsGain,
-            skills: {
-                algebra: (prev.skills.algebra || 0) + (skillsGained.algebra || 0),
-                functions: (prev.skills.functions || 0) + (skillsGained.functions || 0),
-                geometry: (prev.skills.geometry || 0) + (skillsGained.geometry || 0),
-                probabilityAndStatistics: (prev.skills.probabilityAndStatistics || 0) + (skillsGained.probabilityAndStatistics || 0),
-                calculus: (prev.skills.calculus || 0) + (skillsGained.calculus || 0),
-            },
-            inventory: updates.inventory,
-        }) : null);
+        setCharacter(prev => {
+            if (!prev) return null;
+
+            const newWins = { ...(prev.encounterWins || {}) };
+            // And use the new constant here, which removes the error
+            newWins[encounterId] = (newWins[encounterId] || 0) + 1;
+
+            return {
+                ...prev,
+                xp: newXp,
+                level: newLvl,
+                gold: prev.gold + goldGain,
+                maxHp: prev.maxHp + hpGain,
+                unspentPoints: prev.unspentPoints + pointsGain,
+                skills: {
+                    algebra: (prev.skills?.algebra || 0) + (skillsGained.algebra || 0),
+                    functions: (prev.skills?.functions || 0) + (skillsGained.functions || 0),
+                    geometry: (prev.skills?.geometry || 0) + (skillsGained.geometry || 0),
+                    probabilityAndStatistics: (prev.skills?.probabilityAndStatistics || 0) + (skillsGained.probabilityAndStatistics || 0),
+                    calculus: (prev.skills?.calculus || 0) + (skillsGained.calculus || 0),
+                },
+                inventory: updates.inventory,
+                encounterWins: newWins,
+            };
+        });
 
         if (newLvl > oldLvl) {
             setLevelUpData({ oldLvl, newLvl, hpGain, pointsGain });
@@ -234,6 +248,8 @@ export default function PlayClient() {
         setMode('lobby');
     }
   }, [user, character, currentEncounter, gameItems, playerHp]);
+
+
 
   const handleLoss = useCallback(async (reason: string) => {
     if (!user || !character) return;

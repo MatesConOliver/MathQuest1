@@ -55,7 +55,8 @@ const createNewCharacter = (name: string, uid: string) => {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     completedStoryEvents: [],
-    unlockedContinents: ["bSL1XkrzgqQxqtCLNumD"]
+    unlockedContinents: ["bSL1XkrzgqQxqtCLNumD"],
+    encounterWins: {}
   };
 };
 

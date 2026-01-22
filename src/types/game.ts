@@ -77,6 +77,7 @@ export interface Character {
   updatedAt?: any;
   completedStoryEvents: string[]; // List of IDs like ["intro_01", "chapter_1_done"]
   unlockedContinents: string[];   // List of IDs like ["cont_1", "cont_2"]
+  encounterWins: { [encounterId: string]: number };
 }
 
 export interface Monster {
@@ -161,14 +162,6 @@ export type EncounterDoc = {
   imageUrl?: string;
   emoji?: string;
 };
-
-// This is a simplified version for displaying a story screen.
-// The full story data is represented by StoryEvent.
-export interface Story {
-    id: string;
-    title: string;
-    text: string;
-}
 
 // =========================================
 // 📖 STORY ENGINE TYPES
