@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, getDocs, orderBy, query, doc, getDoc } from "firebase/firestore";
 import Link from "next/link";
-import { GameLocation, EncounterDoc } from "@/types/game";
+import { GameLocation, EncounterDoc, Character } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
 import { MAP_LOCATIONS, MapLocationMeta } from "@/config/mapLayout";
+import classNames from "classnames";
 
 function getMapMetaForLocation(locationId: string): MapLocationMeta | null {
   const meta = MAP_LOCATIONS.find((m) => m.locationId === locationId);
@@ -29,6 +30,8 @@ export default function MapPage() {
   // Data
   const [locations, setLocations] = useState<GameLocation[]>([]);
   const [encounters, setEncounters] = useState<EncounterDoc[]>([]);
+  const [character, setCharacter] = useState<Character | null>(null);
+  const [revealedLocations, setRevealedLocations] = useState(new Set<string>());
 
   // Navigation State
   const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(
@@ -41,7 +44,7 @@ export default function MapPage() {
     : null;
 
   // Story-based fog gating
-  const worldUnlocked = false; // TODO: replace with real story flag driven by encounter with id "l8o4lYWfiyUm2qpqWn2U" having counter >= 1
+  const worldUnlocked = (character?.encounterWins?.['1jnYA8nD0PRaxu7Dezhs'] ?? 0) >= 1;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -53,6 +56,13 @@ export default function MapPage() {
 
       setLoading(true);
       try {
+        // 0. Fetch Character Data  <-- ADD THIS BLOCK
+        const charRef = doc(db, "characters", u.uid);
+        const charSnap = await getDoc(charRef);
+        if (charSnap.exists()) {
+          setCharacter(charSnap.data() as Character);
+        }
+        
         // 1. Fetch Locations
         const locSnap = await getDocs(
           query(collection(db, "locations"), orderBy("order"))
@@ -77,6 +87,25 @@ export default function MapPage() {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    // When the world becomes unlocked, we want to trigger the reveal animation.
+    if (worldUnlocked) {
+      // Find all locations that are meant to be hidden initially
+      const newlyRevealedIds = MAP_LOCATIONS
+        .filter(meta => meta.initiallyHidden)
+        .map(meta => meta.locationId);
+  
+      // Add these IDs to our 'revealedLocations' state set.
+      if (newlyRevealedIds.length > 0) {
+        setRevealedLocations(prev => {
+          const newSet = new Set(prev);
+          newlyRevealedIds.forEach(id => newSet.add(id));
+          return newSet;
+        });
+      }
+    }
+  }, [worldUnlocked]);    
 
   const locationEncounters = selectedLocation
     ? encounters.filter((e) => e.locationId === selectedLocation.id)
@@ -114,9 +143,27 @@ export default function MapPage() {
               href="/"
               className="px-4 py-2 bg-gray-800 text-gray-100 font-bold rounded-xl border-2 border-gray-700 hover:bg-gray-700 text-sm transition-all"
             >
-              🏠 Home
+              🏠 Main menu
             </Link>
           </header>
+
+          {/* Style block */}
+          <style jsx global>{`
+            @keyframes fog-reveal {
+              from {
+                opacity: 1;
+                transform: scale(1);
+              }
+              to {
+                opacity: 0;
+                transform: scale(1.2);
+                pointer-events: none;
+              }
+            }
+            .animate-fog-reveal {
+              animation: fog-reveal 700ms ease-out forwards;
+            }
+          `}</style>
 
           {/* MAP AREA */}
           <div
@@ -190,7 +237,15 @@ export default function MapPage() {
                     </span>
                   </div>
                   {isFogged && (
-                    <div className="absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center transition-opacity duration-300">
+                    <div
+                      className={classNames(
+                        "absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none",
+                        {
+                          "animate-fog-reveal": revealedLocations.has(loc.id),
+                          "opacity-0": revealedLocations.has(loc.id),
+                        }
+                      )}
+                    >
                       <span className="text-xl">
                         {mapMeta.fogType === "clouds" ? "☁️" : "🌫️"}
                       </span>
