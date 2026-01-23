@@ -160,8 +160,8 @@ export function EncountersPanel() {
   
       try {
         if (editingId) {
-          // setDoc with merge will now correctly overwrite the skills field
-          await setDoc(doc(db, "encounters", editingId), docData, { merge: true });
+          // Overwrite the document completely to ensure data consistency.
+          await setDoc(doc(db, "encounters", editingId), docData);
           setMsg("✅ Updated Encounter!");
         } else {
           await addDoc(collection(db, "encounters"), docData);

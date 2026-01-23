@@ -108,11 +108,15 @@ export default function MapPage() {
   useEffect(() => {
     if (!worldUnlocked || !pendingReveal || !mapMounted) return;
 
-    const start = requestAnimationFrame(() => {
-      setAnimateFog(true);
-    });
+    // 1. Wait 1.5s before starting the animation
+    const startAnimationTimeout = setTimeout(() => {
+      requestAnimationFrame(() => {
+        setAnimateFog(true);
+      });
+    }, 1500); // 1.5s delay
 
-    const timeout = setTimeout(() => {
+    // 2. Reveal locations after the delay + animation duration
+    const revealTimeout = setTimeout(() => {
       setRevealedLocations(prev => {
         const next = new Set(prev);
         MAP_LOCATIONS.forEach(meta => {
@@ -122,15 +126,14 @@ export default function MapPage() {
         });
         return next;
       });
-
       setAnimateFog(false);
-    }, 800);
+    }, 1500 + 3000); // 1.5s delay + 3s animation
 
     return () => {
-      cancelAnimationFrame(start);
-      clearTimeout(timeout);
+      clearTimeout(startAnimationTimeout);
+      clearTimeout(revealTimeout);
     };
-  }, [worldUnlocked, pendingReveal, mapMounted]);
+  }, [mapMounted, worldUnlocked, pendingReveal]);
 
   // Fallback: ensure fog is gone on future visits
   useEffect(() => {
@@ -201,7 +204,7 @@ export default function MapPage() {
               }
             }
             .animate-fog-reveal {
-              animation: fog-reveal 700ms ease-out forwards;
+              animation: fog-reveal 3000ms ease-out forwards;
             }
           `}</style>
 
