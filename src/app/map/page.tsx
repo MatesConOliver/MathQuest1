@@ -230,7 +230,7 @@ export default function MapPage() {
                   title={isClickable ? loc.name : "The world is still obscured…"}
                   disabled={!isClickable}
                   className={`
-                    group absolute w-48 h-48 rounded-full
+                    group absolute w-12 h-12 rounded-full
                     flex items-center justify-center
                     transition-all duration-300 ease-out
                     focus:outline-none
@@ -283,7 +283,7 @@ export default function MapPage() {
                       )}
                       style={{ animationDelay: "100ms" }}
                     >
-                      <span className="text-xl">
+                      <span className="text-4xl">
                         {mapMeta.fogType === "clouds" ? "☁️" : "🌫️"}
                       </span>
                     </div>
