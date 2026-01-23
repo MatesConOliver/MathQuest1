@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -43,7 +44,7 @@ export default function PlayClient() {
   const [playerHp, setPlayerHp] = useState(100);
   const [foeHp, setFoeHp] = useState(50);
   const [msg, setMsg] = useState('');
-  const [activeStory, setActiveStory] = useState<StoryEvent | null>(null); // Changed to StoryEvent
+  const [activeStory, setActiveStory] = useState<StoryEvent | null>(null);
   const [isBattleOver, setIsBattleOver] = useState(false);
 
   // Battle mechanics state
@@ -154,7 +155,6 @@ export default function PlayClient() {
     if (!user || !character || !currentEncounter || !currentEncounter.id) return;
     const encounterId = currentEncounter.id;
 
-    // --- Standard Rewards ---
     const xpGain = currentEncounter.winRewardXp || 0;
     const goldGain = currentEncounter.winRewardGold || 0;
     const skillsGained = currentEncounter.winRewardSkills || {};
@@ -162,7 +162,6 @@ export default function PlayClient() {
     setGoldReward(goldGain);
     setSkillGains(skillsGained);
 
-    // --- Level Up Logic ---
     const oldLvl = character.level;
     let newXp = (character.xp || 0) + xpGain;
     let newLvl = oldLvl;
@@ -185,13 +184,11 @@ export default function PlayClient() {
         xpToNextLevel = calculateXpToNextLevel(newLvl);
     }
 
-    // --- Loot Drop Logic ---
     if (currentEncounter.winRewardItems) {
         setLootDrops(currentEncounter.winRewardItems.map(id => gameItems[id]?.name || 'Unknown Item'));
     }
 
     try {
-        // --- Prepare DB Update Payload ---
         const updates: { [key:string]: any } = {
             hp: playerHp + hpGain,
             xp: newXp,
@@ -218,7 +215,6 @@ export default function PlayClient() {
         
         await updateDoc('characters', user.uid, updates);
 
-        // --- Optimistically update local character state ---
         setCharacter(prev => {
             if (!prev) return null;
             const newWins = { ...(prev.encounterWins || {}) };
@@ -248,8 +244,6 @@ export default function PlayClient() {
         }
 
         setIsBattleOver(true);
-
-        // This will now correctly show the victory screen without interruption.
         setMode('win');
 
     } catch (error) {
@@ -257,7 +251,7 @@ export default function PlayClient() {
         setMsg('Could not save victory progress.');
         setMode('lobby');
     }
-}, [user, character, currentEncounter, gameItems, playerHp]); // Added "router" to the dependency array
+}, [user, character, currentEncounter, gameItems, playerHp]);
 
   const handleLoss = useCallback(async (reason: string) => {
     if (!user || !character) return;
@@ -271,7 +265,6 @@ export default function PlayClient() {
             gold: increment(-goldLoss)
         });
         
-        // Optimistically update local state
         setCharacter(p => p ? ({ ...p, hp: battleStats.maxHp, gold: p.gold - goldLoss }) : null);
 
         setMsg(finalReason);
@@ -466,7 +459,6 @@ export default function PlayClient() {
         );
         setGameItems(itemsMap);
 
-        // Check for a login story using the new callApi function
         const storyEvent = await callApi<StoryEvent | null>('getStoryForTrigger', { trigger: 'LOGIN' });
 
         if (storyEvent && storyEvent.scenes && storyEvent.scenes.length > 0) {
@@ -507,7 +499,7 @@ export default function PlayClient() {
   useEffect(() => {
     if (mode === 'battle' && !isPaused && !showInventory) {
       if (timeLeft <= 0) {
-        handleAnswer(-1); // Automatically fail the question
+        handleAnswer(-1);
         return;
       }
       const t = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
@@ -527,7 +519,6 @@ export default function PlayClient() {
         setActiveStory(null);
     } catch (error) {
         console.error("Failed to update completed stories: ", error);
-        // Still hide the story, but log the error
         setActiveStory(null);
     }
   };
@@ -583,8 +574,6 @@ export default function PlayClient() {
     }
   };
 
-  const renderMixedText = (text: string) => <>{text}</>;
-
   if (isLoading || !user || !character) {
     return (
       <div className="w-full h-screen flex items-center justify-center text-lg font-bold text-gray-500 animate-pulse">
@@ -632,7 +621,6 @@ export default function PlayClient() {
           skipQuestion={skipQuestion}
           executeEscape={executeEscape}
           usePotion={usePotion}
-          renderMixedText={renderMixedText}
         />
       );
     case 'win':

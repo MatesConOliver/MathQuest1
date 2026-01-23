@@ -1,6 +1,66 @@
-import { Character, FoeDoc, QuestionDoc, GameItem, InventoryItem } from "@/types/game";
+
+import { Character, FoeDoc, QuestionDoc, GameItem, InventoryItem, ContentBlock } from "@/types/game";
 import { HealthBar, TimeBar } from "@/app/play/components/shared/Bars";
-import { BlockMath } from 'react-katex';
+import { BlockMath, InlineMath } from 'react-katex';
+import React from "react";
+
+// ==================================================================================
+// 👇 NEW: Content Rendering Helpers (similar to the admin panel)
+// ==================================================================================
+
+/**
+ * Renders a legacy string that might contain mixed text and LaTeX.
+ * This is for backward compatibility with old `choices` strings.
+ */
+const renderLegacyMixedText = (text: string): React.ReactNode => {
+    if (!text || !text.includes('$')) {
+      return text;
+    }
+    const parts = text.split(/(\$.*?\$)/g);
+    return (
+      <>
+        {parts.map((part, index) => {
+          if (part.startsWith('$') && part.endsWith('$')) {
+            const math = part.slice(1, -1);
+            try {
+                return <InlineMath key={index} math={math} />;
+            } catch (error) {
+                return <span key={index} className="text-red-500 font-mono">{part}</span>;
+            }
+          }
+          return <span key={index}>{part}</span>;
+        })}
+      </>
+    );
+};
+
+/**
+ * Renders an array of new structured ContentBlocks into React nodes.
+ */
+const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = false) => {
+    if (!blocks) return null;
+    const MathComponent = isBlock ? BlockMath : InlineMath;
+
+    return (
+      <>
+        {blocks.map((block, index) => {
+          switch (block.type) {
+            case 'text':
+              return <span key={index}>{block.value}</span>;
+            case 'latex':
+              try {
+                return <MathComponent key={index} math={block.value} />;
+              } catch (e) { return <span key={index} className="text-red-500 font-mono">{`$${block.value}$`}</span>; }
+            case 'image':
+              return <img key={index} src={block.value} alt="Question content" className="my-2 rounded-lg max-w-full h-auto inline-block" />;
+            default:
+              return null;
+          }
+        })}
+      </>
+    );
+};
+
 
 interface BattleScreenProps {
   character: Character | null;
@@ -25,14 +85,14 @@ interface BattleScreenProps {
   skipQuestion: () => void;
   executeEscape: () => void;
   usePotion: (item: InventoryItem) => void;
-  renderMixedText: (text: string) => React.ReactNode;
+  // renderMixedText is no longer needed as this component is now self-sufficient
 }
 
 export function BattleScreen(props: BattleScreenProps) {
   const {
     character, foe, questions, currentQIndex, playerHp, foeHp, msg, timeLeft, totalTime, 
     isPaused, isEscaping, selectedChoice, gameItems, showInventory, setShowInventory, showEscapeConfirm, 
-    setShowEscapeConfirm, handleAnswer, nextQuestion, skipQuestion, executeEscape, usePotion, renderMixedText
+    setShowEscapeConfirm, handleAnswer, nextQuestion, skipQuestion, executeEscape, usePotion
   } = props;
 
   const currentQ = questions[currentQIndex];
@@ -45,6 +105,7 @@ export function BattleScreen(props: BattleScreenProps) {
 
   return (
     <main className="min-h-screen p-2 md:p-4 flex flex-col items-center max-w-2xl mx-auto relative transition-colors font-sans">
+      {/* Top Bars (Health, etc.) - No changes here */}
       <div className="w-full grid grid-cols-2 gap-2 md:gap-4 mb-2">
         <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl border border-blue-100 dark:border-blue-800 text-center space-y-1 transition-colors flex flex-col justify-between">
             <div>
@@ -59,78 +120,94 @@ export function BattleScreen(props: BattleScreenProps) {
             🎒 Items ({character?.inventory.filter(i => gameItems[i.itemId]?.type === 'potion').length || 0})
           </button>
         </div>
-        
         <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-2xl border border-red-100 dark:border-red-800 text-center space-y-1 transition-colors">
             <h3 className="font-bold text-sm text-red-900 dark:text-red-200 truncate">{foe?.name || "Enemy"}</h3>
             <HealthBar label="ENEMY" current={foeHp} max={foe?.maxHp || 50} />
         </div>
       </div>
-
       <div className="bg-white dark:bg-gray-800 dark:text-gray-100 px-4 py-2 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 mb-2 w-full transition-colors">
         <TimeBar current={timeLeft} max={totalTime} />
       </div>
 
+      {/* Main Question Card */}
       <div className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-lg border dark:border-gray-700 p-4 md:p-6 space-y-3 relative transition-colors flex-1 flex flex-col justify-center">
         {msg && <div className="text-center text-red-500 font-bold animate-bounce text-sm absolute top-2 left-0 w-full">{msg}</div>}
         <div className="absolute top-3 right-4 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full text-[9px] font-black text-gray-400 dark:text-gray-300 tracking-widest border border-gray-200 dark:border-gray-600">
            TURN {currentQIndex + 1} / {questions.length}
         </div>
         
-        {currentQ.imageUrl && (
-          <div className="flex justify-center mb-1">
-            <img src={currentQ.imageUrl} alt="Question Context" className="rounded-xl max-h-32 md:max-h-60 object-contain shadow-sm bg-white" />
-          </div>
-        )}
-
-        <div className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100 text-center my-2">
-          {currentQ.promptImageUrl && (
-            <div className="flex justify-center mb-2">
-                <img src={currentQ.promptImageUrl} alt="Question Image" className="max-h-32 md:max-h-48 rounded-lg shadow-md border bg-white" />
-            </div>
-          )}
-          {currentQ.promptLatex && <div className="py-2 overflow-x-auto"><BlockMath math={currentQ.promptLatex} /></div>}
-          {currentQ.promptText && <div className="whitespace-pre-wrap leading-relaxed dark:text-gray-100 text-sm md:text-base">{renderMixedText(currentQ.promptText || "")}</div>}
+        {/* ================================================================================== */}
+        {/* 👇 UPDATED: Main Prompt Rendering Logic                                             */}
+        {/* ================================================================================== */}
+        <div className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100 text-center my-2 leading-relaxed">
+            { currentQ.promptContent ? (
+                // New format: Render structured content
+                renderStructuredContent(currentQ.promptContent, true)
+            ) : (
+                // Legacy format: Fallback to old fields
+                <>
+                    {currentQ.imageUrl && (
+                        <div className="flex justify-center mb-1">
+                            <img src={currentQ.imageUrl} alt="Question Context" className="rounded-xl max-h-32 md:max-h-60 object-contain shadow-sm bg-white" />
+                        </div>
+                    )}
+                    {currentQ.promptImageUrl && (
+                        <div className="flex justify-center mb-2">
+                            <img src={currentQ.promptImageUrl} alt="Question Image" className="max-h-32 md:max-h-48 rounded-lg shadow-md border bg-white" />
+                        </div>
+                    )}
+                    {currentQ.promptLatex && <div className="py-2 overflow-x-auto"><BlockMath math={currentQ.promptLatex} /></div>}
+                    {currentQ.promptText && <div className="whitespace-pre-wrap dark:text-gray-100 text-sm md:text-base">{renderLegacyMixedText(currentQ.promptText)}</div>}
+                </>
+            )}
         </div>
 
+        {/* ================================================================================== */}
+        {/* 👇 UPDATED: Choices Rendering Logic                                                 */}
+        {/* ================================================================================== */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
-          {!isPaused && currentQ.choices.map((choice, idx) => (
-              <button key={idx} disabled={isPaused} onClick={() => handleAnswer(idx)} className={`p-4 pr-10 border-2 rounded-2xl text-base md:text-lg font-bold transition-all duration-200 group relative border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-transparent hover:border-black dark:hover:border-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black active:scale-[0.98]`}>
-                <span className="block w-full text-center">{renderMixedText(choice)}</span>
-              </button>
-          ))}
-          {isPaused && !isEscaping && currentQ.choices.map((choice, idx) => {
+          {currentQ.choices.map((_, idx) => {
+            const choiceContent = currentQ.choicesContent 
+              ? renderStructuredContent(currentQ.choicesContent[idx]) // New format
+              : renderLegacyMixedText(currentQ.choices[idx]); // Legacy format
+
             const isSelected = selectedChoice === idx;
             const isCorrectChoice = idx === currentQ.correctIndex;
             let highlightClass = "opacity-30 border-gray-200 dark:border-gray-800 text-gray-400 dark:text-gray-600";
-            if (isCorrectChoice) {
-              highlightClass = "border-green-500 bg-green-50 dark:bg-green-950/50 text-green-700 dark:text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]";
-            } else if (isSelected && !isCorrectChoice) {
-              highlightClass = "border-red-500 bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400";
+            if (isPaused) {
+                if (isCorrectChoice) {
+                  highlightClass = "border-green-500 bg-green-50 dark:bg-green-950/50 text-green-700 dark:text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]";
+                } else if (isSelected && !isCorrectChoice) {
+                  highlightClass = "border-red-500 bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400";
+                }
             }
-
+            
             return (
-              <button key={idx} disabled={true} className={`p-4 pr-10 border-2 rounded-2xl text-base md:text-lg font-bold transition-all duration-200 group relative ${highlightClass}`}>
-                <span className="block w-full text-center">{renderMixedText(choice)}</span>
-                {isCorrectChoice && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 scale-125">✅</span>}
-                {isSelected && !isCorrectChoice && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-600 dark:text-red-400 scale-125">❌</span>}
+              <button 
+                key={idx} 
+                disabled={isPaused} 
+                onClick={() => handleAnswer(idx)} 
+                className={`p-4 pr-10 border-2 rounded-2xl text-base md:text-lg font-bold transition-all duration-200 group relative ${ isPaused ? highlightClass : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-transparent hover:border-black dark:hover:border-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black active:scale-[0.98]'}`}>
+                  <span className="block w-full text-center">{choiceContent}</span>
+                  {isPaused && isCorrectChoice && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 scale-125">✅</span>}
+                  {isPaused && isSelected && !isCorrectChoice && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-600 dark:text-red-400 scale-125">❌</span>}
               </button>
             );
           })}
         </div>
 
+        {/* Bottom Buttons (Next, Skip, etc.) - No changes here */}
         {isPaused && !isEscaping && (
             <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in mb-2">
               <div className="text-lg font-bold bg-white dark:bg-gray-700 dark:text-white p-3 rounded-xl border-2 border-black dark:border-gray-500 w-full text-center shadow-md">{msg || "Round Over"}</div>
               <button onClick={nextQuestion} className="w-full py-3 rounded-xl text-lg font-black shadow-lg transition-all duration-200 hover:scale-[1.02] bg-blue-600 text-white hover:bg-blue-800 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500 dark:shadow-blue-900/30 dark:ring-1 dark:ring-blue-500/50">NEXT ➡️</button>
             </div>
         )}
-
         {isEscaping && (
             <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in mb-2">
                 <div className="text-lg font-bold bg-white dark:bg-gray-700 dark:text-white p-3 rounded-xl border-2 border-black dark:border-gray-500 w-full text-center shadow-md">{msg}</div>
             </div>
         )}
-
         {!isPaused && (
             <div className="mt-2 flex flex-row gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                 <button onClick={skipQuestion} className="flex-1 py-2 md:py-3 rounded-xl border-2 border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 text-red-500 dark:text-red-400 font-bold hover:bg-red-100 dark:hover:bg-red-900/30 hover:border-red-200 transition-colors text-xs">⏭️ SKIP</button>
@@ -139,6 +216,7 @@ export function BattleScreen(props: BattleScreenProps) {
         )}
       </div>
 
+      {/* Modals (Inventory, Escape) - No changes here */}
       {showInventory && (
         <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
            <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border dark:border-gray-700">
@@ -169,7 +247,6 @@ export function BattleScreen(props: BattleScreenProps) {
            </div>
         </div>
       )}
-
       {showEscapeConfirm && (
         <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
            <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl border-4 border-red-100 dark:border-red-900/50 text-center space-y-4">

@@ -1,3 +1,4 @@
+
 export type ItemType = 'weapon' | 'armor' | 'potion' | 'misc';
 export type EquipmentSlot = 'mainHand' | 'offHand' | 'armor' | 'head';
 
@@ -101,14 +102,28 @@ export interface Question {
   timeLimit?: number;
 }
 
+// NEW: Structured content block for prompts and choices
+export interface ContentBlock {
+    type: 'text' | 'latex' | 'image';
+    value: string;
+}
+
 export type QuestionDoc = {
   id?: string;
   title?: string;
+  
+  // New structured content fields
+  promptContent?: ContentBlock[]; 
+  choicesContent?: ContentBlock[][];
+
+  // --- LEGACY FIELDS (for backward compatibility) ---
   promptType?: "text" | "latex" | "image";
-  promptText?: string;
+  promptText?: string; 
   promptLatex?: string;
   promptImageUrl?: string;
-  choices: string[];
+  choices: string[]; 
+  // --- END OF LEGACY FIELDS ---
+
   choiceType?: "text" | "latex";
   correctIndex: number;
   rewardXp: number;
