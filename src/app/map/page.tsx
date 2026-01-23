@@ -32,6 +32,7 @@ export default function MapPage() {
   const [encounters, setEncounters] = useState<EncounterDoc[]>([]);
   const [character, setCharacter] = useState<Character | null>(null);
   const [revealedLocations, setRevealedLocations] = useState(new Set<string>());
+  const [animateFog, setAnimateFog] = useState(false);
 
   // Navigation State
   const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(
@@ -90,18 +91,26 @@ export default function MapPage() {
 
   useEffect(() => {
     if (!worldUnlocked) return;
+
+    // Step 1: keep fog visible for one frame
+    setAnimateFog(true);
   
-    setRevealedLocations(prev => {
-      const next = new Set(prev);
-  
-      MAP_LOCATIONS.forEach(meta => {
-        if (meta.initiallyHidden && !next.has(meta.locationId)) {
-          next.add(meta.locationId);
-        }
+    // Step 2: trigger reveal animation
+    const revealTimeout = setTimeout(() => {
+      setRevealedLocations(prev => {
+        const next = new Set(prev);
+        MAP_LOCATIONS.forEach(meta => {
+          if (meta.initiallyHidden) {
+            next.add(meta.locationId);
+          }
+        });
+        return next;
       });
   
-      return next;
-    });
+      setAnimateFog(false);
+    }, 100); // small delay so DOM paints fog first
+
+    return () => clearTimeout(revealTimeout);
   }, [worldUnlocked]);   
 
   const locationEncounters = selectedLocation
