@@ -18,12 +18,6 @@ function getMapMetaForLocation(locationId: string): MapLocationMeta | null {
 export default function MapPage() {
   const { playTrack } = useAudio()!;
 
-  useEffect(() => {
-    playTrack(
-      "/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"
-    );
-  }, []);
-
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -34,6 +28,7 @@ export default function MapPage() {
   const [revealedLocations, setRevealedLocations] = useState(new Set<string>());
   const [animateFog, setAnimateFog] = useState(false);
   const [pendingReveal, setPendingReveal] = useState(false);
+  const [mapMounted, setMapMounted] = useState(false);
 
   // Navigation State
   const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(
@@ -47,6 +42,16 @@ export default function MapPage() {
 
   // Story-based fog gating
   const worldUnlocked = (character?.encounterWins?.['1jnYA8nD0PRaxu7Dezhs'] ?? 0) >= 1;
+
+  useEffect(() => {
+    playTrack(
+      "/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"
+    );
+  }, []);
+
+  useEffect(() => {
+    setMapMounted(true);
+  }, []);
 
   useEffect(() => {
     const flag = sessionStorage.getItem("pendingFogReveal");
@@ -67,7 +72,7 @@ export default function MapPage() {
 
       setLoading(true);
       try {
-        // 0. Fetch Character Data  <-- ADD THIS BLOCK
+        // 0. Fetch Character Data
         const charRef = doc(db, "characters", u.uid);
         const charSnap = await getDoc(charRef);
         if (charSnap.exists()) {
@@ -99,11 +104,14 @@ export default function MapPage() {
     return () => unsub();
   }, []);
 
+  // Animate fog reveal
   useEffect(() => {
-    if (!worldUnlocked || !pendingReveal) return;
-  
-    setAnimateFog(true);
-  
+    if (!worldUnlocked || !pendingReveal || !mapMounted) return;
+
+    const start = requestAnimationFrame(() => {
+      setAnimateFog(true);
+    });
+
     const timeout = setTimeout(() => {
       setRevealedLocations(prev => {
         const next = new Set(prev);
@@ -114,15 +122,19 @@ export default function MapPage() {
         });
         return next;
       });
-  
-      setAnimateFog(false);
-    }, 100);
-  
-    return () => clearTimeout(timeout);
-  }, [worldUnlocked, pendingReveal]);
 
+      setAnimateFog(false);
+    }, 800);
+
+    return () => {
+      cancelAnimationFrame(start);
+      clearTimeout(timeout);
+    };
+  }, [worldUnlocked, pendingReveal, mapMounted]);
+
+  // Fallback: ensure fog is gone on future visits
   useEffect(() => {
-    if (worldUnlocked && !pendingReveal) {
+    if (mapMounted && worldUnlocked && !pendingReveal) {
       setRevealedLocations(prev => {
         const next = new Set(prev);
         MAP_LOCATIONS.forEach(meta => {
@@ -133,7 +145,7 @@ export default function MapPage() {
         return next;
       });
     }
-  }, [worldUnlocked, pendingReveal]);
+  }, [mapMounted, worldUnlocked, pendingReveal]);
 
   const locationEncounters = selectedLocation
     ? encounters.filter((e) => e.locationId === selectedLocation.id)
@@ -200,13 +212,7 @@ export default function MapPage() {
               backgroundImage:
                 "url('https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Backgrounds%2Fmap%20background%201.png?alt=media&token=38144b3f-4abf-475f-81f6-96030d482d38')",
                 transition: "transform 600ms cubic-bezier(0.22, 1, 0.36, 1), transform-origin 600ms ease-out",
-              // When a location is selected, we want to zoom into it.
-              // A scale of 1.15 gives a slight zoom effect.
               transform: selectedLocation ? "scale(1.15)" : "scale(1)",
-              // The transform-origin is key to the focus effect. By setting it to the
-              // location's coordinates (as percentages), we make the scale
-              // transformation zoom in on that specific point of the map.
-              // If no location is selected, we default to the center.
               transformOrigin: selectedLocationMeta
                 ? `${selectedLocationMeta.x * 100}% ${
                     selectedLocationMeta.y * 100
@@ -220,7 +226,12 @@ export default function MapPage() {
 
               const isInitiallyFogged = mapMeta.initiallyHidden;
               const shouldShowFog =
-                isInitiallyFogged && (!revealedLocations.has(loc.id) || animateFog);
+                isInitiallyFogged &&
+                (
+                  !mapMounted ||            // ← force fog on first paint
+                  animateFog ||             // ← animate phase
+                  !revealedLocations.has(loc.id)
+                );
               const isClickable = !shouldShowFog;
 
               return (
