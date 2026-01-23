@@ -283,7 +283,7 @@ export default function MapPage() {
                       )}
                       style={{ animationDelay: "100ms" }}
                     >
-                      <span className="text-12xl">
+                      <span className="text-9xl">
                         {mapMeta.fogType === "clouds" ? "☁️" : "🌫️"}
                       </span>
                     </div>
