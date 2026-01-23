@@ -198,7 +198,7 @@ export default function MapPage() {
 
               const isInitiallyFogged = mapMeta.initiallyHidden;
               const shouldShowFog =
-                isInitiallyFogged && !revealedLocations.has(loc.id);
+                isInitiallyFogged && (!revealedLocations.has(loc.id) || animateFog);
               const isClickable = !shouldShowFog;
 
               return (
@@ -256,10 +256,10 @@ export default function MapPage() {
                       className={classNames(
                         "absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none",
                         {
-                          "animate-fog-reveal": worldUnlocked,
+                          "animate-fog-reveal": animateFog,
                         }
                       )}
-                      style={worldUnlocked ? { animationDelay: "100ms" } : undefined}
+                      style={{ animationDelay: "100ms" }}
                     >
                       <span className="text-xl">
                         {mapMeta.fogType === "clouds" ? "☁️" : "🌫️"}
