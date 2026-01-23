@@ -29,6 +29,7 @@ export default function MapPage() {
   const [animateFog, setAnimateFog] = useState(false);
   const [pendingReveal, setPendingReveal] = useState(false);
   const [mapMounted, setMapMounted] = useState(false);
+  const [pulsingLocations, setPulsingLocations] = useState<Set<string>>(new Set());
 
   // Navigation State
   const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(
@@ -119,11 +120,25 @@ export default function MapPage() {
     const revealTimeout = setTimeout(() => {
       setRevealedLocations(prev => {
         const next = new Set(prev);
+        const newlyRevealed: string[] = [];
+
         MAP_LOCATIONS.forEach(meta => {
-          if (meta.initiallyHidden) {
+          if (meta.initiallyHidden && !prev.has(meta.locationId)) {
             next.add(meta.locationId);
+            newlyRevealed.push(meta.locationId);
           }
         });
+
+        // Trigger pulse for newly revealed locations
+        if (newlyRevealed.length > 0) {
+          setPulsingLocations(new Set(newlyRevealed));
+
+          // Clear pulse after animation
+          setTimeout(() => {
+            setPulsingLocations(new Set());
+          }, 2500);
+        }
+
         return next;
       });
       setAnimateFog(false);
@@ -206,6 +221,25 @@ export default function MapPage() {
             .animate-fog-reveal {
               animation: fog-reveal 3000ms ease-out forwards;
             }
+            @keyframes discovery-pulse {
+              0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.9);
+              }
+              70% {
+                transform: scale(1.25);
+                box-shadow: 0 0 0 18px rgba(96, 165, 250, 0);
+              }
+              100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(96, 165, 250, 0);
+              }
+            }
+
+            .animate-discovery-pulse {
+              animation: discovery-pulse 1.6s ease-out;
+              z-index: 20;
+            }
           `}</style>
 
           {/* MAP AREA */}
@@ -243,17 +277,22 @@ export default function MapPage() {
                   onClick={() => isClickable && setSelectedLocation(loc)}
                   title={isClickable ? loc.name : "The world is still obscured…"}
                   disabled={!isClickable}
-                  className={`
-                    group absolute w-12 h-12 rounded-full
-                    flex items-center justify-center
-                    transition-all duration-300 ease-out
-                    focus:outline-none
-                    ${
-                      !isClickable
-                        ? "opacity-90 cursor-not-allowed"
-                        : "opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-blue-300/60 cursor-pointer"
+                  className={classNames(
+                    `
+                      group absolute w-12 h-12 rounded-full
+                      flex items-center justify-center
+                      transition-all duration-300 ease-out
+                      focus:outline-none
+                      ${
+                        !isClickable
+                          ? "opacity-90 cursor-not-allowed"
+                          : "opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-blue-300/60 cursor-pointer"
+                      }
+                    `,
+                    {
+                      "animate-discovery-pulse": pulsingLocations.has(loc.id),
                     }
-                  `}
+                  )}
                   style={{
                     left: `${mapMeta.x * 100}%`,
                     top: `${mapMeta.y * 100}%`,
