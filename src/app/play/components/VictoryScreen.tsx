@@ -17,6 +17,14 @@ export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain,
   const data = levelUpData as any;
 
   const hpGain = data?.hpGain || 0;
+
+  const handleReturnToMap = () => {
+    const isWorldUnlocked = true; 
+    if (isWorldUnlocked) {
+      sessionStorage.setItem("pendingFogReveal", "true");
+    }
+    router.push("/map");
+  };
   
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-yellow-50 dark:bg-gray-900 transition-colors">
@@ -73,7 +81,7 @@ export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain,
 
         <div className="pt-4 flex flex-col gap-2">
           <button 
-            onClick={() => router.push("/map")}
+            onClick={handleReturnToMap}
             className="w-full bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
           >
             Collect Loot & Return ➡️

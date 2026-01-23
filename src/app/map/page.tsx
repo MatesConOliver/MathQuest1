@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useEffect, useState } from "react";
 import { auth, db } from "@/lib/firebase";
@@ -33,6 +33,7 @@ export default function MapPage() {
   const [character, setCharacter] = useState<Character | null>(null);
   const [revealedLocations, setRevealedLocations] = useState(new Set<string>());
   const [animateFog, setAnimateFog] = useState(false);
+  const [pendingReveal, setPendingReveal] = useState(false);
 
   // Navigation State
   const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(
@@ -46,6 +47,15 @@ export default function MapPage() {
 
   // Story-based fog gating
   const worldUnlocked = (character?.encounterWins?.['1jnYA8nD0PRaxu7Dezhs'] ?? 0) >= 1;
+
+  useEffect(() => {
+    const flag = sessionStorage.getItem("pendingFogReveal");
+
+    if (flag === "true") {
+      setPendingReveal(true);
+      sessionStorage.removeItem("pendingFogReveal");
+    }
+  }, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -90,13 +100,11 @@ export default function MapPage() {
   }, []);
 
   useEffect(() => {
-    if (!worldUnlocked) return;
-
-    // Step 1: keep fog visible for one frame
+    if (!worldUnlocked || !pendingReveal) return;
+  
     setAnimateFog(true);
   
-    // Step 2: trigger reveal animation
-    const revealTimeout = setTimeout(() => {
+    const timeout = setTimeout(() => {
       setRevealedLocations(prev => {
         const next = new Set(prev);
         MAP_LOCATIONS.forEach(meta => {
@@ -108,10 +116,24 @@ export default function MapPage() {
       });
   
       setAnimateFog(false);
-    }, 100); // small delay so DOM paints fog first
+    }, 100);
+  
+    return () => clearTimeout(timeout);
+  }, [worldUnlocked, pendingReveal]);
 
-    return () => clearTimeout(revealTimeout);
-  }, [worldUnlocked]);   
+  useEffect(() => {
+    if (worldUnlocked && !pendingReveal) {
+      setRevealedLocations(prev => {
+        const next = new Set(prev);
+        MAP_LOCATIONS.forEach(meta => {
+          if (meta.initiallyHidden) {
+            next.add(meta.locationId);
+          }
+        });
+        return next;
+      });
+    }
+  }, [worldUnlocked, pendingReveal]);
 
   const locationEncounters = selectedLocation
     ? encounters.filter((e) => e.locationId === selectedLocation.id)
@@ -208,7 +230,7 @@ export default function MapPage() {
                   title={isClickable ? loc.name : "The world is still obscured…"}
                   disabled={!isClickable}
                   className={`
-                    group absolute w-12 h-12 rounded-full
+                    group absolute w-48 h-48 rounded-full
                     flex items-center justify-center
                     transition-all duration-300 ease-out
                     focus:outline-none
