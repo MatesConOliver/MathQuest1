@@ -5,17 +5,17 @@ import { BlockMath, InlineMath } from 'react-katex';
 import React from "react";
 
 // ==================================================================================
-// 👇 NEW: Content Rendering Helpers (similar to the admin panel)
+// RENDER HELPERS
 // ==================================================================================
 
 /**
- * Renders a legacy string that might contain mixed text and LaTeX.
- * This is for backward compatibility with old `choices` strings.
+ * Renders a legacy string that might contain mixed text and inline LaTeX ($...$).
+ * This is for backward compatibility with old `promptText` and `choices` strings.
  */
-const renderLegacyMixedText = (text: string): React.ReactNode => {
-    if (!text || !text.includes('$')) {
-      return text;
-    }
+const renderLegacyMixedText = (text: string | undefined): React.ReactNode => {
+    if (!text) return null;
+    if (!text.includes('$')) return text;
+
     const parts = text.split(/(\$.*?\$)/g);
     return (
       <>
@@ -25,6 +25,7 @@ const renderLegacyMixedText = (text: string): React.ReactNode => {
             try {
                 return <InlineMath key={index} math={math} />;
             } catch (error) {
+                // Return the original string if KaTeX fails
                 return <span key={index} className="text-red-500 font-mono">{part}</span>;
             }
           }
@@ -36,6 +37,7 @@ const renderLegacyMixedText = (text: string): React.ReactNode => {
 
 /**
  * Renders an array of new structured ContentBlocks into React nodes.
+ * Used for `promptContent` and `choicesContent`.
  */
 const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = false) => {
     if (!blocks) return null;
@@ -50,7 +52,9 @@ const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = f
             case 'latex':
               try {
                 return <MathComponent key={index} math={block.value} />;
-              } catch (e) { return <span key={index} className="text-red-500 font-mono">{`$${block.value}$`}</span>; }
+              } catch (e) { 
+                return <span key={index} className="text-red-500 font-mono">{`$${block.value}$`}</span>;
+              }
             case 'image':
               return <img key={index} src={block.value} alt="Question content" className="my-2 rounded-lg max-w-full h-auto inline-block" />;
             default:
@@ -61,6 +65,10 @@ const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = f
     );
 };
 
+
+// ==================================================================================
+// BATTLE SCREEN COMPONENT
+// ==================================================================================
 
 interface BattleScreenProps {
   character: Character | null;
@@ -85,7 +93,6 @@ interface BattleScreenProps {
   skipQuestion: () => void;
   executeEscape: () => void;
   usePotion: (item: InventoryItem) => void;
-  // renderMixedText is no longer needed as this component is now self-sufficient
 }
 
 export function BattleScreen(props: BattleScreenProps) {
@@ -97,15 +104,55 @@ export function BattleScreen(props: BattleScreenProps) {
 
   const currentQ = questions[currentQIndex];
 
-  if (!currentQ) return (
-    <div className="p-10 text-center font-bold text-gray-500 dark:text-gray-400 animate-pulse">
-      Loading Battle...
-    </div>
-  );
+  if (!currentQ) {
+    return (
+      <div className="p-10 text-center font-bold text-gray-500 dark:text-gray-400 animate-pulse">
+        Loading Battle...
+      </div>
+    );
+  }
+
+  // ==================================================================================
+  // 👇 CORRECTED: Smart Rendering Logic
+  // ==================================================================================
+
+  const QuestionPrompt = () => {
+    // 1. New Structured Format
+    if (currentQ.promptContent) {
+      return <>{renderStructuredContent(currentQ.promptContent, true)}</>;
+    }
+    // 2. Legacy Format
+    switch (currentQ.promptType) {
+      case 'latex':
+        return <div className="py-2 overflow-x-auto"><BlockMath math={currentQ.promptLatex || ''} /></div>;
+      case 'image':
+        return <img src={currentQ.promptImageUrl} alt="Question" className="max-h-48 rounded-lg shadow-md border bg-white" />;
+      case 'text':
+      default:
+        return <div className="whitespace-pre-wrap dark:text-gray-100 text-sm md:text-base">{renderLegacyMixedText(currentQ.promptText)}</div>;
+    }
+  };
+
+  const getChoiceContent = (idx: number) => {
+    // 1. New Structured Format
+    if (currentQ.choicesContent && currentQ.choicesContent[idx]) {
+      return renderStructuredContent(currentQ.choicesContent[idx]);
+    }
+    // 2. Legacy Format
+    const choiceText = currentQ.choices[idx];
+    if (currentQ.choiceType === 'latex') {
+        try {
+            return <InlineMath math={choiceText} />;
+        } catch (e) {
+            return <span className="text-red-500 font-mono">{choiceText}</span>
+        }
+    }
+    return renderLegacyMixedText(choiceText);
+  };
 
   return (
     <main className="min-h-screen p-2 md:p-4 flex flex-col items-center max-w-2xl mx-auto relative transition-colors font-sans">
-      {/* Top Bars (Health, etc.) - No changes here */}
+      {/* Top Bars (Health, etc.) */}
       <div className="w-full grid grid-cols-2 gap-2 md:gap-4 mb-2">
         <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl border border-blue-100 dark:border-blue-800 text-center space-y-1 transition-colors flex flex-col justify-between">
             <div>
@@ -136,41 +183,20 @@ export function BattleScreen(props: BattleScreenProps) {
            TURN {currentQIndex + 1} / {questions.length}
         </div>
         
-        {/* ================================================================================== */}
-        {/* 👇 UPDATED: Main Prompt Rendering Logic                                             */}
-        {/* ================================================================================== */}
+        {/* Renders the Question Prompt */}
         <div className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100 text-center my-2 leading-relaxed">
-            { currentQ.promptContent ? (
-                // New format: Render structured content
-                renderStructuredContent(currentQ.promptContent, true)
-            ) : (
-                // Legacy format: Fallback to old fields
-                <>
-                    {currentQ.imageUrl && (
-                        <div className="flex justify-center mb-1">
-                            <img src={currentQ.imageUrl} alt="Question Context" className="rounded-xl max-h-32 md:max-h-60 object-contain shadow-sm bg-white" />
-                        </div>
-                    )}
-                    {currentQ.promptImageUrl && (
-                        <div className="flex justify-center mb-2">
-                            <img src={currentQ.promptImageUrl} alt="Question Image" className="max-h-32 md:max-h-48 rounded-lg shadow-md border bg-white" />
-                        </div>
-                    )}
-                    {currentQ.promptLatex && <div className="py-2 overflow-x-auto"><BlockMath math={currentQ.promptLatex} /></div>}
-                    {currentQ.promptText && <div className="whitespace-pre-wrap dark:text-gray-100 text-sm md:text-base">{renderLegacyMixedText(currentQ.promptText)}</div>}
-                </>
-            )}
+          {/* Legacy root imageUrl */}
+          {currentQ.imageUrl && !currentQ.promptContent && (
+            <div className="flex justify-center mb-2">
+                <img src={currentQ.imageUrl} alt="Question Context" className="rounded-xl max-h-40 object-contain" />
+            </div>
+           )}
+          <QuestionPrompt />
         </div>
 
-        {/* ================================================================================== */}
-        {/* 👇 UPDATED: Choices Rendering Logic                                                 */}
-        {/* ================================================================================== */}
+        {/* Renders the Choices */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
-          {currentQ.choices.map((_, idx) => {
-            const choiceContent = currentQ.choicesContent 
-              ? renderStructuredContent(currentQ.choicesContent[idx]) // New format
-              : renderLegacyMixedText(currentQ.choices[idx]); // Legacy format
-
+          {(currentQ.choices || []).map((_, idx) => {
             const isSelected = selectedChoice === idx;
             const isCorrectChoice = idx === currentQ.correctIndex;
             let highlightClass = "opacity-30 border-gray-200 dark:border-gray-800 text-gray-400 dark:text-gray-600";
@@ -188,7 +214,7 @@ export function BattleScreen(props: BattleScreenProps) {
                 disabled={isPaused} 
                 onClick={() => handleAnswer(idx)} 
                 className={`p-4 pr-10 border-2 rounded-2xl text-base md:text-lg font-bold transition-all duration-200 group relative ${ isPaused ? highlightClass : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-transparent hover:border-black dark:hover:border-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black active:scale-[0.98]'}`}>
-                  <span className="block w-full text-center">{choiceContent}</span>
+                  <span className="block w-full text-center">{getChoiceContent(idx)}</span>
                   {isPaused && isCorrectChoice && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 scale-125">✅</span>}
                   {isPaused && isSelected && !isCorrectChoice && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-600 dark:text-red-400 scale-125">❌</span>}
               </button>
@@ -196,7 +222,7 @@ export function BattleScreen(props: BattleScreenProps) {
           })}
         </div>
 
-        {/* Bottom Buttons (Next, Skip, etc.) - No changes here */}
+        {/* Bottom Buttons (Next, Skip, etc.) */}
         {isPaused && !isEscaping && (
             <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in mb-2">
               <div className="text-lg font-bold bg-white dark:bg-gray-700 dark:text-white p-3 rounded-xl border-2 border-black dark:border-gray-500 w-full text-center shadow-md">{msg || "Round Over"}</div>
@@ -216,7 +242,7 @@ export function BattleScreen(props: BattleScreenProps) {
         )}
       </div>
 
-      {/* Modals (Inventory, Escape) - No changes here */}
+      {/* Modals (Inventory, Escape) */}
       {showInventory && (
         <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
            <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border dark:border-gray-700">
