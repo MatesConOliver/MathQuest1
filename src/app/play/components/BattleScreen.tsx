@@ -1,5 +1,5 @@
 
-import { Character, FoeDoc, QuestionDoc, GameItem, InventoryItem, ContentBlock } from "@/types/game";
+import { Character, FoeDoc, QuestionDoc, GameItem, InventoryItem, ContentBlock, StructuredChoice } from "@/types/game";
 import { HealthBar, TimeBar } from "@/app/play/components/shared/Bars";
 import { BlockMath, InlineMath } from 'react-katex';
 import React from "react";
@@ -136,13 +136,13 @@ export function BattleScreen(props: BattleScreenProps) {
   const getChoiceContent = (idx: number) => {
     // 1. New Structured Format
     if (currentQ.choicesContent && currentQ.choicesContent[idx]) {
-      return renderStructuredContent(currentQ.choicesContent[idx]);
+      return renderStructuredContent(currentQ.choicesContent[idx].content);
     }
     // 2. Legacy Format
-    const choiceText = currentQ.choices[idx];
+    const choiceText = currentQ.choices?.[idx];
     if (currentQ.choiceType === 'latex') {
         try {
-            return <InlineMath math={choiceText} />;
+            return <InlineMath math={choiceText || ""} />;
         } catch (e) {
             return <span className="text-red-500 font-mono">{choiceText}</span>
         }
@@ -196,7 +196,7 @@ export function BattleScreen(props: BattleScreenProps) {
 
         {/* Renders the Choices */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
-          {(currentQ.choices || []).map((_, idx) => {
+          {(currentQ.choicesContent || currentQ.choices || []).map((_, idx) => {
             const isSelected = selectedChoice === idx;
             const isCorrectChoice = idx === currentQ.correctIndex;
             let highlightClass = "opacity-30 border-gray-200 dark:border-gray-800 text-gray-400 dark:text-gray-600";
