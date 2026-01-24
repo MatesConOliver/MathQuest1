@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 
-import { QuestionsPanelOriginal } from "./panels/QuestionsPanel";
+import { QuestionsPanel } from "./panels/QuestionsPanel";
 import { ItemsPanel } from "./panels/ItemsPanel";
 import { FoesPanel } from "./panels/FoesPanel";
 import { LocationsPanel } from "./panels/LocationsPanel";
@@ -50,7 +50,7 @@ export default function GMPage() {
       </header>
 
       <div className="bg-gray-50 dark:bg-gray-800/50 p-1 rounded-2xl min-h-[600px] border dark:border-gray-700">
-        {activeTab === "questions" && <QuestionsPanelOriginal />}
+        {activeTab === "questions" && <QuestionsPanel />}
         {activeTab === "foes" && <FoesPanel />}
         {activeTab === "locations" && <LocationsPanel />}
         {activeTab === "encounters" && <EncountersPanel />}
