@@ -103,10 +103,15 @@ export interface Question {
   timeLimit?: number;
 }
 
-// NEW: Structured content block for prompts and choices
+// A block of content (text, latex, or image)
 export interface ContentBlock {
     type: 'text' | 'latex' | 'image';
     value: string;
+}
+
+// A single choice in a structured question, containing multiple content blocks
+export interface StructuredChoice {
+    content: ContentBlock[];
 }
 
 export type QuestionDoc = {
@@ -115,7 +120,7 @@ export type QuestionDoc = {
   
   // New structured content fields
   promptContent?: ContentBlock[]; 
-  choicesContent?: ContentBlock[][];
+  choicesContent?: StructuredChoice[]; // Firestore-compatible version of ContentBlock[][]
 
   // --- LEGACY FIELDS (for backward compatibility) ---
   promptType?: "text" | "latex" | "image";
@@ -170,8 +175,7 @@ export type EncounterDoc = {
   title: string;
   description?: string;
   subAreaId: string; // Foreign key to the 'subAreas' collection
-  // TODO: [Refactor] Remove this once all encounters are moved to sub-areas
-  locationId: string; 
+  locationId: string; // Legacy foreign key
   foeId: string;
   foes?: string[];
   questionTag: string; //legacy
@@ -180,8 +184,8 @@ export type EncounterDoc = {
   winRewardXp?: number;
   winRewardGold?: number;
   winRewardSkills?: Partial<CharacterSkills>;
-  timeMultiplier?: number;
   winRewardItems?: string[];
+  winRewardStoryFlag?: string; // Story flag to grant on victory
   shuffleQuestions?: boolean;
   imageUrl?: string;
   emoji?: string;

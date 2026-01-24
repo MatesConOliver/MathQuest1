@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { auth, getAllDocs, getDoc, updateDoc, callApi, db } from '@/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, getDocs as getFirebaseDocs, query, where, increment } from 'firebase/firestore';
+import { collection, getDocs as getFirebaseDocs, query, where, increment, arrayUnion } from 'firebase/firestore';
 import {
   Character,
   EncounterDoc,
@@ -212,6 +212,10 @@ export default function PlayClient() {
                 updates[`skills.${skill}`] = increment(amount);
             }
         }
+
+        if (currentEncounter.winRewardStoryFlag) {
+            updates.storyFlags = arrayUnion(currentEncounter.winRewardStoryFlag);
+        }
         
         await updateDoc('characters', user.uid, updates);
 
@@ -236,6 +240,7 @@ export default function PlayClient() {
                 },
                 inventory: updates.inventory,
                 encounterWins: newWins,
+                storyFlags: currentEncounter.winRewardStoryFlag ? [...(prev.storyFlags || []), currentEncounter.winRewardStoryFlag] : prev.storyFlags,
             };
         });
 

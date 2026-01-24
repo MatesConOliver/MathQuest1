@@ -41,6 +41,7 @@ export function EncountersPanel() {
     const [imageUrl, setImageUrl] = useState("");
     const [emoji, setEmoji] = useState("👹");
     const [shuffle, setShuffle] = useState(false);
+    const [winRewardStoryFlag, setWinRewardStoryFlag] = useState("");
 
     const [selectedLocationId, setSelectedLocationId] = useState("");
     const [selectedSubAreaId, setSelectedSubAreaId] = useState("");
@@ -84,6 +85,7 @@ export function EncountersPanel() {
       setSelectedLocationId(""); setSelectedSubAreaId("");
       setRewardAlgebra(0); setRewardFunctions(0); setRewardGeometry(0); setRewardStats(0); setRewardCalculus(0);
       setImageUrl(""); setEmoji(""); setShuffle(false);
+      setWinRewardStoryFlag("");
       setMsg("");
     }
   
@@ -109,6 +111,7 @@ export function EncountersPanel() {
       setImageUrl(enc.imageUrl || "");
       setEmoji(enc.emoji || "");
       setShuffle(enc.shuffleQuestions || false);
+      setWinRewardStoryFlag(enc.winRewardStoryFlag || "");
 
       setRewardAlgebra(enc.winRewardSkills?.algebra || 0);
       setRewardFunctions(enc.winRewardSkills?.functions || 0);
@@ -135,6 +138,7 @@ export function EncountersPanel() {
         questionTags: questionTag.split(",").map(s => s.trim()).filter(Boolean),
         winRewardXp: Number(xp), winRewardGold: Number(gold), timeMultiplier: Number(timeMult) || 1.0,
         winRewardSkills: finalSkillsReward,
+        winRewardStoryFlag: winRewardStoryFlag || undefined,
         subAreaId: selectedSubAreaId,
         locationId: selectedLocationId, // For backward compatibility
         foes: foeIds, foeId: foeIds[0] || "",
@@ -207,6 +211,8 @@ export function EncountersPanel() {
                 <Input type="number" label="Calculus" value={rewardCalculus} onChange={(e: ChangeEvent<HTMLInputElement>) => setRewardCalculus(Number(e.target.value))} />
             </div>
           </div>
+
+          <Input label="Win Reward Story Flag" value={winRewardStoryFlag} onChange={(e: ChangeEvent<HTMLInputElement>) => setWinRewardStoryFlag(e.target.value)} placeholder="e.g., DEFEATED_GOBLIN_KING" />
   
           <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border dark:border-gray-600 space-y-3">
               <h3 className="label-sm">Visuals & Logic</h3>
