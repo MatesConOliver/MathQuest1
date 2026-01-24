@@ -77,6 +77,7 @@ export interface Character {
   createdAt?: any;
   updatedAt?: any;
   completedStoryEvents: string[]; // List of IDs like ["intro_01", "chapter_1_done"]
+  storyFlags: string[]; // e.g., ["DEFEATED_GOBLIN_KING"]
   unlockedContinents: string[];   // List of IDs like ["cont_1", "cont_2"]
   encounterWins: { [encounterId: string]: number };
 }
@@ -152,11 +153,25 @@ export type GameLocation = {
   imageUrl?: string;
 };
 
+export type SubArea = {
+  id: string;
+  locationId: string; // Foreign key to the 'locations' collection
+  name: string;
+  description: string;
+  order: number; // To order sub-areas within a location
+  unlockRequirements?: {
+    storyFlags?: string[]; // e.g., ["DEFEATED_GOBLIN_KING"]
+    skills?: Partial<CharacterSkills>; // e.g., { algebra: 10 }
+  };
+};
+
 export type EncounterDoc = {
   id?: string;
   title: string;
   description?: string;
-  locationId: string;
+  subAreaId: string; // Foreign key to the 'subAreas' collection
+  // TODO: [Refactor] Remove this once all encounters are moved to sub-areas
+  locationId: string; 
   foeId: string;
   foes?: string[];
   questionTag: string; //legacy
@@ -164,19 +179,17 @@ export type EncounterDoc = {
   damagePerCorrect?: number;
   winRewardXp?: number;
   winRewardGold?: number;
-  winRewardSkills?: {
-    algebra?: number;
-    functions?: number;
-    geometry?: number;
-    probabilityAndStatistics?: number;
-    calculus?: number;
-  };
+  winRewardSkills?: Partial<CharacterSkills>;
   timeMultiplier?: number;
   winRewardItems?: string[];
   shuffleQuestions?: boolean;
   imageUrl?: string;
   emoji?: string;
 };
+
+export type UnlockedSubArea = {
+  unlockedAt: any; // Using 'any' for Firebase ServerTimestamp
+}
 
 // =========================================
 // 📖 STORY ENGINE TYPES
@@ -206,6 +219,7 @@ export interface StoryEvent {
     gold?: number;
     unlockMapId?: string; // Unlocks a new continent
     unlockEncounterId?: string; // Unlocks a new fight
+    storyFlag?: string; // a flag to add to the character's storyFlags array
   };
 
   // Is it repeatable? Usually stories play once.

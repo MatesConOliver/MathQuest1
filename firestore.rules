@@ -5,28 +5,30 @@ service cloud.firestore {
     // --- Helper Functions ---
     function signedIn() { return request.auth != null; }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
-    // The GM check is hardcoded to a specific email.
     function isGM() {
       return signedIn() && request.auth.token.email == "oliveru1996@gmail.com";
     }
 
     // --- CHARACTERS ---
-    // Users can read/update their own character. GMs can read/update any character.
     match /characters/{uid} {
       allow read, update: if isOwner(uid) || isGM();
       allow create: if isOwner(uid);
-      allow delete: if false; // Deletion is best handled by cloud functions
+      // Deletion is handled by a server-side function to ensure all related data is cleaned up.
+      allow delete: if false; 
+
+      // Progression subcollections
+      match /unlockedSubAreas/{subAreaId} {
+        allow read, write: if isOwner(uid) || isGM();
+      }
     }
     
     // --- ACTIVE ENCOUNTERS ---
-    // Users can fully control their own active encounter document.
     match /activeEncounters/{uid} {
       allow read, create, update: if isOwner(uid) || isGM();
       allow delete: if false;
     }
 
-    // --- STORIES, ITEMS, FOES, ENCOUNTERS (Game Content) ---
-    // Can be read by any signed-in player, but only written by a GM.
+    // --- GAME CONTENT (Can be read by any signed-in player, but only written by a GM) ---
     match /stories/{storyId} {
       allow read: if signedIn();
   		allow write: if isGM();
@@ -40,11 +42,6 @@ service cloud.firestore {
     match /foes/{foeId} {
       allow read: if signedIn();
       allow write: if isGM();
-      
-      match /questions/{questionId} {
-        allow read: if signedIn();
-        allow write: if isGM();
-      }
     }
 
     match /encounters/{encounterId} {
@@ -52,23 +49,27 @@ service cloud.firestore {
       allow write: if isGM();
     }
 
-    // --- SUBMISSIONS ---
-    // Users can create submissions for themselves and read their own. GMs can also read them.
-    match /submissions/{submissionId} {
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow read: if (signedIn() && resource.data.ownerUid == request.auth.uid) || isGM();
-      allow update, delete: if false;
+    match /locations/{locationId} {
+        allow read: if signedIn();
+        allow write: if isGM();
     }
-    
-    // --- LOCATIONS & QUESTIONS (Public-ish content) ---
-    match /locations/{docId} {
-      allow read: if signedIn();
-      allow write: if isGM();
+
+    // NEW: Sub-areas are readable by players, writable by GMs
+    match /subAreas/{subAreaId} {
+        allow read: if signedIn();
+        allow write: if isGM();
     }
 
     match /questions/{questionId} {
       allow read: if signedIn();
       allow write: if isGM();
+    }
+
+    // --- SUBMISSIONS ---
+    match /submissions/{submissionId} {
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow read: if (signedIn() && resource.data.ownerUid == request.auth.uid) || isGM();
+      allow update, delete: if false;
     }
   }
 }
