@@ -18,44 +18,25 @@ function getMapMetaForLocation(locationId: string): MapLocationMeta | null {
   return meta || null;
 }
 
-/**
- * Checks if a player has the necessary skills and story flags to access a sub-area.
- */
 function isSubAreaUnlocked(subArea: SubArea, character: Character, unlockedSubAreas: { [key: string]: UnlockedSubArea }): boolean {
-  // 1. Manually unlocked for the player? They get access.
-  if (unlockedSubAreas[subArea.id]) {
-    return true;
-  }
-
+  if (unlockedSubAreas[subArea.id]) return true;
   const reqs = subArea.unlockRequirements;
-  if (!reqs) {
-    // 2. No requirements? It's unlocked by default.
-    return true;
-  }
+  if (!reqs) return true;
 
-  // 3. Check Story Flags
   if (reqs.storyFlags && reqs.storyFlags.length > 0) {
     const hasAllFlags = reqs.storyFlags.every(flag => character.storyFlags?.includes(flag));
-    if (!hasAllFlags) {
-      return false; // Missing a required story flag
-    }
+    if (!hasAllFlags) return false;
   }
 
-  // 4. Check Skill Levels
   if (reqs.skills) {
     for (const key in reqs.skills) {
       const skill = key as keyof CharacterSkills;
       const requiredLevel = reqs.skills[skill]!;
-      if ((character.skills[skill] || 0) < requiredLevel) {
-        return false; // Skill level too low
-      }
+      if ((character.skills[skill] || 0) < requiredLevel) return false;
     }
   }
-
-  // 5. If all checks passed, it's unlocked!
   return true;
 }
-
 
 export default function MapPage() {
   const { playTrack } = useAudio()!;
@@ -66,9 +47,11 @@ export default function MapPage() {
   // --- Game Data State ---
   const [locations, setLocations] = useState<GameLocation[]>([]);
   const [subAreas, setSubAreas] = useState<SubArea[]>([]);
-  const [encounters, setEncounters] = useState<EncounterDoc[]>([]);
   const [character, setCharacter] = useState<Character | null>(null);
   const [unlockedSubAreas, setUnlockedSubAreas] = useState<{ [key: string]: UnlockedSubArea }>({});
+  const [panelEncounters, setPanelEncounters] = useState<EncounterDoc[]>([]); // Encounters for the selected panel
+  const [panelLoading, setPanelLoading] = useState(false); // Loading state for the panel content
+
 
   // --- UI & Animation State ---
   const [revealedLocations, setRevealedLocations] = useState(new Set<string>());
@@ -107,19 +90,17 @@ export default function MapPage() {
       }
       setLoading(true);
       try {
-        // Fetch all data in parallel
-        const [charSnap, locSnap, subAreaSnap, encSnap, unlockedSnap] = await Promise.all([
+        // Fetch initial core data. Encounters are now fetched on-demand.
+        const [charSnap, locSnap, subAreaSnap, unlockedSnap] = await Promise.all([
           getDoc(doc(db, "characters", u.uid)),
           getDocs(query(collection(db, "locations"), orderBy("order"))),
           getDocs(query(collection(db, "subAreas"), orderBy("order"))),
-          getDocs(query(collection(db, "encounters"), orderBy("title"))),
           getDocs(collection(db, `characters/${u.uid}/unlockedSubAreas`))
         ]);
 
         if (charSnap.exists()) setCharacter(charSnap.data() as Character);
         setLocations(locSnap.docs.map(d => ({ ...d.data(), id: d.id } as GameLocation)));
         setSubAreas(subAreaSnap.docs.map(d => ({ ...d.data(), id: d.id } as SubArea)));
-        setEncounters(encSnap.docs.map(d => ({ ...d.data(), id: d.id } as EncounterDoc)));
         
         const unlockedData: { [key: string]: UnlockedSubArea } = {};
         unlockedSnap.forEach(doc => { unlockedData[doc.id] = doc.data() as UnlockedSubArea });
@@ -134,8 +115,47 @@ export default function MapPage() {
     return () => unsub();
   }, []);
 
-  // --- FOG REVEAL ANIMATION LOGIC (Legacy) ---
+  // --- ON-DEMAND ENCOUNTER FETCHING ---
+  useEffect(() => {
+    const fetchEncounters = async () => {
+      // A sub-area is selected: fetch its encounters.
+      if (selectedSubArea) {
+        setPanelLoading(true);
+        const q = query(collection(db, "encounters"), where("subAreaId", "==", selectedSubArea.id), orderBy("title"));
+        const encSnap = await getDocs(q);
+        setPanelEncounters(encSnap.docs.map(d => ({ ...d.data(), id: d.id } as EncounterDoc)));
+        setPanelLoading(false);
+        return;
+      }
+      
+      // A legacy location (no sub-areas) is selected: fetch its encounters.
+      const locationHasNoSubAreas = selectedLocation && subAreas.filter(sa => sa.locationId === selectedLocation.id).length === 0;
+      if (locationHasNoSubAreas) {
+        setPanelLoading(true);
+        const q = query(collection(db, "encounters"), where("locationId", "==", selectedLocation.id), orderBy("title"));
+        const encSnap = await getDocs(q);
+        setPanelEncounters(encSnap.docs.map(d => ({ ...d.data(), id: d.id } as EncounterDoc)));
+        setPanelLoading(false);
+        return;
+      }
 
+      // Otherwise, there are no encounters to show.
+      setPanelEncounters([]);
+    };
+
+    fetchEncounters();
+  }, [selectedSubArea, selectedLocation, subAreas]);
+
+
+  // --- DEV-ONLY WARNING FOR MISSING METADATA ---
+  useEffect(() => {
+      if (selectedLocation && !selectedLocationMeta) {
+          console.warn(`[Dev Warning] No map metadata found for location ID "${selectedLocation.id}". Map will default to center-scaling. Please add an entry to /src/config/mapLayout.ts.`);
+      }
+  }, [selectedLocation, selectedLocationMeta]);
+
+
+  // --- FOG REVEAL ANIMATION LOGIC (Legacy) ---
   useEffect(() => {
     if (!worldUnlocked || !pendingReveal || !mapMounted) return;
     const startAnimationTimeout = setTimeout(() => requestAnimationFrame(() => setAnimateFog(true)), 1500);
@@ -178,7 +198,7 @@ export default function MapPage() {
 
   const handleLocationClick = (loc: GameLocation) => {
     setSelectedLocation(loc);
-    setSelectedSubArea(null); // Reset sub-area selection when a new location is clicked
+    setSelectedSubArea(null);
   };
 
   const handlePanelClose = () => {
@@ -186,16 +206,11 @@ export default function MapPage() {
     setSelectedSubArea(null);
   }
 
-  // Get the sub-areas for the currently selected location
-  const locationSubAreas = selectedLocation ? subAreas.filter(sa => sa.locationId === selectedLocation.id) : [];
-  
-  // Get encounters for the selected context (either a sub-area or a legacy location)
-  const panelEncounters = selectedSubArea 
-    ? encounters.filter(e => e.subAreaId === selectedSubArea.id)
-    : selectedLocation && locationSubAreas.length === 0
-    ? encounters.filter(e => e.locationId === selectedLocation.id) // Legacy fallback
+  const locationSubAreas = selectedLocation
+    ? subAreas
+        .filter(sa => sa.locationId === selectedLocation.id)
+        .sort((a, b) => a.order - b.order)
     : [];
-
 
   if (loading || !character) {
     return (
@@ -317,7 +332,9 @@ export default function MapPage() {
                       )}
                       <h3 className="text-lg font-bold text-gray-200 mb-3">Available Battles</h3>
                       <div className="space-y-3">
-                          {panelEncounters.length === 0 ? (
+                          {panelLoading ? (
+                               <div className="text-center py-10 text-gray-400 italic">Scouting for battles...</div>
+                          ) : panelEncounters.length === 0 ? (
                               <div className="text-center py-10 text-gray-400 italic">No enemies spotted here...</div>
                           ) : (
                               panelEncounters.map((enc) => (
