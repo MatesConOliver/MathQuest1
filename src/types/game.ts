@@ -120,20 +120,19 @@ export type QuestionDoc = {
   
   // New structured content fields
   promptContent?: ContentBlock[]; 
-  choicesContent?: StructuredChoice[]; // Firestore-compatible version of ContentBlock[][]
+  choicesContent?: StructuredChoice[];
 
   // --- LEGACY FIELDS (for backward compatibility) ---
   promptType?: "text" | "latex" | "image";
   promptText?: string; 
   promptLatex?: string;
   promptImageUrl?: string;
-  choices: string[]; 
-  // --- END OF LEGACY FIELDS ---
+  choices?: string[]; 
 
   choiceType?: "text" | "latex";
   correctIndex: number;
-  rewardXp: number;
-  rewardGold: number;
+  rewardXp?: number;
+  rewardGold?: number;
   difficulty?: number;
   tags: string[];
   packId?: string;
@@ -184,6 +183,7 @@ export type EncounterDoc = {
   winRewardXp?: number;
   winRewardGold?: number;
   winRewardSkills?: Partial<CharacterSkills>;
+  timeMultiplier?: number;
   winRewardItems?: string[];
   winRewardStoryFlag?: string; // Story flag to grant on victory
   shuffleQuestions?: boolean;
