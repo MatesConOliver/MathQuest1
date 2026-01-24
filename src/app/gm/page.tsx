@@ -58,7 +58,7 @@ export default function GMPage() {
 
       <div className="bg-gray-50 dark:bg-gray-800/50 p-1 rounded-2xl min-h-[600px] border dark:border-gray-700">
         {activeTab === "questions" && <QuestionsPanel />}
-        {activeTool === "foes" && <FoesPanel />}
+        {activeTab === "foes" && <FoesPanel />}
         {activeTab === "locations" && <LocationsPanel />}
         {/* Render the new SubAreasPanel when the tab is active */}
         {activeTab === "subareas" && <SubAreasPanel />}

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, ChangeEvent, MouseEvent } from "react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -42,7 +42,6 @@ export function EncountersPanel() {
     const [emoji, setEmoji] = useState("👹");
     const [shuffle, setShuffle] = useState(false);
 
-    // New state for location/sub-area selection
     const [selectedLocationId, setSelectedLocationId] = useState("");
     const [selectedSubAreaId, setSelectedSubAreaId] = useState("");
 
@@ -100,10 +99,9 @@ export function EncountersPanel() {
       setGold(enc.winRewardGold || 0);          
       setTimeMult(enc.timeMultiplier !== undefined ? enc.timeMultiplier : 1.0);
       
-      // Load location and sub-area
       const subAreaLocationId = subAreas.find(sa => sa.id === enc.subAreaId)?.locationId;
       setSelectedLocationId(enc.locationId || subAreaLocationId || ""); 
-      // This timeout gives React time to update the subAreas list based on the new locationId
+
       setTimeout(() => {
         setSelectedSubAreaId(enc.subAreaId || "");
       }, 0);
@@ -168,56 +166,55 @@ export function EncountersPanel() {
           <h2 className="text-xl font-bold">{editingId ? "✏️ Edit Encounter" : "⚔️ New Encounter"}</h2>
           {msg && <div className="text-center bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-blue-800 dark:text-blue-200 font-bold text-sm">{msg}</div>}
   
-          <Input label="Title" value={title} onChange={(e:any) => setTitle(e.target.value)} />
-          <Input label="Description" value={desc} onChange={(e:any) => setDesc(e.target.value)} />
+          <Input label="Title" value={title} onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)} />
+          <Input label="Description" value={desc} onChange={(e: ChangeEvent<HTMLInputElement>) => setDesc(e.target.value)} />
           
-          {/* Location & Sub-Area Selection */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Location</label>
-              <select value={selectedLocationId} onChange={e => {setSelectedLocationId(e.target.value); setSelectedSubAreaId("");}} className="input">
+              <select value={selectedLocationId} onChange={(e: ChangeEvent<HTMLSelectElement>) => {setSelectedLocationId(e.target.value); setSelectedSubAreaId("");}} className="input">
                 <option value="">Select Location...</option>
                 {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
               </select>
             </div>
             <div>
               <label className="label">Sub-Area</label>
-              <select value={selectedSubAreaId} onChange={e => setSelectedSubAreaId(e.target.value)} className="input" disabled={!selectedLocationId}>
+              <select value={selectedSubAreaId} onChange={(e: ChangeEvent<HTMLSelectElement>) => setSelectedSubAreaId(e.target.value)} className="input" disabled={!selectedLocationId}>
                 <option value="">Select Sub-Area...</option>
                 {subAreas.map(sa => <option key={sa.id} value={sa.id}>{sa.name}</option>)}
               </select>
             </div>
           </div>
 
-          <Input label="Question Tags (comma sep)" value={questionTag} onChange={(e:any) => setQuestionTag(e.target.value)} placeholder="level1, algebra" />
-          <Input label="Foe IDs (comma sep)" value={foesText} onChange={(e:any) => setFoesText(e.target.value)} placeholder="goblin, dragon" />
+          <Input label="Question Tags (comma sep)" value={questionTag} onChange={(e: ChangeEvent<HTMLInputElement>) => setQuestionTag(e.target.value)} placeholder="level1, algebra" />
+          <Input label="Foe IDs (comma sep)" value={foesText} onChange={(e: ChangeEvent<HTMLInputElement>) => setFoesText(e.target.value)} placeholder="goblin, dragon" />
   
           <div className="grid grid-cols-3 gap-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border dark:border-gray-600">
-             <Input type="number" label="XP" value={xp} onChange={(e:any) => setXp(Number(e.target.value))} />
-             <Input type="number" label="Gold" value={gold} onChange={(e:any) => setGold(Number(e.target.value))} />
-             <Input type="number" step="0.1" min="0.1" label="Time x" value={timeMult} onChange={(e:any) => setTimeMult(Number(e.target.value))} />
+             <Input type="number" label="XP" value={xp} onChange={(e: ChangeEvent<HTMLInputElement>) => setXp(Number(e.target.value))} />
+             <Input type="number" label="Gold" value={gold} onChange={(e: ChangeEvent<HTMLInputElement>) => setGold(Number(e.target.value))} />
+             <Input type="number" step="0.1" min="0.1" label="Time x" value={timeMult} onChange={(e: ChangeEvent<HTMLInputElement>) => setTimeMult(Number(e.target.value))} />
           </div>
 
           <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border dark:border-gray-600">
             <h3 className="label-sm">Skill Rewards</h3>
             <div className="grid grid-cols-3 gap-2">
-                <Input type="number" label="Algebra" value={rewardAlgebra} onChange={(e:any) => setRewardAlgebra(Number(e.target.value))} />
-                <Input type="number" label="Functions" value={rewardFunctions} onChange={(e:any) => setRewardFunctions(Number(e.target.value))} />
-                <Input type="number" label="Geometry" value={rewardGeometry} onChange={(e:any) => setRewardGeometry(Number(e.target.value))} />
+                <Input type="number" label="Algebra" value={rewardAlgebra} onChange={(e: ChangeEvent<HTMLInputElement>) => setRewardAlgebra(Number(e.target.value))} />
+                <Input type="number" label="Functions" value={rewardFunctions} onChange={(e: ChangeEvent<HTMLInputElement>) => setRewardFunctions(Number(e.target.value))} />
+                <Input type="number" label="Geometry" value={rewardGeometry} onChange={(e: ChangeEvent<HTMLInputElement>) => setRewardGeometry(Number(e.target.value))} />
             </div>
             <div className="grid grid-cols-2 gap-2 mt-2">
-                <Input type="number" label="Stats/Prob" value={rewardStats} onChange={(e:any) => setRewardStats(Number(e.target.value))} />
-                <Input type="number" label="Calculus" value={rewardCalculus} onChange={(e:any) => setRewardCalculus(Number(e.target.value))} />
+                <Input type="number" label="Stats/Prob" value={rewardStats} onChange={(e: ChangeEvent<HTMLInputElement>) => setRewardStats(Number(e.target.value))} />
+                <Input type="number" label="Calculus" value={rewardCalculus} onChange={(e: ChangeEvent<HTMLInputElement>) => setRewardCalculus(Number(e.target.value))} />
             </div>
           </div>
   
           <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border dark:border-gray-600 space-y-3">
               <h3 className="label-sm">Visuals & Logic</h3>
-              <Input label="Image URL" value={imageUrl} onChange={(e:any) => setImageUrl(e.target.value)} placeholder="https://..." />
+              <Input label="Image URL" value={imageUrl} onChange={(e: ChangeEvent<HTMLInputElement>) => setImageUrl(e.target.value)} placeholder="https://..." />
               <div className="flex gap-4 items-end">
-                <Input label="Emoji" value={emoji} onChange={(e:any) => setEmoji(e.target.value)} placeholder="👹" />
+                <Input label="Emoji" value={emoji} onChange={(e: ChangeEvent<HTMLInputElement>) => setEmoji(e.target.value)} placeholder="👹" />
                 <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-gray-600 dark:border-gray-500 border px-3 py-3 rounded-lg h-[42px] mb-[2px]">
-                  <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} className="w-4 h-4" />
+                  <input type="checkbox" checked={shuffle} onChange={(e: ChangeEvent<HTMLInputElement>) => setShuffle(e.target.checked)} className="w-4 h-4" />
                   <span className="text-sm font-bold">Shuffle Qs?</span>
                 </label>
               </div>
@@ -235,13 +232,12 @@ export function EncountersPanel() {
           </div>
         </div>
   
-        {/* LIST SIDE */}
         <div className="space-y-4 border-l dark:border-gray-700 pl-4">
           <Input 
               className="w-full text-sm" 
               placeholder="🔍 Filter Encounters..." 
               value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)} 
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)} 
           />
           <h3 className="label-sm">Existing Encounters</h3>
           <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
@@ -265,7 +261,7 @@ export function EncountersPanel() {
                               </div>
                               <div className="text-xs text-gray-400 font-mono">{location?.name} &gt; {subArea?.name || `(${enc.subAreaId || 'Legacy'})`}</div>
                           </div>
-                          <button onClick={(e) => { e.stopPropagation(); if (enc.id) deleteEnc(enc.id); }} className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs font-bold px-2 ml-2">
+                          <button onClick={(e: MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); if (enc.id) deleteEnc(enc.id); }} className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs font-bold px-2 ml-2">
                               DEL
                           </button>
                       </div>

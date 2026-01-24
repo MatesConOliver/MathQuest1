@@ -12,7 +12,7 @@ const SubAreasPanel = () => {
   const [subAreas, setSubAreas] = useState<SubArea[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [selectedSubArea, setSelectedSubArea] = useState<Partial<SubArea> | null>(null);
-  // Initialize with a proper default structure for unlockRequirements
+  
   const getInitialNewSubArea = (): Partial<SubArea> => ({
     id: '',
     name: '',
@@ -58,9 +58,7 @@ const SubAreasPanel = () => {
       return;
     }
 
-    // Ensure unlockRequirements exists before cleaning
     if (subAreaToSave.unlockRequirements) {
-        // Clean up empty requirement fields
         if (subAreaToSave.unlockRequirements.storyFlags?.length === 0) {
             delete subAreaToSave.unlockRequirements.storyFlags;
         }
@@ -76,10 +74,10 @@ const SubAreasPanel = () => {
 
     await setDoc(doc(db, 'subAreas', id!), {
         ...data,
-        locationId: selectedLocationId, // Always ensure locationId is set
+        locationId: selectedLocationId,
     }, { merge: true });
 
-    if (!selectedSubArea) { // If it was a new one
+    if (!selectedSubArea) {
         setNewSubArea(getInitialNewSubArea());
     }
     setSelectedSubArea(null);
@@ -118,17 +116,17 @@ const SubAreasPanel = () => {
 
     return (
         <div className="flex flex-col gap-4">
-            <Input label="ID" value={subArea.id ?? ''} onChange={e => setSubArea({ ...subArea, id: e.target.value })} placeholder="unique-sub-area-id" disabled={!isNew}/>
-            <Input label="Name" value={subArea.name ?? ''} onChange={e => setSubArea({ ...subArea, name: e.target.value })} />
-            <Input label="Description" value={subArea.description ?? ''} onChange={e => setSubArea({ ...subArea, description: e.target.value })} />
-            <Input label="Order" type="number" value={subArea.order ?? 0} onChange={e => setSubArea({ ...subArea, order: Number(e.target.value) })} />
+            <Input label="ID" value={subArea.id ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, id: e.target.value })} placeholder="unique-sub-area-id" disabled={!isNew}/>
+            <Input label="Name" value={subArea.name ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, name: e.target.value })} />
+            <Input label="Description" value={subArea.description ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, description: e.target.value })} />
+            <Input label="Order" type="number" value={subArea.order ?? 0} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, order: Number(e.target.value) })} />
             
             <div className="border-t border-gray-600 my-2"></div>
             <h4 className="font-bold">Unlock Requirements (Optional)</h4>
             <Input 
                 label="Story Flags (comma-separated)" 
                 value={subArea.unlockRequirements?.storyFlags?.join(', ') ?? ''} 
-                onChange={e => setSubArea({ ...subArea, unlockRequirements: { ...subArea.unlockRequirements, storyFlags: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }})} 
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, unlockRequirements: { ...subArea.unlockRequirements, storyFlags: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean) }})} 
                 placeholder="FLAG_A, FLAG_B"
             />
 
@@ -138,8 +136,8 @@ const SubAreasPanel = () => {
                         key={skillName}
                         label={`Min ${skillName}`}
                         type="number"
-                        value={subArea.unlockRequirements?.skills?.[skillName] || ''} // Use || '' to prevent showing 0
-                        onChange={(e) => handleSkillChange(skillName, e.target.value)}
+                        value={subArea.unlockRequirements?.skills?.[skillName] || ''}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSkillChange(skillName, e.target.value)}
                         placeholder="Level"
                     />
                 ))}
