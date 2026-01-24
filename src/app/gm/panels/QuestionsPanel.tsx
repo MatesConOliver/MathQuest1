@@ -168,7 +168,7 @@ export function QuestionsPanel() {
       // MIGRATE-ON-EDIT LOGIC
       if (q.promptContent) { // New format
         setPromptString(contentBlocksToString(q.promptContent));
-        const choicesStrings = (q.choicesContent || []).map(choiceBlocks => contentBlocksToString(choiceBlocks));
+        const choicesStrings = (q.choicesContent || []).map(choice => contentBlocksToString(choice.content));
         setChoices(choicesStrings.length === 4 ? choicesStrings : ["","","",""]);
       } else { // Legacy format
         let legacyPrompt = q.promptText || "";
@@ -206,7 +206,7 @@ export function QuestionsPanel() {
         title: title || "Untitled",
         // NEW: Save in structured format
         promptContent: stringToContentBlocks(promptString),
-        choicesContent: choices.map(c => stringToContentBlocks(c)),
+        choicesContent: choices.map(c => ({ content: stringToContentBlocks(c) })),
         
         correctIndex,
         difficulty: Number(difficulty),
