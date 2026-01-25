@@ -6,7 +6,6 @@ import { db } from "@/lib/firebase";
 import {
   collection,
   doc,
-  getDocs,
   setDoc,
   addDoc,
   deleteDoc,
@@ -138,10 +137,10 @@ export function EncountersPanel() {
         questionTags: questionTag.split(",").map(s => s.trim()).filter(Boolean),
         winRewardXp: Number(xp), winRewardGold: Number(gold), timeMultiplier: Number(timeMult) || 1.0,
         winRewardSkills: finalSkillsReward,
-        winRewardStoryFlag: winRewardStoryFlag || undefined,
+        ...(winRewardStoryFlag && { winRewardStoryFlag }),
         subAreaId: selectedSubAreaId,
         locationId: selectedLocationId, // For backward compatibility
-        foes: foeIds, foeId: foeIds[0] || "",
+        foes: foeIds, foeId: foesText.split(",")[0]?.trim() || "",
         imageUrl: imageUrl || "", emoji: emoji || "👹", shuffleQuestions: shuffle,
         questionTag: questionTag //legacy
       };

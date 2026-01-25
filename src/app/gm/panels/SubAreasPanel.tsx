@@ -50,11 +50,15 @@ const SubAreasPanel = () => {
   }, [selectedLocationId]);
 
   const handleSave = async () => {
-    let subAreaToSave = selectedSubArea || newSubArea;
+    let subAreaToSave = JSON.parse(JSON.stringify(selectedSubArea || newSubArea));
 
     if (!subAreaToSave.id || !subAreaToSave.name || !selectedLocationId) {
       alert("Sub-Area ID, Name, and a parent Location are required.");
       return;
+    }
+    
+    if (subAreaToSave.unlockRequirements?.storyFlags) {
+        subAreaToSave.unlockRequirements.storyFlags = subAreaToSave.unlockRequirements.storyFlags.filter(Boolean);
     }
 
     if (subAreaToSave.unlockRequirements) {
@@ -71,13 +75,16 @@ const SubAreasPanel = () => {
 
     const { id, ...data } = subAreaToSave;
 
-    await setDoc(doc(db, 'subAreas', id!), {
+    await setDoc(doc(db, 'subAreas', id!),
+      {
         ...data,
         locationId: selectedLocationId,
-    }, { merge: true });
+      },
+      { merge: true }
+    );
 
     if (!selectedSubArea) {
-        setNewSubArea(getInitialNewSubArea());
+      setNewSubArea(getInitialNewSubArea());
     }
     setSelectedSubArea(null);
   };
@@ -115,17 +122,17 @@ const SubAreasPanel = () => {
 
     return (
         <div className="flex flex-col gap-4">
-            <Input label="ID" value={subArea.id ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, id: e.target.value })} placeholder="unique-sub-area-id" disabled={!isNew}/>
-            <Input label="Name" value={subArea.name ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, name: e.target.value })} />
-            <Input label="Description" value={subArea.description ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, description: e.target.value })} />
-            <Input label="Order" type="number" value={subArea.order ?? 0} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, order: Number(e.target.value) })} />
+            <Input label="ID" value={subArea.id ?? ''} onChange={(e) => setSubArea({ ...subArea, id: e.target.value })} placeholder="unique-sub-area-id" disabled={!isNew}/>
+            <Input label="Name" value={subArea.name ?? ''} onChange={(e) => setSubArea({ ...subArea, name: e.target.value })} />
+            <Input label="Description" value={subArea.description ?? ''} onChange={(e) => setSubArea({ ...subArea, description: e.target.value })} />
+            <Input label="Order" type="number" value={subArea.order ?? 0} onChange={(e) => setSubArea({ ...subArea, order: Number(e.target.value) })} />
             
             <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
             <h4 className="font-bold">Unlock Requirements (Optional)</h4>
             <Input 
                 label="Story Flags (comma-separated)" 
                 value={subArea.unlockRequirements?.storyFlags?.join(', ') ?? ''} 
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, unlockRequirements: { ...subArea.unlockRequirements, storyFlags: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean) }})} 
+                onChange={(e) => setSubArea({ ...subArea, unlockRequirements: { ...subArea.unlockRequirements, storyFlags: e.target.value.split(',').map(s => s.trim()) }})} 
                 placeholder="FLAG_A, FLAG_B"
             />
 
@@ -136,7 +143,7 @@ const SubAreasPanel = () => {
                         label={`Min ${skillName}`}
                         type="number"
                         value={subArea.unlockRequirements?.skills?.[skillName] || ''}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSkillChange(skillName, e.target.value)}
+                        onChange={(e) => handleSkillChange(skillName, e.target.value)}
                         placeholder="Level"
                     />
                 ))}
@@ -158,7 +165,7 @@ const SubAreasPanel = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-1 flex flex-col gap-2 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-            <h3 className="font-bold text-lg pb-2 mb-2 text-gray-900 dark:text-gray-100">Sub-Areas in {locations.find(l=>l.id === selectedLocationId)?.name || '...'}</h3>
+             <h3 className="font-bold text-lg pb-2 mb-2 text-gray-900 dark:text-gray-100">Sub-Areas in {locations.find(l=>l.id === selectedLocationId)?.name || '...'}</h3>
             <div className="flex flex-col gap-2 mt-2">
                 {subAreas.map(sa => (
                     <div key={sa.id} onClick={() => setSelectedSubArea(JSON.parse(JSON.stringify(sa)))} className={`p-3 rounded transition-colors duration-200 cursor-pointer border ${selectedSubArea?.id === sa.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/30 dark:border-blue-400' : 'bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-600'}`}>
