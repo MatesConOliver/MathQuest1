@@ -1,4 +1,4 @@
-export function TabButton({ children, active, onClick, className }: any) {
+export function TabButton({ label, children, active, onClick, className }: any) {
     return (
       <button 
         onClick={onClick} 
@@ -8,7 +8,7 @@ export function TabButton({ children, active, onClick, className }: any) {
             : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
           } ${className}`}
       >
-        {children}
+        {label || children}
       </button>
     );
   }
