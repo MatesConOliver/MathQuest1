@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ChangeEvent } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore';
 import { GameLocation, SubArea, CharacterSkills } from '@/types/game';
@@ -122,17 +122,17 @@ const SubAreasPanel = () => {
 
     return (
         <div className="flex flex-col gap-4">
-            <Input label="ID" value={subArea.id ?? ''} onChange={(e) => setSubArea({ ...subArea, id: e.target.value })} placeholder="unique-sub-area-id" disabled={!isNew}/>
-            <Input label="Name" value={subArea.name ?? ''} onChange={(e) => setSubArea({ ...subArea, name: e.target.value })} />
-            <Input label="Description" value={subArea.description ?? ''} onChange={(e) => setSubArea({ ...subArea, description: e.target.value })} />
-            <Input label="Order" type="number" value={subArea.order ?? 0} onChange={(e) => setSubArea({ ...subArea, order: Number(e.target.value) })} />
+            <Input label="ID" value={subArea.id ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, id: e.target.value })} placeholder="unique-sub-area-id" disabled={!isNew}/>
+            <Input label="Name" value={subArea.name ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, name: e.target.value })} />
+            <Input label="Description" value={subArea.description ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, description: e.target.value })} />
+            <Input label="Order" type="number" value={subArea.order ?? 0} onChange={(e: ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, order: Number(e.target.value) })} />
             
             <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
             <h4 className="font-bold">Unlock Requirements (Optional)</h4>
             <Input 
                 label="Story Flags (comma-separated)" 
                 value={subArea.unlockRequirements?.storyFlags?.join(', ') ?? ''} 
-                onChange={(e) => setSubArea({ ...subArea, unlockRequirements: { ...subArea.unlockRequirements, storyFlags: e.target.value.split(',').map(s => s.trim()) }})} 
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, unlockRequirements: { ...subArea.unlockRequirements, storyFlags: e.target.value.split(',').map(s => s.trim()) }})} 
                 placeholder="FLAG_A, FLAG_B"
             />
 
@@ -143,7 +143,7 @@ const SubAreasPanel = () => {
                         label={`Min ${skillName}`}
                         type="number"
                         value={subArea.unlockRequirements?.skills?.[skillName] || ''}
-                        onChange={(e) => handleSkillChange(skillName, e.target.value)}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => handleSkillChange(skillName, e.target.value)}
                         placeholder="Level"
                     />
                 ))}
