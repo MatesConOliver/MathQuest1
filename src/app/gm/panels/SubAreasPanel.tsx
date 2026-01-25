@@ -1,4 +1,3 @@
-
 "use client";
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
@@ -121,7 +120,7 @@ const SubAreasPanel = () => {
             <Input label="Description" value={subArea.description ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, description: e.target.value })} />
             <Input label="Order" type="number" value={subArea.order ?? 0} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, order: Number(e.target.value) })} />
             
-            <div className="border-t border-gray-600 my-2"></div>
+            <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
             <h4 className="font-bold">Unlock Requirements (Optional)</h4>
             <Input 
                 label="Story Flags (comma-separated)" 
@@ -148,8 +147,8 @@ const SubAreasPanel = () => {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-2 p-2 bg-gray-800 rounded-lg">
+    <div className="flex flex-col gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+      <div className="flex flex-wrap gap-2 p-2 bg-gray-100 dark:bg-gray-900/50 rounded-lg">
         {locations.map(loc => (
           <TabButton key={loc.id} onClick={() => { setSelectedLocationId(loc.id); setSelectedSubArea(null); }} active={selectedLocationId === loc.id}>
             {loc.name}
@@ -158,13 +157,13 @@ const SubAreasPanel = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-1 flex flex-col gap-2 bg-gray-800 p-4 rounded-lg">
-            <h3 className="font-bold text-lg border-b border-gray-700 pb-2">Sub-Areas in {locations.find(l=>l.id === selectedLocationId)?.name || '...'}</h3>
+        <div className="md:col-span-1 flex flex-col gap-2 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+            <h3 className="font-bold text-lg border-b border-gray-200 dark:border-gray-700 pb-2 mb-2 text-gray-900 dark:text-gray-100">Sub-Areas in {locations.find(l=>l.id === selectedLocationId)?.name || '...'}</h3>
             <div className="flex flex-col gap-2 mt-2">
                 {subAreas.map(sa => (
-                    <div key={sa.id} onClick={() => setSelectedSubArea(JSON.parse(JSON.stringify(sa)))} className={`p-3 rounded transition-colors duration-200 cursor-pointer ${selectedSubArea?.id === sa.id ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                        <span className="font-semibold">{sa.name}</span>
-                        <span className="text-xs text-gray-400 block">Order: {sa.order}</span>
+                    <div key={sa.id} onClick={() => setSelectedSubArea(JSON.parse(JSON.stringify(sa)))} className={`p-3 rounded transition-colors duration-200 cursor-pointer border ${selectedSubArea?.id === sa.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/30 dark:border-blue-400' : 'bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-600'}`}>
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">{sa.name}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 block">Order: {sa.order}</span>
                     </div>
                 ))}
             </div>
@@ -173,15 +172,15 @@ const SubAreasPanel = () => {
             </TabButton>
         </div>
 
-        <div className="md:col-span-2 bg-gray-800 p-6 rounded-lg">
+        <div className="md:col-span-2 bg-gray-50 dark:bg-gray-700/50 p-6 rounded-lg">
             {selectedSubArea ? (
                 <div>
-                    <h3 className="font-bold text-xl mb-4">Edit: {selectedSubArea.name}</h3>
+                    <h3 className="font-bold text-xl mb-4 text-gray-900 dark:text-gray-100">Edit: {selectedSubArea.name}</h3>
                     {renderSubAreaForm(selectedSubArea, (sa) => setSelectedSubArea(sa))}
                 </div>
             ) : (
                 <div>
-                    <h3 className="font-bold text-xl mb-4">Create New Sub-Area</h3>
+                    <h3 className="font-bold text-xl mb-4 text-gray-900 dark:text-gray-100">Create New Sub-Area</h3>
                     {renderSubAreaForm(newSubArea, (sa) => setNewSubArea(sa))}
                 </div>
             )}
