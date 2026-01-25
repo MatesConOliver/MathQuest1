@@ -33,7 +33,7 @@ const SubAreasPanel = () => {
       }
     });
     return () => unsub();
-  }, [selectedLocationId]);
+  }, []); // Corrected dependency array
 
   useEffect(() => {
     if (!selectedLocationId) {
@@ -57,12 +57,12 @@ const SubAreasPanel = () => {
       return;
     }
     
-    if (subAreaToSave.unlockRequirements?.storyFlags) {
-        subAreaToSave.unlockRequirements.storyFlags = subAreaToSave.unlockRequirements.storyFlags.filter(Boolean);
+    if (typeof subAreaToSave.unlockRequirements?.storyFlags === 'string') {
+      subAreaToSave.unlockRequirements.storyFlags = subAreaToSave.unlockRequirements.storyFlags.split(',').map(s => s.trim()).filter(Boolean);
     }
 
     if (subAreaToSave.unlockRequirements) {
-        if (subAreaToSave.unlockRequirements.storyFlags?.length === 0) {
+        if (!subAreaToSave.unlockRequirements.storyFlags || subAreaToSave.unlockRequirements.storyFlags.length === 0) {
             delete subAreaToSave.unlockRequirements.storyFlags;
         }
         if (subAreaToSave.unlockRequirements.skills && Object.values(subAreaToSave.unlockRequirements.skills).every(v => v === 0 || v === null || v === undefined)) {
@@ -131,8 +131,8 @@ const SubAreasPanel = () => {
             <h4 className="font-bold">Unlock Requirements (Optional)</h4>
             <Input 
                 label="Story Flags (comma-separated)" 
-                value={subArea.unlockRequirements?.storyFlags?.join(', ') ?? ''} 
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, unlockRequirements: { ...subArea.unlockRequirements, storyFlags: e.target.value.split(',').map(s => s.trim()) }})} 
+                value={(Array.isArray(subArea.unlockRequirements?.storyFlags) ? subArea.unlockRequirements.storyFlags.join(', ') : subArea.unlockRequirements?.storyFlags) ?? ''} 
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setSubArea({ ...subArea, unlockRequirements: { ...subArea.unlockRequirements, storyFlags: e.target.value.split(',') }})} 
                 placeholder="FLAG_A, FLAG_B"
             />
 
@@ -165,7 +165,7 @@ const SubAreasPanel = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-1 flex flex-col gap-2 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-             <h3 className="font-bold text-lg pb-2 mb-2 text-gray-900 dark:text-gray-100">Sub-Areas in {locations.find(l=>l.id === selectedLocationId)?.name || '...'}</h3>
+            <h3 className="font-bold text-lg pb-2 mb-2 text-gray-900 dark:text-gray-100">Sub-Areas in {locations.find(l=>l.id === selectedLocationId)?.name || '...'}</h3>
             <div className="flex flex-col gap-2 mt-2">
                 {subAreas.map(sa => (
                     <div key={sa.id} onClick={() => setSelectedSubArea(JSON.parse(JSON.stringify(sa)))} className={`p-3 rounded transition-colors duration-200 cursor-pointer border ${selectedSubArea?.id === sa.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/30 dark:border-blue-400' : 'bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-600'}`}>
