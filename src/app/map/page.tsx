@@ -81,39 +81,51 @@ export default function MapPage() {
     }
   }, []);
 
+  // Step 1: Listen for Auth State changes
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      if (!u) {
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      try {
-        // Fetch initial core data. Encounters are now fetched on-demand.
-        const [charSnap, locSnap, subAreaSnap, unlockedSnap] = await Promise.all([
-          getDoc(doc(db, "characters", u.uid)),
-          getDocs(query(collection(db, "locations"), orderBy("order"))),
-          getDocs(query(collection(db, "subAreas"), orderBy("order"))),
-          getDocs(collection(db, `characters/${u.uid}/unlockedSubAreas`))
-        ]);
-
-        if (charSnap.exists()) setCharacter(charSnap.data() as Character);
-        setLocations(locSnap.docs.map(d => ({ ...d.data(), id: d.id } as GameLocation)));
-        setSubAreas(subAreaSnap.docs.map(d => ({ ...d.data(), id: d.id } as SubArea)));
-        
-        const unlockedData: { [key: string]: UnlockedSubArea } = {};
-        unlockedSnap.forEach(doc => { unlockedData[doc.id] = doc.data() as UnlockedSubArea });
-        setUnlockedSubAreas(unlockedData);
-
-      } catch (err) {
-        console.error("Error loading map data:", err);
-      } finally {
-        setLoading(false);
-      }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      setLoading(false); // Stop loading once we know if there's a user or not
     });
-    return () => unsub();
+    return () => unsubscribe();
   }, []);
+
+  // Step 2: Fetch data only when a user is confirmed to exist
+  useEffect(() => {
+    if (user) {
+      const fetchData = async () => {
+        setLoading(true);
+        try {
+          const [charSnap, locSnap, subAreaSnap, unlockedSnap] = await Promise.all([
+            getDoc(doc(db, "characters", user.uid)),
+            getDocs(query(collection(db, "locations"), orderBy("order"))),
+            getDocs(query(collection(db, "subAreas"), orderBy("order"))),
+            getDocs(collection(db, `characters/${user.uid}/unlockedSubAreas`))
+          ]);
+
+          if (charSnap.exists()) setCharacter(charSnap.data() as Character);
+          setLocations(locSnap.docs.map(d => ({ ...d.data(), id: d.id } as GameLocation)));
+          setSubAreas(subAreaSnap.docs.map(d => ({ ...d.data(), id: d.id } as SubArea)));
+          
+          const unlockedData: { [key: string]: UnlockedSubArea } = {};
+          unlockedSnap.forEach(doc => { unlockedData[doc.id] = doc.data() as UnlockedSubArea });
+          setUnlockedSubAreas(unlockedData);
+
+        } catch (err) {
+          console.error("Error loading map data:", err);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchData();
+    } else {
+      // Clear data when user logs out
+      setCharacter(null);
+      setLocations([]);
+      setSubAreas([]);
+      setUnlockedSubAreas({});
+    }
+  }, [user]);
 
   // --- ON-DEMAND ENCOUNTER FETCHING ---
   useEffect(() => {
