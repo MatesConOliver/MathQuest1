@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -35,7 +34,7 @@ import { Input } from "@/app/gm/components/Input";
 const stringToContentBlocks = (text: string): ContentBlock[] => {
     if (!text) return [];
     // Regex to split by markdown images and by $...$ latex, keeping delimiters
-    const parts = text.split(/(!\[.*?\]\(.*?\)|\\$.*?\\$)/g).filter(Boolean);
+    const parts = text.split(/(!\[.*?\]\(.*?\)|\$.*?\$)/g).filter(Boolean);
   
     return parts.map(part => {
       if (part.startsWith('![')) { // Handle images
@@ -201,32 +200,19 @@ export function QuestionsPanel() {
       const tagsArray = tagsText.split(",").map((s) => s.trim()).filter(Boolean);
       const totalSecs = (Number(qMinutes) * 60) + Number(qSeconds);
       const safeTime = totalSecs > 0 ? totalSecs : 30;
-  
+    
       const docData: any = {
         title: title || "Untitled",
-        // NEW: Save in structured format
         promptContent: stringToContentBlocks(promptString),
         choicesContent: choices.map(c => ({ content: stringToContentBlocks(c) })),
-        
         correctIndex,
         difficulty: Number(difficulty),
         tags: tagsArray,
         timeLimit: safeTime,
         order: order ? Number(order) : null,
         updatedAt: serverTimestamp(),
-
-        // LEGACY: Set to undefined to remove from document on update
-        promptType: undefined,
-        promptText: undefined,
-        promptLatex: undefined,
-        promptImageUrl: undefined,
-        choices: undefined,
-        imageUrl: undefined,
-        rewardXp: undefined,
-        rewardGold: undefined,
-        choiceType: undefined,
       };
-  
+    
       try {
         if (editingId) {
           await setDoc(doc(db, "questions", editingId), docData, { merge: true });
@@ -239,7 +225,7 @@ export function QuestionsPanel() {
         if (!editingId) resetForm(); 
         if (dbTagSearch) loadByTag(); else loadRecent();
       } catch (e: any) { setMsg("Error: " + e.message); }
-    }
+    }    
   
     async function deleteQuestion(qId: string) {
       if (!confirm("Permanently delete this question?")) return;
