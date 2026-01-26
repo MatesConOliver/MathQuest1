@@ -27,6 +27,7 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
       
       <div className="grid gap-4">
         {encounters.map(enc => {
+          if (!enc.id) return null;
           const winCount = encounterWinCounts[enc.id] || 0;
           const canSeeRewards = winCount > 0;
           const skillRewards = enc.winRewardSkills ? Object.entries(enc.winRewardSkills).filter(([, val]) => val > 0) : [];
