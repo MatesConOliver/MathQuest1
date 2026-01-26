@@ -1,12 +1,12 @@
 
-import { EncounterDoc, Foe } from "@/types/game";
+import { EncounterDoc, FoeDoc } from "@/types/game";
 
 interface LobbyProps {
   encounters: EncounterDoc[];
   onStartEncounter: (encounter: EncounterDoc) => void;
   msg?: string;
   encounterWinCounts: { [key: string]: number };
-  getFoe: (id: string) => Foe | undefined;
+  getFoe: (id: string) => FoeDoc | undefined;
 }
 
 const formatSkillName = (skill: string) => {
@@ -82,7 +82,7 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
                                     <span className="font-bold">{foe.name}</span>
                                     {canSeeRewards ? (
                                         <div className="text-gray-500 dark:text-gray-400">
-                                            HP: {foe.hp}, ATK: {foe.attack}
+                                            HP: {foe.maxHp}, ATK: {foe.attackDamage}
                                         </div>
                                     ) : (
                                         <div className="text-gray-400 dark:text-gray-500 italic">

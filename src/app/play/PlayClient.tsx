@@ -13,7 +13,6 @@ import {
   GameItem,
   InventoryItem,
   StoryEvent,
-  Foe,
 } from '@/types/game';
 import { useRouter, useSearchParams } from 'next/navigation';
 import 'katex/dist/katex.min.css';
@@ -39,7 +38,7 @@ export default function PlayClient() {
   const [currentEncounter, setCurrentEncounter] = useState<EncounterDoc | null>(
     null
   );
-    const [foes, setFoes] = useState<Record<string, Foe>>({});
+  const [foes, setFoes] = useState<Record<string, FoeDoc>>({});
   const [foe, setFoe] = useState<FoeDoc | null>(null);
   const [questions, setQuestions] = useState<QuestionDoc[]>([]);
   const [currentQIndex, setCurrentQIndex] = useState(0);
