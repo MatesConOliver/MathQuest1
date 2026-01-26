@@ -611,6 +611,7 @@ export default function PlayClient() {
           foe={foe}
           questionCount={questions.length}
           onStartBattle={handleStartBattle}
+          character={character}
         />
       );
     case 'battle':

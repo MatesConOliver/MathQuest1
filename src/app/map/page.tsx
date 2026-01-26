@@ -23,7 +23,6 @@ function getMapMetaForLocation(locationId: string): MapLocationMeta | null {
   return meta || null;
 }
 
-// New, more detailed unlock status function
 function getSubAreaUnlockStatus(subArea: SubArea, character: Character, unlockedSubAreas: { [key: string]: UnlockedSubArea }): SubAreaUnlockStatus {
   if (unlockedSubAreas[subArea.id]) return { locked: false }; // Already unlocked via item/event
   const reqs = subArea.unlockRequirements;
@@ -40,7 +39,6 @@ function getSubAreaUnlockStatus(subArea: SubArea, character: Character, unlocked
   // 2. If story flags are met, check skills
   if (reqs.skills) {
     const missingSkills: { skill: keyof CharacterSkills, required: number }[] = [];
-    // Use the canonical skill order for checking
     const skillOrder: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
     for (const skill of skillOrder) {
       const requiredLevel = reqs.skills[skill];
@@ -53,7 +51,6 @@ function getSubAreaUnlockStatus(subArea: SubArea, character: Character, unlocked
     }
   }
 
-  // If all checks pass, it's unlocked
   return { locked: false };
 }
 
@@ -65,6 +62,11 @@ const SKILL_COLORS: { [key in keyof CharacterSkills]?: string } = {
     calculus: 'text-violet-400',
 };
 
+const formatSkillName = (skill: string) => {
+    const spaced = skill.replace(/([A-Z])/g, ' $1');
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 
 export default function MapPage() {
   const { playTrack } = useAudio()!;
@@ -72,31 +74,25 @@ export default function MapPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // --- Game Data State ---
   const [locations, setLocations] = useState<GameLocation[]>([]);
   const [character, setCharacter] = useState<Character | null>(null);
   const [unlockedSubAreas, setUnlockedSubAreas] = useState<{ [key: string]: UnlockedSubArea }>({});
   
-  // State for the side panel content
   const [panelSubAreas, setPanelSubAreas] = useState<SubArea[]>([]);
   const [panelEncounters, setPanelEncounters] = useState<EncounterDoc[]>([]);
   const [panelLoading, setPanelLoading] = useState(false);
 
-  // --- UI & Animation State ---
   const [revealedLocations, setRevealedLocations] = useState(new Set<string>());
   const [animateFog, setAnimateFog] = useState(false);
   const [pendingReveal, setPendingReveal] = useState(false);
   const [mapMounted, setMapMounted] = useState(false);
   const [pulsingLocations, setPulsingLocations] = useState<Set<string>>(new Set());
 
-  // --- Navigation State ---
   const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(null);
   const [selectedSubArea, setSelectedSubArea] = useState<SubArea | null>(null);
 
   const selectedLocationMeta = selectedLocation ? getMapMetaForLocation(selectedLocation.id) : null;
   const worldUnlocked = (character?.encounterWins?.['1jnYA8nD0PRaxu7Dezhs'] ?? 0) >= 1;
-
-  // --- DATA FETCHING --- 
 
   useEffect(() => {
     playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3");
@@ -111,7 +107,6 @@ export default function MapPage() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (!currentUser) {
-        // Clear all state on logout
         setLoading(false);
         setCharacter(null);
         setLocations([]);
@@ -125,7 +120,6 @@ export default function MapPage() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch core data once user is available
   useEffect(() => {
     if (!user) return;
 
@@ -154,7 +148,6 @@ export default function MapPage() {
     fetchCoreData();
   }, [user]);
 
-  // Fetch sub-areas when a location is selected
   useEffect(() => {
     if (!selectedLocation) {
       setPanelSubAreas([]);
@@ -183,7 +176,6 @@ export default function MapPage() {
     fetchSubAreas();
   }, [selectedLocation]);
 
-  // Fetch encounters when a sub-area is selected
   useEffect(() => {
     if (!selectedSubArea) {
       setPanelEncounters([]);
@@ -213,7 +205,6 @@ export default function MapPage() {
   }, [selectedSubArea]);
 
 
-  // --- ANIMATION & DEV WARNINGS ---
   useEffect(() => {
       if (selectedLocation && !selectedLocationMeta) {
           console.warn(`[Dev Warning] No map metadata found for location ID "${selectedLocation.id}".`);
@@ -230,10 +221,9 @@ export default function MapPage() {
     }
   }, [mapMounted, worldUnlocked, pendingReveal]);
 
-  // --- EVENT HANDLERS ---
   const handleLocationClick = (loc: GameLocation) => {
     setSelectedLocation(loc);
-    setSelectedSubArea(null); // Always reset sub-area when a new location is clicked
+    setSelectedSubArea(null);
   };
 
   const handlePanelClose = () => {
@@ -256,7 +246,6 @@ export default function MapPage() {
 
   return (
     <main className="min-h-screen bg-gray-900 md:flex">
-      {/* --- MAP + HEADER --- */}
       <div className="flex-grow p-4 md:p-8">
           <div className="max-w-7xl mx-auto h-full flex flex-col">
           <header className="flex justify-between items-end pb-4 border-b border-gray-700">
@@ -311,7 +300,6 @@ export default function MapPage() {
         </div>
       </div>
 
-      {/* --- RIGHT-SIDE INFORMATION PANEL --- */}
       {selectedLocation && (
         <aside className="fixed inset-0 z-50 bg-gray-900 animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:slide-in-from-left-full duration-300 md:static md:w-[400px] lg:w-[420px] md:flex-shrink-0 md:border-l md:border-gray-700">
           <div className="w-full h-full flex flex-col bg-gray-800 text-white">
@@ -325,7 +313,6 @@ export default function MapPage() {
               
               <hr className="border-gray-600" />
 
-              {/* View: Sub-Areas OR Encounters */}
               {showSubAreaList ? (
                   <div>
                       <h3 className="text-lg font-bold text-gray-200 mb-3">Explore Area</h3>
@@ -333,7 +320,6 @@ export default function MapPage() {
                           {panelSubAreas.map(sa => {
                               const unlockStatus = getSubAreaUnlockStatus(sa, character, unlockedSubAreas);
 
-                              // Case 1: Locked by Story Flag
                               if (unlockStatus.locked && unlockStatus.reason === 'story') {
                                   return (
                                       <div key={sa.id} className="w-full text-center flex flex-col items-center justify-center p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl opacity-60">
@@ -344,7 +330,6 @@ export default function MapPage() {
                                   )
                               }
 
-                              // Case 2 & 3: Locked by Skills or Fully Unlocked
                               return (
                                 <button 
                                     key={sa.id} 
@@ -385,21 +370,46 @@ export default function MapPage() {
                           ) : panelEncounters.length === 0 ? (
                               <div className="text-center py-10 text-gray-400 italic">No enemies spotted here.</div>
                           ) : (
-                              panelEncounters.map((enc) => (
-                                  <div key={enc.id} title={enc.description} className="flex items-center justify-between p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl hover:border-blue-400 hover:shadow-md transition-all group">
-                                      <div className="flex items-center gap-3 min-w-0 mr-3">
-                                          <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-lg shrink-0">{enc.emoji || '⚔️'}</div>
-                                          <div className="min-w-0">
-                                              <h3 className="font-bold text-gray-100 truncate">{enc.title}</h3>
-                                              <div className="text-xs text-gray-400 font-medium flex items-center gap-3">
-                                                  <span>XP: <span className="text-purple-400 font-bold">+{enc.winRewardXp || 0}</span></span>
-                                                  <span>Gold: <span className="text-yellow-400 font-bold">+{enc.winRewardGold || 0}</span></span>
-                                              </div>
-                                          </div>
-                                      </div>
-                                      <Link href={`/play?id=${enc.id}`} className="shrink-0 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-sm active:scale-95 transition-all">FIGHT</Link>
-                                  </div>
-                              ))
+                              panelEncounters.map((enc) => {
+                                  if (!enc.id) return null;
+                                  const winCount = character.encounterWins?.[enc.id] || 0;
+                                  const canSeeRewards = winCount > 0;
+                                  const skillRewards = enc.winRewardSkills ? Object.entries(enc.winRewardSkills).filter(([, val]) => val > 0) : [];
+
+                                  return (
+                                    <div key={enc.id} title={enc.description} className="flex items-center justify-between p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl hover:border-blue-400 hover:shadow-md transition-all group">
+                                        <div className="flex items-center gap-3 min-w-0 mr-3">
+                                            <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-lg shrink-0">{enc.emoji || '⚔️'}</div>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h3 className="font-bold text-gray-100 truncate">{enc.title}</h3>
+                                                    {canSeeRewards && (
+                                                        <span className="text-xs font-bold text-green-500 bg-green-900/50 px-2 py-0.5 rounded-full">
+                                                            🏆 {winCount}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-xs text-gray-400 font-medium flex items-center flex-wrap gap-x-3 gap-y-1 mt-1">
+                                                    {canSeeRewards ? (
+                                                        <>
+                                                            <span>XP: <span className="text-purple-400 font-bold">+{enc.winRewardXp || 0}</span></span>
+                                                            <span>Gold: <span className="text-yellow-400 font-bold">+{enc.winRewardGold || 0}</span></span>
+                                                            {skillRewards.map(([skill, value]) => (
+                                                                <span key={skill}>
+                                                                    {formatSkillName(skill)}: <span className="font-bold text-blue-400">+{value}</span>
+                                                                </span>
+                                                            ))}
+                                                        </>
+                                                    ) : (
+                                                        <span className="italic text-gray-500">(Rewards hidden until first victory)</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <Link href={`/play?id=${enc.id}`} className="shrink-0 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-sm active:scale-95 transition-all">FIGHT</Link>
+                                    </div>
+                                  )
+                              })
                           )}
                       </div>
                   </div>
