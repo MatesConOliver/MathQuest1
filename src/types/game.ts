@@ -173,6 +173,7 @@ export type EncounterDoc = {
   id?: string;
   title: string;
   description?: string;
+  order?: number;
   subAreaId: string; // Foreign key to the 'subAreas' collection
   locationId: string; // Legacy foreign key
   foeId: string;
