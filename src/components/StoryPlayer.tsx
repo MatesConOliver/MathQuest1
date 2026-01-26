@@ -30,6 +30,16 @@ const preloadVideo = (src: string) => {
   });
 };
 
+// Helper to preload a single audio file
+const preloadAudio = (src: string) => {
+  return new Promise((resolve, reject) => {
+    const audio = new Audio();
+    audio.src = src;
+    audio.oncanplaythrough = resolve;
+    audio.onerror = reject;
+  });
+};
+
 export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
   const [currentSceneId, setCurrentSceneId] = useState<string | 'END'>(
     story.scenes[0]?.id || 'END'
@@ -43,23 +53,44 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
   // --- Preloading Effect ---
   useEffect(() => {
     const preloadAssets = async () => {
-      const urlsToPreload = story.scenes.flatMap(scene => 
-        [scene.videoUrl, scene.backgroundUrl, scene.speakerSprite].filter(Boolean) as string[]
+      // 1. Gather all unique asset URLs from all scenes
+      const urlsToPreload = story.scenes.flatMap(scene =>
+        [scene.videoUrl, scene.backgroundUrl, scene.speakerSprite, scene.musicUrl].filter(Boolean) as string[]
       );
       const uniqueUrls = [...new Set(urlsToPreload)];
-      
-      const imagePromises = uniqueUrls.filter(url => url.match(/\.(jpeg|jpg|gif|png|svg)$/)).map(preloadImage);
-      const videoPromises = uniqueUrls.filter(url => url.match(/\.(mp4|webm|ogg)$/)).map(preloadVideo);
 
-      try {
-        await Promise.all([...imagePromises, ...videoPromises]);
-      } catch (error) {
-        console.warn('Asset preloading failed for some assets, continuing anyway...', error);
-      }
+      // 2. Create an array of preloading promises for each asset
+      const promises = uniqueUrls.map(url => {
+        if (url.match(/\.(jpeg|jpg|gif|png|svg)$/i)) {
+          return preloadImage(url);
+        } else if (url.match(/\.(mp4|webm|ogg)$/i)) {
+          return preloadVideo(url);
+        } else if (url.match(/\.(mp3|wav|ogg)$/i)) {
+          return preloadAudio(url);
+        }
+        console.warn(`Unknown asset type, skipping preload: ${url}`);
+        return Promise.resolve(); // Immediately resolve for unknown types
+      });
+
+      // 3. Wait for all promises to settle (either resolve or reject)
+      const results = await Promise.allSettled(promises);
+
+      // 4. Log any assets that failed to load for debugging
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.warn(`Failed to preload asset: ${uniqueUrls[index]}`, result.reason);
+        }
+      });
+      
+      // 5. Preloading is complete, allow the story to start
       setIsPreloading(false);
     };
 
-    preloadAssets();
+    if (story && story.scenes?.length > 0) {
+      preloadAssets();
+    } else {
+      setIsPreloading(false); // No scenes to preload, start immediately
+    }
   }, [story]);
 
   const currentScene = useMemo(() => {
