@@ -120,8 +120,7 @@ const SubAreasPanel = () => {
     const { id, ...data } = subAreaToSave;
 
     await setDoc(doc(db, 'subAreas', id!),
-      { ...data, locationId: selectedLocationId },
-      { merge: true }
+      { ...data, locationId: selectedLocationId }
     );
     
     startNewSubArea(); // Reset form after save
