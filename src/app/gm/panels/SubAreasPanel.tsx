@@ -16,29 +16,35 @@ const SubAreasPanel = () => {
   const [storyFlagsInput, setStoryFlagsInput] = useState('');
   const [isCreating, setIsCreating] = useState(true);
 
+  // Effect 1: Load locations from Firestore. Runs only ONCE.
   useEffect(() => {
     const unsub = onSnapshot(query(collection(db, 'locations'), orderBy('order')), (snapshot) => {
-      const locs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GameLocation));
-      setLocations(locs);
-      if (!selectedLocationId && locs.length > 0) {
-        setSelectedLocationId(locs[0].id);
-      }
+        const locs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GameLocation));
+        setLocations(locs);
     });
     return () => unsub();
-  }, [selectedLocationId]); // Only run once
+  }, []); // Correct: Empty dependency array ensures this runs only on mount.
 
+  // Effect 2: Set the initial location *after* the locations have been loaded.
+  useEffect(() => {
+    if (!selectedLocationId && locations.length > 0) {
+        setSelectedLocationId(locations[0].id);
+    }
+  }, [locations]); // Correct: This runs only when the `locations` array changes.
+
+  // Effect 3: Load sub-areas whenever the selected location changes.
   useEffect(() => {
     if (!selectedLocationId) {
-      setSubAreas([]);
-      return;
+        setSubAreas([]);
+        return;
     }
     const q = query(collection(db, 'subAreas'), where('locationId', '==', selectedLocationId), orderBy('order'));
     const unsub = onSnapshot(q, (snapshot) => {
-      const areas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubArea));
-      setSubAreas(areas);
+        const areas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubArea));
+        setSubAreas(areas);
     });
     return () => unsub();
-  }, [selectedLocationId]);
+  }, [selectedLocationId]); // This was always correct.
 
   const selectSubAreaToEdit = (sa: SubArea) => {
     setIsCreating(false);
