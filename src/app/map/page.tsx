@@ -40,10 +40,11 @@ function getSubAreaUnlockStatus(subArea: SubArea, character: Character, unlocked
   // 2. If story flags are met, check skills
   if (reqs.skills) {
     const missingSkills: { skill: keyof CharacterSkills, required: number }[] = [];
-    for (const key in reqs.skills) {
-      const skill = key as keyof CharacterSkills;
-      const requiredLevel = reqs.skills[skill]!;
-      if (requiredLevel > 0 && (character.skills[skill] || 0) < requiredLevel) {
+    // Use the canonical skill order for checking
+    const skillOrder: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
+    for (const skill of skillOrder) {
+      const requiredLevel = reqs.skills[skill];
+      if (requiredLevel && requiredLevel > 0 && (character.skills[skill] || 0) < requiredLevel) {
         missingSkills.push({ skill, required: requiredLevel });
       }
     }

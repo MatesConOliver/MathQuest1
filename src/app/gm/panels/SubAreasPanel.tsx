@@ -133,7 +133,7 @@ const SubAreasPanel = () => {
     }
   };
 
-  const allPossibleSkills: (keyof CharacterSkills)[] = ['algebra', 'calculus', 'functions', 'geometry', 'probabilityAndStatistics'];
+  const allPossibleSkills: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
 
   return (
     <div className="flex flex-col gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
