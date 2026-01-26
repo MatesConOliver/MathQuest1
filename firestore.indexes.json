@@ -1,0 +1,18 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "subAreas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "locationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "order",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ]
+}
