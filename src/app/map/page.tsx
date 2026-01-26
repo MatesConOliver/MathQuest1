@@ -10,6 +10,12 @@ import { useAudio } from "@/context/AudioContext";
 import { MAP_LOCATIONS, MapLocationMeta } from "@/config/mapLayout";
 import classNames from "classnames";
 
+// --- TYPES ---
+type SubAreaUnlockStatus = 
+    | { locked: false }
+    | { locked: true; reason: 'story'; }
+    | { locked: true; reason: 'skills'; missing: { skill: keyof CharacterSkills, required: number }[] };
+
 // --- HELPER FUNCTIONS ---
 
 function getMapMetaForLocation(locationId: string): MapLocationMeta | null {
@@ -17,25 +23,47 @@ function getMapMetaForLocation(locationId: string): MapLocationMeta | null {
   return meta || null;
 }
 
-function isSubAreaUnlocked(subArea: SubArea, character: Character, unlockedSubAreas: { [key: string]: UnlockedSubArea }): boolean {
-  if (unlockedSubAreas[subArea.id]) return true;
+// New, more detailed unlock status function
+function getSubAreaUnlockStatus(subArea: SubArea, character: Character, unlockedSubAreas: { [key: string]: UnlockedSubArea }): SubAreaUnlockStatus {
+  if (unlockedSubAreas[subArea.id]) return { locked: false }; // Already unlocked via item/event
   const reqs = subArea.unlockRequirements;
-  if (!reqs) return true;
+  if (!reqs) return { locked: false }; // No requirements
 
+  // 1. Check Story Flags first
   if (reqs.storyFlags && reqs.storyFlags.length > 0) {
     const hasAllFlags = reqs.storyFlags.every(flag => character.storyFlags?.includes(flag));
-    if (!hasAllFlags) return false;
+    if (!hasAllFlags) {
+      return { locked: true, reason: 'story' };
+    }
   }
 
+  // 2. If story flags are met, check skills
   if (reqs.skills) {
+    const missingSkills: { skill: keyof CharacterSkills, required: number }[] = [];
     for (const key in reqs.skills) {
       const skill = key as keyof CharacterSkills;
       const requiredLevel = reqs.skills[skill]!;
-      if ((character.skills[skill] || 0) < requiredLevel) return false;
+      if (requiredLevel > 0 && (character.skills[skill] || 0) < requiredLevel) {
+        missingSkills.push({ skill, required: requiredLevel });
+      }
+    }
+    if (missingSkills.length > 0) {
+      return { locked: true, reason: 'skills', missing: missingSkills };
     }
   }
-  return true;
+
+  // If all checks pass, it's unlocked
+  return { locked: false };
 }
+
+const SKILL_COLORS: { [key in keyof CharacterSkills]?: string } = {
+    algebra: 'text-red-400',
+    functions: 'text-green-400',
+    geometry: 'text-blue-400',
+    probabilityAndStatistics: 'text-yellow-400',
+    calculus: 'text-violet-400',
+};
+
 
 export default function MapPage() {
   const { playTrack } = useAudio()!;
@@ -184,7 +212,7 @@ export default function MapPage() {
   }, [selectedSubArea]);
 
 
-  // --- ANIMATION & DEV WARNINGS (omitted for brevity in this explanation, but included in code) ---
+  // --- ANIMATION & DEV WARNINGS ---
   useEffect(() => {
       if (selectedLocation && !selectedLocationMeta) {
           console.warn(`[Dev Warning] No map metadata found for location ID "${selectedLocation.id}".`);
@@ -223,14 +251,12 @@ export default function MapPage() {
     );
   }
   
-  // Determine what the panel should show
   const showSubAreaList = panelSubAreas.length > 0 && !selectedSubArea;
 
   return (
     <main className="min-h-screen bg-gray-900 md:flex">
       {/* --- MAP + HEADER --- */}
       <div className="flex-grow p-4 md:p-8">
-          {/* ... Map rendering logic (no changes here) ... */}
           <div className="max-w-7xl mx-auto h-full flex flex-col">
           <header className="flex justify-between items-end pb-4 border-b border-gray-700">
              <div>
@@ -304,19 +330,43 @@ export default function MapPage() {
                       <h3 className="text-lg font-bold text-gray-200 mb-3">Explore Area</h3>
                       <div className="space-y-3">
                           {panelSubAreas.map(sa => {
-                              const isUnlocked = isSubAreaUnlocked(sa, character, unlockedSubAreas);
-                              const skillReqs = sa.unlockRequirements?.skills ? Object.entries(sa.unlockRequirements.skills).map(([s,l]) => `${s.charAt(0).toUpperCase() + s.slice(1)}: Lvl ${l}`).join(', ') : null;
+                              const unlockStatus = getSubAreaUnlockStatus(sa, character, unlockedSubAreas);
+
+                              // Case 1: Locked by Story Flag
+                              if (unlockStatus.locked && unlockStatus.reason === 'story') {
+                                  return (
+                                      <div key={sa.id} className="w-full text-center flex flex-col items-center justify-center p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl opacity-60">
+                                          <span className="text-3xl mb-1">🔒</span>
+                                          <h4 className="font-bold text-gray-400 text-sm">Locked</h4>
+                                          <p className="text-xs text-gray-500">Keep playing to unlock.</p>
+                                      </div>
+                                  )
+                              }
+
+                              // Case 2 & 3: Locked by Skills or Fully Unlocked
                               return (
-                                <button key={sa.id} onClick={() => isUnlocked && setSelectedSubArea(sa)} disabled={!isUnlocked} className="w-full text-left flex items-center justify-between p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl transition-all group disabled:opacity-50 disabled:cursor-not-allowed enabled:hover:border-blue-400 enabled:hover:shadow-md">
+                                <button 
+                                    key={sa.id} 
+                                    onClick={() => !unlockStatus.locked && setSelectedSubArea(sa)} 
+                                    disabled={unlockStatus.locked}
+                                    className="w-full text-left flex items-center justify-between p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl transition-all group disabled:opacity-70 disabled:cursor-not-allowed enabled:hover:border-blue-400 enabled:hover:shadow-md"
+                                >
                                     <div>
                                         <h4 className="font-bold text-gray-100">{sa.name}</h4>
-                                        {!isUnlocked && (
-                                            <div className="text-xs text-red-400 font-semibold mt-1">
-                                                {sa.unlockRequirements?.storyFlags ? `Requires flag: ${sa.unlockRequirements.storyFlags.join(', ')}` : skillReqs ? `Requires: ${skillReqs}`: 'Locked'}
+                                        {unlockStatus.locked && unlockStatus.reason === 'skills' && (
+                                            <div className="text-xs font-semibold mt-2 space-y-1">
+                                                <div className="text-gray-400">Requires:</div>
+                                                {unlockStatus.missing.map(({ skill, required }) => (
+                                                    <div key={skill} className="flex items-center gap-2">
+                                                         <span className={classNames("font-bold", SKILL_COLORS[skill] || 'text-gray-300')}>
+                                                             {skill.charAt(0).toUpperCase() + skill.slice(1).replace(/([A-Z])/g, ' $1')}: Lvl {required}
+                                                         </span>
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
                                     </div>
-                                    {isUnlocked && <span className="font-bold text-lg">›</span>}
+                                    {!unlockStatus.locked && <span className="font-bold text-lg text-blue-400 group-hover:translate-x-1 transition-transform">›</span>}
                                 </button>
                               )
                           })}
