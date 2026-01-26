@@ -9,6 +9,11 @@ interface LobbyProps {
   getFoe: (id: string) => Foe | undefined;
 }
 
+const formatSkillName = (skill: string) => {
+    const spaced = skill.replace(/([A-Z])/g, ' $1');
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, getFoe }: LobbyProps) {
   return (
     <main className="p-6 max-w-2xl mx-auto space-y-6">
@@ -23,7 +28,8 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
       <div className="grid gap-4">
         {encounters.map(enc => {
           const winCount = encounterWinCounts[enc.id] || 0;
-          const canSeeStats = winCount > 0;
+          const canSeeRewards = winCount > 0;
+          const skillRewards = enc.winRewardSkills ? Object.entries(enc.winRewardSkills).filter(([, val]) => val > 0) : [];
 
           return (
             <div 
@@ -42,9 +48,25 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
                         </span>
                     )}
                 </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-3">
-                  <span>XP: <span className="text-purple-600 dark:text-purple-400 font-bold">+{enc.winRewardXp || 0}</span></span>
-                  <span>Gold: <span className="text-yellow-600 dark:text-yellow-400 font-bold">+{enc.winRewardGold || 0}</span></span>
+                
+                {/* Rewards Section */}
+                <div className="pt-2">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Rewards</h4>
+                    {canSeeRewards ? (
+                        <div className="text-sm text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                            <span>XP: <span className="text-purple-600 dark:text-purple-400 font-bold">+{enc.winRewardXp || 0}</span></span>
+                            <span>Gold: <span className="text-yellow-600 dark:text-yellow-400 font-bold">+{enc.winRewardGold || 0}</span></span>
+                            {skillRewards.map(([skill, value]) => (
+                                <span key={skill}>
+                                    {formatSkillName(skill)}: <span className="font-bold text-blue-500">+{value}</span>
+                                </span>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-sm text-gray-400 dark:text-gray-500 italic mt-1">
+                            (hidden until first victory)
+                        </div>
+                    )}
                 </div>
 
                 {/* Foes Section */}
@@ -58,7 +80,7 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
                             return (
                                 <div key={foeId} className="bg-gray-100 dark:bg-gray-700/70 p-2 rounded-lg text-xs">
                                     <span className="font-bold">{foe.name}</span>
-                                    {canSeeStats ? (
+                                    {canSeeRewards ? (
                                         <div className="text-gray-500 dark:text-gray-400">
                                             HP: {foe.hp}, ATK: {foe.attack}
                                         </div>
