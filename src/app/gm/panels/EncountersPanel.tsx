@@ -37,6 +37,7 @@ export function EncountersPanel() {
     const [xp, setXp] = useState(100);
     const [gold, setGold] = useState(50);
     const [timeMult, setTimeMult] = useState(1.0);
+    const [order, setOrder] = useState(0);
     const [imageUrl, setImageUrl] = useState("");
     const [emoji, setEmoji] = useState("👹");
     const [shuffle, setShuffle] = useState(false);
@@ -80,7 +81,7 @@ export function EncountersPanel() {
     function resetForm() {
       setEditingId(""); setTitle(""); setDesc("");
       setQuestionTag(""); setFoesText(""); 
-      setXp(0); setGold(0); setTimeMult(1.0);
+      setXp(0); setGold(0); setTimeMult(1.0); setOrder(0);
       setSelectedLocationId(""); setSelectedSubAreaId("");
       setRewardAlgebra(0); setRewardFunctions(0); setRewardGeometry(0); setRewardStats(0); setRewardCalculus(0);
       setImageUrl(""); setEmoji(""); setShuffle(false);
@@ -99,6 +100,7 @@ export function EncountersPanel() {
       setXp(enc.winRewardXp || 0);
       setGold(enc.winRewardGold || 0);          
       setTimeMult(enc.timeMultiplier !== undefined ? enc.timeMultiplier : 1.0);
+      setOrder(enc.order || 0);
       
       const subAreaLocationId = subAreas.find(sa => sa.id === enc.subAreaId)?.locationId;
       setSelectedLocationId(enc.locationId || subAreaLocationId || ""); 
@@ -134,6 +136,7 @@ export function EncountersPanel() {
       
       const docData: EncounterDoc = {
         title, description: desc,
+        order: Number(order),
         questionTags: questionTag.split(",").map(s => s.trim()).filter(Boolean),
         winRewardXp: Number(xp), winRewardGold: Number(gold), timeMultiplier: Number(timeMult) || 1.0,
         winRewardSkills: finalSkillsReward,
@@ -192,10 +195,11 @@ export function EncountersPanel() {
           <Input label="Question Tags (comma sep)" value={questionTag} onChange={(e: ChangeEvent<HTMLInputElement>) => setQuestionTag(e.target.value)} placeholder="level1, algebra" />
           <Input label="Foe IDs (comma sep)" value={foesText} onChange={(e: ChangeEvent<HTMLInputElement>) => setFoesText(e.target.value)} placeholder="goblin, dragon" />
   
-          <div className="grid grid-cols-3 gap-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border dark:border-gray-600">
+          <div className="grid grid-cols-4 gap-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border dark:border-gray-600">
              <Input type="number" label="XP" value={xp} onChange={(e: ChangeEvent<HTMLInputElement>) => setXp(Number(e.target.value))} />
              <Input type="number" label="Gold" value={gold} onChange={(e: ChangeEvent<HTMLInputElement>) => setGold(Number(e.target.value))} />
              <Input type="number" step="0.1" min="0.1" label="Time x" value={timeMult} onChange={(e: ChangeEvent<HTMLInputElement>) => setTimeMult(Number(e.target.value))} />
+             <Input type="number" label="Order" value={order} onChange={(e: ChangeEvent<HTMLInputElement>) => setOrder(Number(e.target.value))} />
           </div>
 
           <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border dark:border-gray-600">
@@ -256,8 +260,7 @@ export function EncountersPanel() {
                           className={`p-3 border rounded-lg flex justify-between items-center cursor-pointer transition-colors 
                               ${editingId === enc.id 
                                   ? 'border-green-500 bg-green-50 ring-1 ring-green-500 dark:bg-green-900/30 dark:border-green-400' 
-                                  : 'dark:border-gray-600 hover:bg-gray-700/50'}`
-                          }
+                                  : 'dark:border-gray-600 hover:bg-gray-700/50'}`}
                       >
                           <div className="min-w-0">
                               <div className="font-bold text-sm flex items-center gap-2 dark:text-gray-100">
