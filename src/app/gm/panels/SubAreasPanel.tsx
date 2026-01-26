@@ -16,35 +16,45 @@ const SubAreasPanel = () => {
   const [storyFlagsInput, setStoryFlagsInput] = useState('');
   const [isCreating, setIsCreating] = useState(true);
 
-  // Effect 1: Load locations from Firestore. Runs only ONCE.
   useEffect(() => {
-    const unsub = onSnapshot(query(collection(db, 'locations'), orderBy('order')), (snapshot) => {
-        const locs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GameLocation));
-        setLocations(locs);
-    });
-    return () => unsub();
-  }, []); // Correct: Empty dependency array ensures this runs only on mount.
+      // This effect manages all data loading for the component.
 
-  // Effect 2: Set the initial location *after* the locations have been loaded.
-  useEffect(() => {
-    if (!selectedLocationId && locations.length > 0) {
-        setSelectedLocationId(locations[0].id);
-    }
-  }, [locations]); // Correct: This runs only when the `locations` array changes.
+      // 1. Subscribe to locations.
+      const locationsUnsubscribe = onSnapshot(
+        query(collection(db, 'locations'), orderBy('order')),
+        (locationsSnapshot) => {
+          const fetchedLocations = locationsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as GameLocation));
+          setLocations(fetchedLocations);
 
-  // Effect 3: Load sub-areas whenever the selected location changes.
-  useEffect(() => {
-    if (!selectedLocationId) {
+          // If we haven't determined which location to show yet, pick the first one.
+          if (!selectedLocationId && fetchedLocations.length > 0) {
+            setSelectedLocationId(fetchedLocations[0].id);
+          }
+        }
+      );
+
+      // 2. Subscribe to sub-areas based on the selected location.
+      let subAreasUnsubscribe: () => void = () => {};
+      if (selectedLocationId) {
+        const subAreasQuery = query(collection(db, 'subAreas'), where('locationId', '==', selectedLocationId), orderBy('order'));
+        subAreasUnsubscribe = onSnapshot(subAreasQuery, (subAreasSnapshot) => {
+          const fetchedSubAreas = subAreasSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as SubArea));
+          setSubAreas(fetchedSubAreas);
+        }, (error) => {
+          console.error(`Error fetching sub-areas for location ${selectedLocationId}:`, error);
+          setSubAreas([]);
+        });
+      } else {
+        // If there's no selected location, ensure sub-areas are cleared.
         setSubAreas([]);
-        return;
-    }
-    const q = query(collection(db, 'subAreas'), where('locationId', '==', selectedLocationId), orderBy('order'));
-    const unsub = onSnapshot(q, (snapshot) => {
-        const areas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubArea));
-        setSubAreas(areas);
-    });
-    return () => unsub();
-  }, [selectedLocationId]); // This was always correct.
+      }
+
+      // Return a cleanup function that unsubscribes from both listeners.
+      return () => {
+        locationsUnsubscribe();
+        subAreasUnsubscribe();
+      };
+  }, [selectedLocationId]); // Re-run the entire logic ONLY when the user clicks a new location.
 
   const selectSubAreaToEdit = (sa: SubArea) => {
     setIsCreating(false);
