@@ -13,6 +13,7 @@ import {
   GameItem,
   InventoryItem,
   StoryEvent,
+  Foe,
 } from '@/types/game';
 import { useRouter, useSearchParams } from 'next/navigation';
 import 'katex/dist/katex.min.css';
@@ -38,6 +39,7 @@ export default function PlayClient() {
   const [currentEncounter, setCurrentEncounter] = useState<EncounterDoc | null>(
     null
   );
+    const [foes, setFoes] = useState<Record<string, Foe>>({});
   const [foe, setFoe] = useState<FoeDoc | null>(null);
   const [questions, setQuestions] = useState<QuestionDoc[]>([]);
   const [currentQIndex, setCurrentQIndex] = useState(0);
@@ -444,10 +446,11 @@ export default function PlayClient() {
 
     const fetchGameData = async () => {
       try {
-        const [charData, encs, items] = await Promise.all([
+        const [charData, encs, items, foeData] = await Promise.all([
           getDoc<Character>('characters', user.uid),
           getAllDocs<EncounterDoc>('encounters'),
           getAllDocs<GameItem>('items'),
+          getAllDocs<FoeDoc>('foes'),
         ]);
 
         if (charData) {
@@ -463,6 +466,12 @@ export default function PlayClient() {
           {}
         );
         setGameItems(itemsMap);
+
+        const foesMap = foeData.reduce(
+            (acc, foe) => ({ ...acc, [foe.id]: foe }),
+            {}
+        );
+        setFoes(foesMap);
 
         const storyEvent = await callApi<StoryEvent | null>('getStoryForTrigger', { trigger: 'LOGIN' });
 
@@ -480,6 +489,8 @@ export default function PlayClient() {
 
     fetchGameData();
   }, [user, router]);
+    
+  const getFoe = useCallback((id: string) => foes[id], [foes]);
 
   useEffect(() => {
     if (character) {
@@ -648,6 +659,8 @@ export default function PlayClient() {
           encounters={encounters}
           onStartEncounter={handleStartEncounter}
           msg={msg}
+          encounterWinCounts={character.encounterWins || {}}
+          getFoe={getFoe}
         />
       );
   }
