@@ -466,10 +466,12 @@ export default function PlayClient() {
         );
         setGameItems(itemsMap);
 
-        const foesMap = foeData.reduce(
-            (acc, foe) => ({ ...acc, [foe.id]: foe }),
-            {}
-        );
+        const foesMap = foeData.reduce<Record<string, FoeDoc>>((acc, foe) => {
+            if (foe.id) {
+                acc[foe.id] = foe;
+            }
+            return acc;
+        }, {});
         setFoes(foesMap);
 
         const storyEvent = await callApi<StoryEvent | null>('getStoryForTrigger', { trigger: 'LOGIN' });
