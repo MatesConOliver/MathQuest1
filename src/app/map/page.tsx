@@ -130,33 +130,32 @@ export default function MapPage() {
   // --- ON-DEMAND ENCOUNTER FETCHING ---
   useEffect(() => {
     const fetchEncounters = async () => {
-      // A sub-area is selected: fetch its encounters.
-      if (selectedSubArea) {
-        setPanelLoading(true);
-        const q = query(collection(db, "encounters"), where("subAreaId", "==", selectedSubArea.id), orderBy("title"));
-        const encSnap = await getDocs(q);
-        setPanelEncounters(encSnap.docs.map(d => ({ ...d.data(), id: d.id } as EncounterDoc)));
-        setPanelLoading(false);
-        return;
-      }
-      
-      // A legacy location (no sub-areas) is selected: fetch its encounters.
-      const locationHasNoSubAreas = selectedLocation && subAreas.filter(sa => sa.locationId === selectedLocation.id).length === 0;
-      if (locationHasNoSubAreas) {
-        setPanelLoading(true);
-        const q = query(collection(db, "encounters"), where("locationId", "==", selectedLocation.id), orderBy("title"));
-        const encSnap = await getDocs(q);
-        setPanelEncounters(encSnap.docs.map(d => ({ ...d.data(), id: d.id } as EncounterDoc)));
-        setPanelLoading(false);
-        return;
+      if (!selectedSubArea) {
+          setPanelEncounters([]);
+          return;
       }
 
-      // Otherwise, there are no encounters to show.
-      setPanelEncounters([]);
-    };
+      setPanelLoading(true);
+      try {
+          const q = query(
+              collection(db, "encounters"),
+              where("subAreaId", "==", selectedSubArea.id),
+              orderBy("order")
+          );
+          const querySnapshot = await getDocs(q);
+          const encounters = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as EncounterDoc));
+          setPanelEncounters(encounters);
+      } catch (error) {
+          console.error("Error fetching encounters for sub-area:", selectedSubArea.id, error);
+          setPanelEncounters([]); // Clear encounters on error
+      } finally {
+          setPanelLoading(false);
+      }
+  };
 
-    fetchEncounters();
-  }, [selectedSubArea, selectedLocation, subAreas]);
+  fetchEncounters();
+}, [selectedSubArea]); // Only re-run when the selectedSubArea changes
+
 
 
   // --- DEV-ONLY WARNING FOR MISSING METADATA ---
