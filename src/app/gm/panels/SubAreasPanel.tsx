@@ -14,8 +14,7 @@ const SubAreasPanel = () => {
   // State for the form, separated for clarity
   const [editingSubArea, setEditingSubArea] = useState<Partial<SubArea> | null>(null);
   const [storyFlagsInput, setStoryFlagsInput] = useState('');
-
-  const isNew = !editingSubArea?.id;
+  const [isCreating, setIsCreating] = useState(true);
 
   useEffect(() => {
     const unsub = onSnapshot(query(collection(db, 'locations'), orderBy('order')), (snapshot) => {
@@ -42,24 +41,19 @@ const SubAreasPanel = () => {
   }, [selectedLocationId]);
 
   const selectSubAreaToEdit = (sa: SubArea) => {
-    // Deep copy to avoid mutating state directly
+    setIsCreating(false);
     setEditingSubArea(JSON.parse(JSON.stringify(sa)));
     setStoryFlagsInput(sa.unlockRequirements?.storyFlags?.join(', ') ?? '');
   };
 
   const startNewSubArea = () => {
+    setIsCreating(true);
     setEditingSubArea({
         id: '', name: '', description: '', order: subAreas.length + 1,
         unlockRequirements: { skills: {} }
     });
     setStoryFlagsInput('');
   };
-  
-  // Effect to handle switching between locations or initial load
-  useEffect(() => {
-      startNewSubArea();
-  }, [selectedLocationId]);
-
 
   const handleFormChange = (field: keyof SubArea, value: any) => {
     setEditingSubArea(prev => prev ? { ...prev, [field]: value } : null);
@@ -137,7 +131,7 @@ const SubAreasPanel = () => {
     <div className="flex flex-col gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
       <div className="flex flex-wrap gap-2 p-2 bg-gray-100 dark:bg-gray-900/50 rounded-lg">
         {locations.map(loc => (
-          <TabButton key={loc.id} onClick={() => setSelectedLocationId(loc.id)} active={selectedLocationId === loc.id}>
+          <TabButton key={loc.id} onClick={() => { setSelectedLocationId(loc.id); startNewSubArea(); }} active={selectedLocationId === loc.id}>
             {loc.name}
           </TabButton>
         ))}
@@ -146,15 +140,15 @@ const SubAreasPanel = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-1 flex flex-col gap-2 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
             <h3 className="font-bold text-lg pb-2 mb-2 text-gray-900 dark:text-gray-100">Sub-Areas in {locations.find(l=>l.id === selectedLocationId)?.name || '...'}</h3>
-            <div className="flex flex-col gap-2">
+            <div className={"flex flex-col gap-2"}>
                 {subAreas.map(sa => (
-                    <div key={sa.id} onClick={() => selectSubAreaToEdit(sa)} className={`p-3 rounded transition-colors duration-200 cursor-pointer border ${editingSubArea?.id === sa.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/30 dark:border-blue-400' : 'bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-600'}`}>
+                    <div key={sa.id} onClick={() => selectSubAreaToEdit(sa)} className={`p-3 rounded transition-colors duration-200 cursor-pointer border ${!isCreating && editingSubArea?.id === sa.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/30 dark:border-blue-400' : 'bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-600'}`}>
                         <span className="font-semibold text-gray-900 dark:text-gray-100">{sa.name}</span>
                         <span className="text-xs text-gray-500 dark:text-gray-400 block">Order: {sa.order}</span>
                     </div>
                 ))}
             </div>
-            <TabButton onClick={startNewSubArea} active={isNew} className="mt-auto">
+            <TabButton onClick={startNewSubArea} active={isCreating} className="mt-auto">
                 + New Sub-Area
             </TabButton>
         </div>
@@ -162,9 +156,9 @@ const SubAreasPanel = () => {
         <div className="md:col-span-2 bg-gray-50 dark:bg-gray-700/50 p-6 rounded-lg">
             {!editingSubArea ? <div className="text-center text-gray-500 py-10">Select a sub-area to edit or create a new one.</div> : (
                 <>
-                    <h3 className="font-bold text-xl mb-4 text-gray-900 dark:text-gray-100">{isNew ? 'Create New Sub-Area' : `Edit: ${editingSubArea.name}`}</h3>
+                    <h3 className="font-bold text-xl mb-4 text-gray-900 dark:text-gray-100">{isCreating ? 'Create New Sub-Area' : `Edit: ${editingSubArea.name}`}</h3>
                      <div className="flex flex-col gap-4">
-                        <Input label="ID" value={editingSubArea.id ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('id', e.target.value)} placeholder="unique-sub-area-id" disabled={!isNew}/>
+                        <Input label="ID" value={editingSubArea.id ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('id', e.target.value)} placeholder="unique-sub-area-id" disabled={!isCreating}/>
                         <Input label="Name" value={editingSubArea.name ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('name', e.target.value)} />
                         <Input label="Description" value={editingSubArea.description ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('description', e.target.value)} />
                         <Input label="Order" type="number" value={editingSubArea.order ?? 0} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('order', Number(e.target.value))} />
@@ -194,9 +188,9 @@ const SubAreasPanel = () => {
                     </div>
                     <div className="flex gap-4 mt-6">
                         <button onClick={handleSave} className="flex-grow px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors duration-200">
-                            {isNew ? 'Create Sub-Area' : 'Save Changes'}
+                            {isCreating ? 'Create Sub-Area' : 'Save Changes'}
                         </button>
-                        {!isNew && editingSubArea.id && (
+                        {!isCreating && editingSubArea.id && (
                             <button onClick={() => handleDelete(editingSubArea.id!)} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors duration-200">
                                 Delete
                             </button>
