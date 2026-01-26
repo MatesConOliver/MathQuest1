@@ -25,7 +25,7 @@ const SubAreasPanel = () => {
       }
     });
     return () => unsub();
-  }, []); // Only run once
+  }, [selectedLocationId]); // Only run once
 
   useEffect(() => {
     if (!selectedLocationId) {
