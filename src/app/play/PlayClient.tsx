@@ -511,7 +511,7 @@ export default function PlayClient() {
         setMsg("The battle you were looking for doesn't exist!");
       }
     }
-  }, [searchParams, encounters, character, handleStartEncounter]);
+  }, [searchParams, encounters, character, handleStartEncounter, isBattleOver]);
 
   useEffect(() => {
     if (mode === 'battle' && !isPaused && !showInventory) {
