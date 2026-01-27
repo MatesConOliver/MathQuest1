@@ -476,50 +476,43 @@ export default function CharacterPage() {
   };
 
   const commitUpgrades = async () => {
-      if(!char || !user) return;
+    if(!char || !user) return;
+    
+    const { a, b, c, d } = pendingUpgrades;
+    const totalCost = a + b + c + d;
+    
+    if(totalCost === 0) return;
+    if (totalCost > (char.unspentPoints || 0)) {
+      setMsg("Not enough points.");
+      return;
+    }
+
+    try {
+      const charRef = doc(db, "characters", user.uid);
       
-      const { a, b, c, d } = pendingUpgrades;
-      const totalCost = a + b + c + d;
+      // 1. UPDATE FIREBASE
+      // The onSnapshot listener will automatically update the local state.
+      await updateDoc(charRef, {
+          "stats.a": increment(a),
+          "stats.b": increment(b),
+          "stats.c": increment(c),
+          "stats.d": increment(d),
+          "unspentPoints": increment(-totalCost)
+      });
       
-      if(totalCost === 0) return;
+      // 2. RESET PENDING & SHOW MESSAGE
+      // This will now wait until the database confirms the change.
+      setPendingUpgrades({ a:0, b:0, c:0, d:0 }); 
+      setMsg("Stats Saved!");
+      playSfx("/upgrade-sfx.mp3");
 
-      try {
-        const charRef = doc(db, "characters", user.uid);
-        
-        await updateDoc(charRef, {
-            "stats.a": increment(a),
-            "stats.b": increment(b),
-            "stats.c": increment(c),
-            "stats.d": increment(d),
-            "unspentPoints": increment(-totalCost)
-        });
-        
-        // 2. UPDATE LOCAL STATE (The Screen)
-        // We explicitly tell TypeScript that 'prev' is a Character or null
-        setChar((prev: Character | null) => {
-            if (!prev) return null;
-
-            return {
-                ...prev,
-                unspentPoints: (prev.unspentPoints || 0) - totalCost,
-                stats: {
-                    a: (prev.stats?.a || 0) + a,
-                    b: (prev.stats?.b || 0) + b,
-                    c: (prev.stats?.c || 0) + c,
-                    d: (prev.stats?.d || 0) + d,
-                }
-            };
-        });
-
-        // 3. Reset Pending
-        setPendingUpgrades({ a:0, b:0, c:0, d:0 }); 
-        setMsg("Stats Saved!");
-
-      } catch (error) {
-        console.error("Error upgrading stats:", error);
-        setMsg("Error saving stats.");
-      }
-  };
+    } catch (error) {
+      console.error("Error upgrading stats:", error);
+      setMsg("Error saving stats.");
+      // If there's an error, clear the pending state as well
+      setPendingUpgrades({ a:0, b:0, c:0, d:0 });
+    }
+};
   
   // --- HANDLERS ---
 
