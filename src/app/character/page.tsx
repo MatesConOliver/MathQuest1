@@ -334,6 +334,7 @@ export default function CharacterPage() {
   const [msg, setMsg] = useState("");
   const [showFormula, setShowFormula] = useState(false);
   const [pendingUpgrades, setPendingUpgrades] = useState({ a: 0, b: 0, c: 0, d: 0 });
+  const [isSaving, setIsSaving] = useState(false);
   const [previewX, setPreviewX] = useState(1);
 
   useEffect(() => {
@@ -476,7 +477,7 @@ export default function CharacterPage() {
   };
 
   const commitUpgrades = async () => {
-    if(!char || !user) return;
+    if(!char || !user || isSaving) return; // Prevent multiple clicks
     
     const { a, b, c, d } = pendingUpgrades;
     const totalCost = a + b + c + d;
@@ -487,11 +488,10 @@ export default function CharacterPage() {
       return;
     }
 
+    setIsSaving(true); // Disable the button immediately
     try {
       const charRef = doc(db, "characters", user.uid);
       
-      // 1. UPDATE FIREBASE
-      // The onSnapshot listener will automatically update the local state.
       await updateDoc(charRef, {
           "stats.a": increment(a),
           "stats.b": increment(b),
@@ -500,8 +500,6 @@ export default function CharacterPage() {
           "unspentPoints": increment(-totalCost)
       });
       
-      // 2. RESET PENDING & SHOW MESSAGE
-      // This will now wait until the database confirms the change.
       setPendingUpgrades({ a:0, b:0, c:0, d:0 }); 
       setMsg("Stats Saved!");
       playSfx("/upgrade-sfx.mp3");
@@ -509,10 +507,12 @@ export default function CharacterPage() {
     } catch (error) {
       console.error("Error upgrading stats:", error);
       setMsg("Error saving stats.");
-      // If there's an error, clear the pending state as well
       setPendingUpgrades({ a:0, b:0, c:0, d:0 });
+    } finally {
+      setIsSaving(false); // Re-enable the button
     }
-};
+  };
+
   
   // --- HANDLERS ---
 
@@ -741,9 +741,13 @@ export default function CharacterPage() {
                       PTS: {(char.unspentPoints || 0) - (pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d)}
                    </div>
                    {(pendingUpgrades.a + pendingUpgrades.b + pendingUpgrades.c + pendingUpgrades.d) > 0 && (
-                       <button onClick={commitUpgrades} className="bg-green-600 text-white dark:bg-green-500 dark:text-white text-xs px-3 py-1 rounded font-bold animate-pulse hover:bg-green-500 dark:hover:bg-green-400 shadow-lg">
-                         CONFIRM ✔
-                       </button>
+                       <button 
+                       onClick={commitUpgrades} 
+                       disabled={isSaving}
+                       className="bg-green-600 text-white dark:bg-green-500 dark:text-white text-xs px-3 py-1 rounded font-bold hover:bg-green-500 dark:hover:bg-green-400 shadow-lg disabled:bg-gray-400 dark:disabled:bg-gray-600 transition-colors"
+                     >
+                       {isSaving ? "SAVING..." : "CONFIRM ✔"}
+                     </button>
                    )}
                 </div>
             </div>
