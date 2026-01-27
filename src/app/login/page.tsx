@@ -89,7 +89,7 @@ export default function LoginPage() {
         muted
         playsInline
         poster="/login.png"
-        className="absolute top-0 left-0 w-full h-full object-cover -z-20"
+        className="absolute top-0 left-0 w-full h-full object-contain md:object-cover -z-20"
       >
         <source src="/login.mp4" type="video/mp4" />
       </video>
