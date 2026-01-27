@@ -502,7 +502,12 @@ export default function PlayClient() {
 
   useEffect(() => {
     const encounterId = searchParams.get('id');
-    if (isBattleOver) return;
+    
+    // Do not start a new battle if one just ended or is in progress.
+    if (mode === 'win' || mode === 'lose' || mode === 'battle' || mode === 'intro') {
+      return;
+    }
+
     if (encounterId && encounters.length > 0 && character) {
       const selectedEncounter = encounters.find((e) => e.id === encounterId);
       if (selectedEncounter) {
@@ -511,7 +516,7 @@ export default function PlayClient() {
         setMsg("The battle you were looking for doesn't exist!");
       }
     }
-  }, [searchParams, encounters, character, handleStartEncounter, isBattleOver]);
+  }, [searchParams, encounters, character, handleStartEncounter, mode]);
 
   useEffect(() => {
     if (mode === 'battle' && !isPaused && !showInventory) {
