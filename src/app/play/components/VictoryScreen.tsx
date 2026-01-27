@@ -43,7 +43,7 @@ export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain,
             </div>
             <div className="flex justify-between items-center px-2">
                 <span className="font-bold text-gray-600 dark:text-gray-400">Gold Found</span>
-                <span className="font-bold text-yellow-600 dark:text-yellow-400 text-lg">+{goldReward} 🪙</span>
+                <span className="font-bold text-yellow-600 dark:text-yellow-400 text-lg">🪙 +{goldReward}</span>
             </div>
             {skillGains && Object.keys(skillGains).length > 0 && (
                 <div className="pt-1">
