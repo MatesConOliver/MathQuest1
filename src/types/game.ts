@@ -155,6 +155,10 @@ export type GameLocation = {
   description: string;
   order: number; // To sort them (1. Forest, 2. Caves...)
   imageUrl?: string;
+  unlockRequirements?: {
+    storyFlags?: string[];
+    skills?: Partial<CharacterSkills>;
+  };
 };
 
 export type SubArea = {

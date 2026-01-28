@@ -11,7 +11,7 @@ import { MAP_LOCATIONS, MapLocationMeta } from "@/config/mapLayout";
 import classNames from "classnames";
 
 // --- TYPES ---
-type SubAreaUnlockStatus = 
+type UnlockStatus = 
     | { locked: false }
     | { locked: true; reason: 'story'; }
     | { locked: true; reason: 'skills'; missing: { skill: keyof CharacterSkills, required: number }[] };
@@ -23,9 +23,13 @@ function getMapMetaForLocation(locationId: string): MapLocationMeta | null {
   return meta || null;
 }
 
-function getSubAreaUnlockStatus(subArea: SubArea, character: Character, unlockedSubAreas: { [key: string]: UnlockedSubArea }): SubAreaUnlockStatus {
-  if (unlockedSubAreas[subArea.id]) return { locked: false }; // Already unlocked via item/event
-  const reqs = subArea.unlockRequirements;
+function getUnlockStatus(item: GameLocation | SubArea, character: Character, unlockedSubAreas?: { [key: string]: UnlockedSubArea }): UnlockStatus {
+  // Handle specific sub-area direct unlocks (e.g. via an item)
+  if ('locationId' in item && unlockedSubAreas?.[item.id]) {
+    return { locked: false };
+  }
+
+  const reqs = item.unlockRequirements;
   if (!reqs) return { locked: false }; // No requirements
 
   // 1. Check Story Flags first
@@ -53,6 +57,7 @@ function getSubAreaUnlockStatus(subArea: SubArea, character: Character, unlocked
 
   return { locked: false };
 }
+
 
 const SKILL_COLORS: { [key in keyof CharacterSkills]?: string } = {
     algebra: 'text-red-400',
@@ -82,25 +87,16 @@ export default function MapPage() {
   const [panelEncounters, setPanelEncounters] = useState<EncounterDoc[]>([]);
   const [panelLoading, setPanelLoading] = useState(false);
 
-  const [revealedLocations, setRevealedLocations] = useState(new Set<string>());
-  const [animateFog, setAnimateFog] = useState(false);
-  const [pendingReveal, setPendingReveal] = useState(false);
   const [mapMounted, setMapMounted] = useState(false);
-  const [pulsingLocations, setPulsingLocations] = useState<Set<string>>(new Set());
-
+  
   const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(null);
   const [selectedSubArea, setSelectedSubArea] = useState<SubArea | null>(null);
 
   const selectedLocationMeta = selectedLocation ? getMapMetaForLocation(selectedLocation.id) : null;
-  const worldUnlocked = (character?.encounterWins?.['1jnYA8nD0PRaxu7Dezhs'] ?? 0) >= 1;
 
   useEffect(() => {
     playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3");
     setMapMounted(true);
-    if (sessionStorage.getItem("pendingFogReveal") === "true") {
-      setPendingReveal(true);
-      sessionStorage.removeItem("pendingFogReveal");
-    }
   }, []);
 
   useEffect(() => {
@@ -211,17 +207,8 @@ export default function MapPage() {
       }
   }, [selectedLocation, selectedLocationMeta]);
 
-  useEffect(() => {
-    if (mapMounted && worldUnlocked && !pendingReveal) {
-      setRevealedLocations(prev => {
-        const next = new Set(prev);
-        MAP_LOCATIONS.forEach(meta => { if (meta.initiallyHidden) next.add(meta.locationId) });
-        return next;
-      });
-    }
-  }, [mapMounted, worldUnlocked, pendingReveal]);
-
-  const handleLocationClick = (loc: GameLocation) => {
+  const handleLocationClick = (loc: GameLocation, status: UnlockStatus) => {
+    if (status.locked) return;
     setSelectedLocation(loc);
     setSelectedSubArea(null);
   };
@@ -268,29 +255,44 @@ export default function MapPage() {
               const mapMeta = getMapMetaForLocation(loc.id);
               if (!mapMeta) return null;
 
-              const isInitiallyFogged = mapMeta.initiallyHidden;
-              const shouldShowFog = isInitiallyFogged && (!mapMounted || animateFog || !revealedLocations.has(loc.id));
-              const isClickable = !shouldShowFog;
+              const unlockStatus = getUnlockStatus(loc, character);
+              const isStoryLocked = unlockStatus.locked && unlockStatus.reason === 'story';
+              const isSkillLocked = unlockStatus.locked && unlockStatus.reason === 'skills';
+
+              // The very first location should always be visible.
+              const isFirstLocation = loc.order === 1;
+              const shouldShowFog = !isFirstLocation && isStoryLocked;
+              const isClickable = !shouldShowFog && !isSkillLocked;
+              
+              const title = isSkillLocked 
+                ? `Locked. Requires: ${unlockStatus.missing.map(m => `${formatSkillName(m.skill)} Lvl ${m.required}`).join(', ')}` 
+                : isStoryLocked
+                ? "Keep playing to unlock"
+                : loc.name;
 
               return (
                 <button
                   key={loc.id}
-                  onClick={() => isClickable && handleLocationClick(loc)}
-                  title={isClickable ? loc.name : "The world is still obscured…"}
+                  onClick={() => handleLocationClick(loc, unlockStatus)}
+                  title={title}
                   disabled={!isClickable}
                   className={classNames(
                     `group absolute w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ease-out focus:outline-none`,
-                    { 'opacity-90 cursor-not-allowed': !isClickable, 'opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-blue-300/60 cursor-pointer': isClickable },
-                    { 'animate-discovery-pulse': pulsingLocations.has(loc.id) }
+                    { 'opacity-90 cursor-not-allowed': !isClickable },
+                    { 'opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-blue-300/60 cursor-pointer': isClickable },
                   )}
                   style={{ left: `${mapMeta.x * 100}%`, top: `${mapMeta.y * 100}%`, transform: "translate(-50%, -50%)" }}
                 >
                   <div className="w-full h-full rounded-full ring-2 ring-white/50 backdrop-blur-sm bg-black/30 flex items-center justify-center transition-transform duration-300 ease-out group-hover:scale-110">
-                    <span className="text-2xl select-none">{loc.name.includes("Forest") ? "🌲" : loc.name.includes("Library") ? "📚" : loc.name.includes("Cave") ? "🦇" : loc.name.includes("Mountain") ? "⛰️" : loc.name.includes("Peak") ? "🏔️" : loc.name.includes("polis") ? "🏙️" : "📍"}</span>
+                     {isSkillLocked ? (
+                        <span className="text-2xl">🔒</span>
+                     ) : (
+                        <span className="text-2xl select-none">{loc.name.includes("Forest") ? "🌲" : loc.name.includes("Library") ? "📚" : loc.name.includes("Cave") ? "🦇" : loc.name.includes("Mountain") ? "⛰️" : loc.name.includes("Peak") ? "🏔️" : loc.name.includes("polis") ? "🏙️" : "📍"}</span>
+                     )}
                   </div>
                   {shouldShowFog && (
-                    <div className={classNames("absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none", { 'animate-fog-reveal': animateFog })} style={{ animationDelay: "100ms" }}>
-                      <span className="text-9xl">{mapMeta.fogType === "clouds" ? "☁️" : "🌫️"}</span>
+                    <div className={classNames("absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none")}>
+                      <span className="text-5xl">☁️</span>
                     </div>
                   )}
                 </button>
@@ -318,12 +320,12 @@ export default function MapPage() {
                       <h3 className="text-lg font-bold text-gray-200 mb-3">Explore Area</h3>
                       <div className="space-y-3">
                           {panelSubAreas.map(sa => {
-                              const unlockStatus = getSubAreaUnlockStatus(sa, character, unlockedSubAreas);
+                              const unlockStatus = getUnlockStatus(sa, character, unlockedSubAreas);
 
                               if (unlockStatus.locked && unlockStatus.reason === 'story') {
                                   return (
                                       <div key={sa.id} className="w-full text-center flex flex-col items-center justify-center p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl opacity-60">
-                                          <span className="text-3xl mb-1">🔒</span>
+                                          <span className="text-3xl mb-1">☁️</span>
                                           <h4 className="font-bold text-gray-400 text-sm">Locked</h4>
                                           <p className="text-xs text-gray-500">Keep playing to unlock.</p>
                                       </div>
@@ -342,17 +344,23 @@ export default function MapPage() {
                                         {unlockStatus.locked && unlockStatus.reason === 'skills' && (
                                             <div className="text-xs font-semibold mt-2 space-y-1">
                                                 <div className="text-gray-400">Requires:</div>
-                                                {unlockStatus.missing.map(({ skill, required }) => (
-                                                    <div key={skill} className="flex items-center gap-2">
-                                                         <span className={classNames("font-bold", SKILL_COLORS[skill] || 'text-gray-300')}>
-                                                             {skill.charAt(0).toUpperCase() + skill.slice(1).replace(/([A-Z])/g, ' $1')}: Lvl {required}
-                                                         </span>
-                                                    </div>
-                                                ))}
+                                                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                                    {unlockStatus.missing.map(({ skill, required }) => (
+                                                        <div key={skill} className="flex items-center gap-1.5">
+                                                            <span className={classNames("font-bold", SKILL_COLORS[skill] || 'text-gray-300')}>
+                                                                {formatSkillName(skill)}: {required}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
                                     </div>
-                                    {!unlockStatus.locked && <span className="font-bold text-lg text-blue-400 group-hover:translate-x-1 transition-transform">›</span>}
+                                     {unlockStatus.locked ? (
+                                        <span className="text-2xl pl-4">🔒</span>
+                                     ) : (
+                                        <span className="font-bold text-lg text-blue-400 group-hover:translate-x-1 transition-transform">›</span>
+                                     )}
                                 </button>
                               )
                           })}
