@@ -249,6 +249,7 @@ export default function PlayClient() {
             setLevelUpData({ oldLvl, newLvl, hpGain, pointsGain });
         }
 
+        router.push('/play', { scroll: false });
         setIsBattleOver(true);
         setMode('win');
 
@@ -257,7 +258,7 @@ export default function PlayClient() {
         setMsg('Could not save victory progress.');
         setMode('lobby');
     }
-}, [user, character, currentEncounter, gameItems, playerHp]);
+}, [user, character, currentEncounter, gameItems, playerHp, router]);
 
   const handleLoss = useCallback(async (reason: string) => {
     if (!user || !character) return;
@@ -273,6 +274,7 @@ export default function PlayClient() {
         
         setCharacter(p => p ? ({ ...p, hp: battleStats.maxHp, gold: p.gold - goldLoss }) : null);
 
+        router.push('/play', { scroll: false });
         setMsg(finalReason);
         setIsBattleOver(true);
         setMode('lose');
@@ -281,7 +283,7 @@ export default function PlayClient() {
         setMsg('Error saving character state.');
         setMode('lobby');
     }
-  }, [user, character, battleStats]);
+  }, [user, character, battleStats, router]);
 
   const nextQuestion = useCallback(() => {
     if (foeHp <= 0) {
