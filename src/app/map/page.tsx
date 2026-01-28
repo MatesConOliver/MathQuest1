@@ -227,25 +227,32 @@ export default function MapPage() {
 
                 // 2. After the animation duration, update the character data.
                 setTimeout(() => {
-                    const doUpdate = async () => {
-                        try {
-                            await updateDoc(doc(db, "characters", user.uid), {
-                                storyFlags: arrayUnion(pendingFlag)
-                            });
-                            setCharacter(prev => ({...prev!, storyFlags: [...(prev?.storyFlags || []), pendingFlag]}));
-                            
-                            // 3. Clean up the animation state
-                            setAnimatingOutLocationIds(prev => {
-                                const newSet = new Set(prev);
-                                newSet.delete(unlockedLocation.id);
-                                return newSet;
-                            });
-                        } catch (error) {
-                            console.error("Failed to update story flag after animation:", error);
-                        }
-                    };
-                    doUpdate();
-                }, 3000); // This should be slightly longer than the animation duration (1000ms)
+                  const doUpdate = async () => {
+                      try {
+                          // First, update the database and the character's state.
+                          // This causes a re-render, but the cloud is kept alive
+                          // because `animatingOutLocationIds` still has its ID.
+                          await updateDoc(doc(db, "characters", user.uid), {
+                              storyFlags: arrayUnion(pendingFlag)
+                          });
+                          setCharacter(prev => ({...prev!, storyFlags: [...(prev?.storyFlags || []), pendingFlag]}));
+
+                          // 3. Finally, schedule the cleanup of the animation state.
+                          // This runs *after* the character state update has been rendered.
+                          setTimeout(() => {
+                              setAnimatingOutLocationIds(prev => {
+                                  const newSet = new Set(prev);
+                                  newSet.delete(unlockedLocation.id);
+                                  return newSet;
+                              });
+                          }, 200); // Short delay for DOM to stabilize before final cleanup.
+
+                      } catch (error) {
+                          console.error("Failed to update story flag after animation:", error);
+                      }
+                  };
+                  doUpdate();
+              }, 3000); // This should be your animation duration.
             }, 1000); // Delay before animation starts to allow rendering
         }
     }
