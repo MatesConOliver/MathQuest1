@@ -220,33 +220,37 @@ export default function MapPage() {
         const unlockedLocation = locations.find(loc => loc.unlockRequirements?.storyFlags?.includes(pendingFlag));
 
         if (unlockedLocation) {
-            // 1. Start the animation by adding the location ID to our animation state
-            setAnimatingOutLocationIds(prev => new Set(prev).add(unlockedLocation.id));
-
-            // 2. After the animation duration, update the character data. This will make the cloud unmount.
+            // Wait for the map to render before starting the animation
             setTimeout(() => {
-                const doUpdate = async () => {
-                    try {
-                        await updateDoc(doc(db, "characters", user.uid), {
-                            storyFlags: arrayUnion(pendingFlag)
-                        });
-                        setCharacter(prev => ({...prev!, storyFlags: [...(prev?.storyFlags || []), pendingFlag]}));
-                        
-                        // 3. Clean up the animation state
-                        setAnimatingOutLocationIds(prev => {
-                            const newSet = new Set(prev);
-                            newSet.delete(unlockedLocation.id);
-                            return newSet;
-                        });
-                    } catch (error) {
-                        console.error("Failed to update story flag after animation:", error);
-                    }
-                };
-                doUpdate();
-            }, 1200); // This should be slightly longer than the animation duration (1000ms)
+                // 1. Start the animation by adding the location ID to our animation state
+                setAnimatingOutLocationIds(prev => new Set(prev).add(unlockedLocation.id));
+
+                // 2. After the animation duration, update the character data.
+                setTimeout(() => {
+                    const doUpdate = async () => {
+                        try {
+                            await updateDoc(doc(db, "characters", user.uid), {
+                                storyFlags: arrayUnion(pendingFlag)
+                            });
+                            setCharacter(prev => ({...prev!, storyFlags: [...(prev?.storyFlags || []), pendingFlag]}));
+                            
+                            // 3. Clean up the animation state
+                            setAnimatingOutLocationIds(prev => {
+                                const newSet = new Set(prev);
+                                newSet.delete(unlockedLocation.id);
+                                return newSet;
+                            });
+                        } catch (error) {
+                            console.error("Failed to update story flag after animation:", error);
+                        }
+                    };
+                    doUpdate();
+                }, 3000); // This should be slightly longer than the animation duration (1000ms)
+            }, 1000); // Delay before animation starts to allow rendering
         }
     }
   }, [user, character, locations]);
+
 
 
   const handleLocationClick = (loc: GameLocation, status: UnlockStatus) => {
@@ -342,7 +346,7 @@ export default function MapPage() {
                               'opacity-100 scale-100': !animatingOutLocationIds.has(loc.id)
                           }
                       )}>
-                          <span className={classNames("text-9xl transition-transform duration-1000 ease-in-out", {
+                          <span className={classNames("text-9xl transition-transform duration-2500 ease-in-out", {
                               'transform rotate-45 scale-0': animatingOutLocationIds.has(loc.id),
                           })}>
                               ☁️
