@@ -718,7 +718,7 @@ export default function CharacterPage() {
 
         <div className="text-right">
             <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">🪙 {char.gold} G</div>
-            <Link href="/" className="text-sm underline text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">Back to Map</Link>
+            <Link href="/" className="text-sm underline text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">🏠 Main menu</Link>
         </div>
       </header>
 

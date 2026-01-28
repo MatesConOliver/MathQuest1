@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { collection, getDocs, orderBy, query, doc, getDoc, where } from "firebase/firestore";
+import { collection, getDocs, orderBy, query, doc, getDoc, where, updateDoc, arrayUnion } from "firebase/firestore";
 import Link from "next/link";
 import { GameLocation, EncounterDoc, Character, SubArea, UnlockedSubArea, CharacterSkills } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
@@ -92,6 +92,8 @@ export default function MapPage() {
   const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(null);
   const [selectedSubArea, setSelectedSubArea] = useState<SubArea | null>(null);
 
+  const [animatingOutLocationIds, setAnimatingOutLocationIds] = useState<Set<string>>(new Set());
+  
   const selectedLocationMeta = selectedLocation ? getMapMetaForLocation(selectedLocation.id) : null;
 
   useEffect(() => {
@@ -207,6 +209,46 @@ export default function MapPage() {
       }
   }, [selectedLocation, selectedLocationMeta]);
 
+  useEffect(() => {
+    if (!user || !character || locations.length === 0) return;
+
+    const pendingFlag = sessionStorage.getItem("pendingStoryFlag");
+    // Check if the character *doesn't* already have the flag to prevent re-animations on refresh
+    if (pendingFlag && !character.storyFlags?.includes(pendingFlag)) {
+        sessionStorage.removeItem("pendingStoryFlag");
+
+        const unlockedLocation = locations.find(loc => loc.unlockRequirements?.storyFlags?.includes(pendingFlag));
+
+        if (unlockedLocation) {
+            // 1. Start the animation by adding the location ID to our animation state
+            setAnimatingOutLocationIds(prev => new Set(prev).add(unlockedLocation.id));
+
+            // 2. After the animation duration, update the character data. This will make the cloud unmount.
+            setTimeout(() => {
+                const doUpdate = async () => {
+                    try {
+                        await updateDoc(doc(db, "characters", user.uid), {
+                            storyFlags: arrayUnion(pendingFlag)
+                        });
+                        setCharacter(prev => ({...prev!, storyFlags: [...(prev?.storyFlags || []), pendingFlag]}));
+                        
+                        // 3. Clean up the animation state
+                        setAnimatingOutLocationIds(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(unlockedLocation.id);
+                            return newSet;
+                        });
+                    } catch (error) {
+                        console.error("Failed to update story flag after animation:", error);
+                    }
+                };
+                doUpdate();
+            }, 1200); // This should be slightly longer than the animation duration (1000ms)
+        }
+    }
+  }, [user, character, locations]);
+
+
   const handleLocationClick = (loc: GameLocation, status: UnlockStatus) => {
     if (status.locked) return;
     setSelectedLocation(loc);
@@ -290,10 +332,22 @@ export default function MapPage() {
                         <span className="text-2xl select-none">{loc.name.includes("Forest") ? "🌲" : loc.name.includes("Library") ? "📚" : loc.name.includes("Cave") ? "🦇" : loc.name.includes("Mountain") ? "⛰️" : loc.name.includes("Peak") ? "🏔️" : loc.name.includes("polis") ? "🏙️" : "📍"}</span>
                      )}
                   </div>
-                  {shouldShowFog && (
-                    <div className={classNames("absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none")}>
-                      <span className="text-9xl">☁️</span>
-                    </div>
+                  {/* Animate cloud disappearance */}
+                  {((!isFirstLocation && isStoryLocked) || animatingOutLocationIds.has(loc.id)) && (
+                      <div className={classNames(
+                          "absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none",
+                          "transition-all duration-1000 ease-in-out", // Animation classes
+                          { 
+                              'opacity-0 scale-150': animatingOutLocationIds.has(loc.id),
+                              'opacity-100 scale-100': !animatingOutLocationIds.has(loc.id)
+                          }
+                      )}>
+                          <span className={classNames("text-9xl transition-transform duration-1000 ease-in-out", {
+                              'transform rotate-45 scale-0': animatingOutLocationIds.has(loc.id),
+                          })}>
+                              ☁️
+                          </span>
+                      </div>
                   )}
                 </button>
               );

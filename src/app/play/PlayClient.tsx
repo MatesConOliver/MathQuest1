@@ -256,29 +256,12 @@ export default function PlayClient() {
   }, [user, character, currentEncounter, gameItems, playerHp]);
 
 
-  const handleReturnToMap = useCallback(async () => {
-    if (!user || !character || !currentEncounter) return;
-
-    if (currentEncounter.winRewardStoryFlag) {
-      try {
-        await updateDoc('characters', user.uid, {
-          storyFlags: arrayUnion(currentEncounter.winRewardStoryFlag),
-        });
-        setCharacter(prev => {
-            if (!prev) return null;
-            return {
-                ...prev,
-                storyFlags: [...(prev.storyFlags || []), currentEncounter.winRewardStoryFlag!],
-            };
-        });
-      } catch (error) {
-        console.error('Error updating story flag on return to map:', error);
-      }
+  const handleReturnToMap = useCallback(() => {
+    if (currentEncounter?.winRewardStoryFlag) {
+      sessionStorage.setItem("pendingStoryFlag", currentEncounter.winRewardStoryFlag);
     }
-    
-    sessionStorage.setItem("pendingFogReveal", "true");
     router.push("/map");
-  }, [user, character, currentEncounter, router]);
+  }, [currentEncounter, router]);
 
   const handleLoss = useCallback(async (reason: string) => {
     if (!user || !character) return;

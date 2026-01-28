@@ -185,7 +185,7 @@ export default function ShopPage() {
             🪙 {character ? character.gold : 0} G
           </div>
           <button onClick={() => router.push("/")} className="text-sm underline text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-            Back to Map
+            🏠 Main menu
           </button>
         </div>
       </header>
