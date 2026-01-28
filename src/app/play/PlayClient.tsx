@@ -213,10 +213,6 @@ export default function PlayClient() {
                 updates[`skills.${skill}`] = increment(amount);
             }
         }
-
-        if (currentEncounter.winRewardStoryFlag) {
-            updates.storyFlags = arrayUnion(currentEncounter.winRewardStoryFlag);
-        }
         
         await updateDoc('characters', user.uid, updates);
 
@@ -241,7 +237,7 @@ export default function PlayClient() {
                 },
                 inventory: updates.inventory,
                 encounterWins: newWins,
-                storyFlags: currentEncounter.winRewardStoryFlag ? [...(prev.storyFlags || []), currentEncounter.winRewardStoryFlag] : prev.storyFlags,
+                storyFlags: prev.storyFlags
             };
         });
 
@@ -249,7 +245,6 @@ export default function PlayClient() {
             setLevelUpData({ oldLvl, newLvl, hpGain, pointsGain });
         }
 
-        router.push('/play', { scroll: false });
         setIsBattleOver(true);
         setMode('win');
 
@@ -258,7 +253,32 @@ export default function PlayClient() {
         setMsg('Could not save victory progress.');
         setMode('lobby');
     }
-}, [user, character, currentEncounter, gameItems, playerHp, router]);
+  }, [user, character, currentEncounter, gameItems, playerHp]);
+
+
+  const handleReturnToMap = useCallback(async () => {
+    if (!user || !character || !currentEncounter) return;
+
+    if (currentEncounter.winRewardStoryFlag) {
+      try {
+        await updateDoc('characters', user.uid, {
+          storyFlags: arrayUnion(currentEncounter.winRewardStoryFlag),
+        });
+        setCharacter(prev => {
+            if (!prev) return null;
+            return {
+                ...prev,
+                storyFlags: [...(prev.storyFlags || []), currentEncounter.winRewardStoryFlag!],
+            };
+        });
+      } catch (error) {
+        console.error('Error updating story flag on return to map:', error);
+      }
+    }
+    
+    sessionStorage.setItem("pendingFogReveal", "true");
+    router.push("/map");
+  }, [user, character, currentEncounter, router]);
 
   const handleLoss = useCallback(async (reason: string) => {
     if (!user || !character) return;
@@ -655,6 +675,7 @@ export default function PlayClient() {
           levelUpData={levelUpData}
           lootDrops={lootDrops}
           onFightAgain={handleFightAgain}
+          onReturnToMap={handleReturnToMap}
           xpReward={xpReward}
           goldReward={goldReward}
           skillGains={skillGains}
