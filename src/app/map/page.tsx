@@ -292,7 +292,7 @@ export default function MapPage() {
                   </div>
                   {shouldShowFog && (
                     <div className={classNames("absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none")}>
-                      <span className="text-5xl">☁️</span>
+                      <span className="text-9xl">☁️</span>
                     </div>
                   )}
                 </button>
