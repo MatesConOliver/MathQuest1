@@ -217,13 +217,12 @@ export default function MapPage() {
     if (pendingFlag && !character.storyFlags?.includes(pendingFlag)) {
         sessionStorage.removeItem("pendingStoryFlag");
 
-        // Find ALL locations that this flag unlocks
         const unlockedLocations = locations.filter(loc => loc.unlockRequirements?.storyFlags?.includes(pendingFlag));
 
         if (unlockedLocations.length > 0) {
-            // Wait a moment for the map to render before starting the animation
+            // Wait 2 seconds for the map to render before starting the animation
             setTimeout(() => {
-                // 1. Start the animation for ALL newly unlocked locations at once
+                // 1. Start the animation for ALL newly unlocked locations
                 setAnimatingOutLocationIds(prev => {
                     const newSet = new Set(prev);
                     unlockedLocations.forEach(loc => newSet.add(loc.id));
@@ -239,23 +238,23 @@ export default function MapPage() {
                             });
                             setCharacter(prev => ({...prev!, storyFlags: [...(prev?.storyFlags || []), pendingFlag]}));
 
-                            // 3. After the character state is updated, clean up the animation state
+                            // 3. After state is updated, clean up the animation state
                             setTimeout(() => {
                                 setAnimatingOutLocationIds(prev => {
                                     const newSet = new Set(prev);
                                     unlockedLocations.forEach(loc => newSet.delete(loc.id));
                                     return newSet;
                                 });
-                            }, 200); // Brief delay for DOM to stabilize before cleanup
+                            }, 200);
 
                         } catch (error) {
                             console.error("Failed to update story flag after animation:", error);
                         }
                     };
                     doUpdate();
-                }, 2500); // <-- This is your new animation duration (2.5s)
+                }, 2500); // Animation duration (2.5s)
 
-            }, 200); // Delay before animation starts
+            }, 2000); // <-- New 2-second delay before animation starts
         }
     }
   }, [user, character, locations]);
@@ -347,13 +346,13 @@ export default function MapPage() {
                   {((!isFirstLocation && isStoryLocked) || animatingOutLocationIds.has(loc.id)) && (
                       <div className={classNames(
                           "absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none",
-                          "transition-all duration-1000 ease-in-out", // Animation classes
+                          "transition-all duration-[2500ms] ease-in-out", // Animation classes
                           { 
                               'opacity-0 scale-150': animatingOutLocationIds.has(loc.id),
                               'opacity-100 scale-100': !animatingOutLocationIds.has(loc.id)
                           }
                       )}>
-                          <span className={classNames("text-9xl transition-transform duration-2500 ease-in-out", {
+                          <span className={classNames("text-9xl transition-transform duration-[2500ms] ease-in-out", {
                               'transform rotate-45 scale-0': animatingOutLocationIds.has(loc.id),
                           })}>
                               ☁️
