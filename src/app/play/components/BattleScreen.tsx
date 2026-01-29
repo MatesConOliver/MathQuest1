@@ -155,8 +155,8 @@ const TopArea = ({ character, playerHp, foe, foeHp, timeLeft, totalTime, current
             <InfoBox title={character?.name || "Player"} hp={playerHp} maxHp={character?.maxHp || 100} />
             
             <div className="w-1/4 bg-black/60 backdrop-blur-sm p-3 rounded-lg border-2 border-white/20 text-center">
-                <h3 className="font-bold text-lg uppercase tracking-wider">Turn</h3>
-                <p className="text-3xl font-black">{currentQIndex + 1} / {totalQuestions}</p>
+                <h3 className="font-bold text-base uppercase tracking-wider">Turn</h3>
+                <p className="text-2xl font-black">{currentQIndex + 1} / {totalQuestions}</p>
             </div>
 
             <InfoBox title={foe?.name || "Enemy"} hp={foeHp} maxHp={foe?.maxHp || 50} isFoe />
@@ -207,11 +207,13 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
         const isPlayerSelection = idx === selectedChoice;
 
         if (isPlayerSelection) {
-            return isCorrectAnswer ? '!bg-green-500' : '!bg-red-500';
+            // Added !opacity-100 to make the colors fully visible on disabled buttons
+            return isCorrectAnswer ? '!bg-green-500 !opacity-100' : '!bg-red-500 !opacity-100';
         }
         
         if (isCorrectAnswer) {
-            return '!bg-green-500';
+            // Added !opacity-100 here as well
+            return '!bg-green-500 !opacity-100';
         }
 
         return 'bg-gray-700/50 opacity-60'; 
