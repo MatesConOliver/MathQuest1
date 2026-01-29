@@ -129,12 +129,16 @@ export function BattleScreen(props: BattleScreenProps) {
 }
 
 // SUB-COMPONENTS
-const Sprites = ({ character, foe }: { character: Character | null, foe: FoeDoc | null }) => (
-    <div className="absolute inset-0 pointer-events-none">
-        {character?.imageUrl && <img src={character.imageUrl} alt="Character" className="absolute bottom-1/4 left-1/4 w-48 h-48 object-contain" />}
-        {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/4 right-1/4 w-48 h-48 object-contain" />}
-    </div>
-);
+const Sprites = ({ character, foe }: { character: Character | null, foe: FoeDoc | null }) => {
+    const playerImage = character?.imageUrl || "https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=c929fa4d-02f2-4da6-bf6f-12fd88656298";
+    
+    return (
+        <div className="absolute inset-0 pointer-events-none">
+            <img src={playerImage} alt="Character" className="absolute bottom-1/4 left-1/4 w-60 h-60 object-contain" />
+            {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/4 right-1/4 w-60 h-60 object-contain" />}
+        </div>
+    );
+};
 
 const TopArea = ({ character, playerHp, foe, foeHp, timeLeft, totalTime }: any) => (
     <div className="relative z-10 p-4 space-y-2">
