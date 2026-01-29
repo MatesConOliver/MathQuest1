@@ -130,12 +130,12 @@ export function BattleScreen(props: BattleScreenProps) {
 
 // SUB-COMPONENTS
 const Sprites = ({ character, foe }: { character: Character | null, foe: FoeDoc | null }) => {
-    const playerImage = character?.imageUrl || "https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=c929fa4d-02f2-4da6-bf6f-12fd88656298";
+    const playerImage = character?.imageUrl || "https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=bae93c5e-92ed-4958-9274-fb67a3f5f8c9";
     
     return (
         <div className="absolute inset-0 pointer-events-none">
-            <img src={playerImage} alt="Character" className="absolute bottom-1/4 left-1/4 w-60 h-60 object-contain" />
-            {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/4 right-1/4 w-60 h-60 object-contain" />}
+            <img src={playerImage} alt="Character" className="absolute bottom-1/4 left-1/4 w-96 h-96 object-contain" />
+            {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/4 right-1/4 w-96 h-96 object-contain" />}
         </div>
     );
 };
