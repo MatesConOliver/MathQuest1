@@ -182,7 +182,7 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
                             <button onClick={() => setShowEscapeConfirm(true)} disabled={isPaused} className="battle-btn">Escape</button>
                         </>
                     ) : (
-                        (currentQ.choices || []).map((_, idx) => (
+                        (currentQ.choices || []).map((_: any, idx: number) => (
                             <button key={idx} disabled={isPaused} onClick={() => handleAnswer(idx)} className={`battle-btn col-span-1 ${getButtonClass(idx)}`}>
                                 {getChoiceContent(idx)}
                             </button>
@@ -201,28 +201,41 @@ const InfoBox = ({ title, hp, maxHp, isFoe = false }: InfoBoxProps) => (
     </div>
 );
 
-const InventoryPanel = ({ items, gameItems, onUse, onClose }: { items: InventoryItem[], gameItems: Record<string, GameItem>, onUse: (item: InventoryItem) => void, onClose: () => void }) => (
-  <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-50">
-    <div className="bg-gray-800 border-2 border-white/30 rounded-xl p-6 w-full max-w-md m-4 text-white">
-      <h2 className="text-2xl font-bold mb-4">Inventory</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-        {items.length > 0 ? items.map(item => {
-          const gameItem = gameItems[item.itemId];
-          return (
-            <div key={item.itemId} className="bg-gray-700 rounded-lg p-4 flex flex-col">
-              <div className="flex-1">
-                <h3 className="font-bold text-lg">{gameItem?.name || 'Unknown Item'} (x{item.quantity})</h3>
-                <p className="text-sm text-gray-400">{gameItem?.description}</p>
+const InventoryPanel = ({ items, gameItems, onUse, onClose }: { items: InventoryItem[], gameItems: Record<string, GameItem>, onUse: (item: InventoryItem) => void, onClose: () => void }) => {
+
+  const groupedInventory = items.reduce((acc: Record<string, { item: InventoryItem, quantity: number }>, currentItem) => {
+    if (!acc[currentItem.itemId]) {
+      acc[currentItem.itemId] = { item: currentItem, quantity: 0 };
+    }
+    acc[currentItem.itemId].quantity++;
+    return acc;
+  }, {});
+
+  const displayItems = Object.values(groupedInventory);
+
+  return (
+    <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-gray-800 border-2 border-white/30 rounded-xl p-6 w-full max-w-md m-4 text-white">
+        <h2 className="text-2xl font-bold mb-4">Inventory</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+          {displayItems.length > 0 ? displayItems.map(({ item, quantity }) => {
+            const gameItem = gameItems[item.itemId];
+            return (
+              <div key={item.itemId} className="bg-gray-700 rounded-lg p-4 flex flex-col">
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg">{gameItem?.name || 'Unknown Item'} (x{quantity})</h3>
+                  <p className="text-sm text-gray-400">{gameItem?.description}</p>
+                </div>
+                <button onClick={() => onUse(item)} className="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-all active:scale-95">Use</button>
               </div>
-              <button onClick={() => onUse(item)} className="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-all active:scale-95">Use</button>
-            </div>
-          );
-        }) : <p className="text-gray-400 col-span-full">Your inventory is empty.</p>}
+            );
+          }) : <p className="text-gray-400 col-span-full">Your inventory is empty.</p>}
+        </div>
+        <button onClick={onClose} className="mt-6 w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-all active:scale-95">Close</button>
       </div>
-      <button onClick={onClose} className="mt-6 w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-all active:scale-95">Close</button>
     </div>
-  </div>
-);
+  );
+}
 
 const EscapeConfirm = ({ onConfirm, onCancel }: { onConfirm: () => void, onCancel: () => void }) => (
     <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-50">
