@@ -173,19 +173,13 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
 
     const QuestionPrompt = () => {
         const promptContainerClasses = "leading-relaxed text-lg font-serif text-gray-800 dark:text-gray-100 text-center";
-
         if (currentQ.promptContent) {
             return <div className={promptContainerClasses}>{renderStructuredContent(currentQ.promptContent, true)}</div>;
         }
-        
-        // Legacy Fallbacks
         switch (currentQ.promptType) {
-            case 'latex': 
-                return <div className={promptContainerClasses}><BlockMath math={currentQ.promptLatex || ''} /></div>;
-            case 'image': 
-                return <img src={currentQ.promptImageUrl} alt="Question" className="max-h-48 rounded-lg shadow-md border bg-white" />;
-            default: 
-                return <div className={promptContainerClasses}>{renderLegacyMixedText(currentQ.promptText)}</div>;
+            case 'latex': return <div className={promptContainerClasses}><BlockMath math={currentQ.promptLatex || ''} /></div>;
+            case 'image': return <img src={currentQ.promptImageUrl} alt="Question" className="max-h-48 rounded-lg shadow-md border bg-white" />;
+            default: return <div className={promptContainerClasses}>{renderLegacyMixedText(currentQ.promptText)}</div>;
         }
     };
 
@@ -202,20 +196,14 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
     
     const getButtonClass = (idx: number) => {
         if (!isPaused) return 'hover:bg-blue-900';
-
         const isCorrectAnswer = idx === currentQ.correctIndex;
         const isPlayerSelection = idx === selectedChoice;
-
         if (isPlayerSelection) {
-            // Added !opacity-100 to make the colors fully visible on disabled buttons
             return isCorrectAnswer ? '!bg-green-500 !opacity-100' : '!bg-red-500 !opacity-100';
         }
-        
         if (isCorrectAnswer) {
-            // Added !opacity-100 here as well
             return '!bg-green-500 !opacity-100';
         }
-
         return 'bg-gray-700/50 opacity-60'; 
     };
 
@@ -228,9 +216,7 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
                 </div>
 
                 <div className="w-1/3 bg-black/60 backdrop-blur-sm p-3 rounded-xl border-2 border-white/20">
-                    {isPaused ? (
-                        <div className="grid grid-cols-1"><button onClick={nextQuestion} className="battle-btn">Next</button></div>
-                    ) : !showAnswers ? (
+                    {!showAnswers ? (
                         <div className="grid grid-cols-2 gap-2">
                             <button onClick={() => setShowAnswers(true)} className="battle-btn">Answer</button>
                             <button onClick={() => setShowInventory(true)} className="battle-btn">Items</button>
@@ -238,20 +224,33 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
                             <button onClick={() => setShowEscapeConfirm(true)} className="battle-btn">Escape</button>
                         </div>
                     ) : (
-                        <>
-                            <div className="flex justify-end mb-2">
-                                <button onClick={() => setShowAnswers(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded text-sm">
-                                    ⏎ Back
-                                </button>
-                            </div>
+                        <div className="flex flex-col gap-2">
+                            {/* Show Back button only when not paused */}
+                            {!isPaused && (
+                                <div className="flex justify-end">
+                                    <button onClick={() => setShowAnswers(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded text-sm mb-2">
+                                        ⏎ Back
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Answer Grid */}
                             <div className="grid grid-cols-2 gap-2">
-                                {(currentQ.choices || []).map((_: any, idx: number) => (
+                                {/* CORRECTED: Prioritize choicesContent over choices */}
+                                {(currentQ.choicesContent || currentQ.choices || []).map((_: any, idx: number) => (
                                     <button key={idx} disabled={isPaused} onClick={() => handleAnswer(idx)} className={`battle-btn ${getButtonClass(idx)}`}>
                                         {getChoiceContent(idx)}
                                     </button>
                                 ))}
                             </div>
-                        </>
+
+                            {/* Show Next button only when paused */}
+                            {isPaused && (
+                                <div className="grid grid-cols-1 mt-2">
+                                    <button onClick={nextQuestion} className="battle-btn">Next</button>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
