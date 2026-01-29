@@ -139,7 +139,7 @@ export function BattleScreen(props: BattleScreenProps) {
 
 // SUB-COMPONENTS
 const Sprites = ({ character, foe }: { character: Character | null, foe: FoeDoc | null }) => {
-    const playerImage = character?.imageUrl || "https://storage.googleapis.com/mathquest-cdn/player_character/player_sprite.png";
+    const playerImage = character?.imageUrl || "https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=bae93c5e-92ed-4958-9274-fb67a3f5f8c9";
     
     return (
         <div className="absolute inset-0 pointer-events-none">
@@ -169,8 +169,9 @@ const TopArea = ({ character, playerHp, foe, foeHp, timeLeft, totalTime, current
 
 const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAnswer, skipQuestion, setShowInventory, setShowEscapeConfirm, selectedChoice, msg, nextQuestion }: any) => {
 
+    const finalMsg = isPaused && selectedChoice === null ? "Time's Up!" : msg;
+
     const QuestionPrompt = () => {
-        // New Unified Prompt Style
         const promptContainerClasses = "leading-relaxed text-lg font-serif text-gray-800 dark:text-gray-100 text-center";
 
         if (currentQ.promptContent) {
@@ -192,7 +193,6 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
         if (currentQ.choicesContent && currentQ.choicesContent[idx]) {
             return renderStructuredContent(currentQ.choicesContent[idx].content);
         }
-        // Legacy Fallback for choices
         const choiceText = currentQ.choices?.[idx];
         if (currentQ.choiceType === 'latex') {
             try { return <InlineMath math={choiceText || ""} />; } catch (e) { return <span className="text-red-500 font-mono">{choiceText}</span>; }
@@ -222,32 +222,34 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
             <div className="flex justify-between items-end gap-4">
                 <div className="flex-1 bg-black/60 backdrop-blur-sm p-4 rounded-xl border-2 border-white/20 relative min-h-[100px] flex items-center justify-center">
                     <div className="absolute -top-3 right-1/2 bg-inherit w-6 h-6 transform rotate-45"></div>
-                    {isPaused && msg ? <p className="text-center text-lg font-bold animate-pulse">{msg}</p> : <QuestionPrompt />}
+                    {isPaused && finalMsg ? <p className="text-center text-lg font-bold animate-pulse">{finalMsg}</p> : <QuestionPrompt />}
                 </div>
 
-                <div className="w-1/3 grid grid-cols-2 gap-2 bg-black/60 backdrop-blur-sm p-3 rounded-xl border-2 border-white/20">
+                <div className="w-1/3 bg-black/60 backdrop-blur-sm p-3 rounded-xl border-2 border-white/20">
                     {isPaused ? (
-                        <button onClick={nextQuestion} className="battle-btn col-span-2">Next</button>
+                        <div className="grid grid-cols-1"><button onClick={nextQuestion} className="battle-btn">Next</button></div>
                     ) : !showAnswers ? (
-                        <>
-                            <button onClick={() => setShowAnswers(true)} disabled={isPaused} className="battle-btn">Answer</button>
-                            <button onClick={() => setShowInventory(true)} disabled={isPaused} className="battle-btn">Items</button>
-                            <button onClick={skipQuestion} disabled={isPaused} className="battle-btn">Skip</button>
-                            <button onClick={() => setShowEscapeConfirm(true)} disabled={isPaused} className="battle-btn">Escape</button>
-                        </>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => setShowAnswers(true)} className="battle-btn">Answer</button>
+                            <button onClick={() => setShowInventory(true)} className="battle-btn">Items</button>
+                            <button onClick={skipQuestion} className="battle-btn">Skip</button>
+                            <button onClick={() => setShowEscapeConfirm(true)} className="battle-btn">Escape</button>
+                        </div>
                     ) : (
-                        <>
-                            {(currentQ.choices || []).map((_: any, idx: number) => (
-                                <button key={idx} disabled={isPaused} onClick={() => handleAnswer(idx)} className={`battle-btn col-span-1 ${getButtonClass(idx)}`}>
-                                    {getChoiceContent(idx)}
+                        <div className="flex flex-col gap-2">
+                            <div className="flex justify-end">
+                                <button onClick={() => setShowAnswers(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded text-sm">
+                                    ⏎ Back
                                 </button>
-                            ))}
-                             {!isPaused && (
-                                <button onClick={() => setShowAnswers(false)} className="battle-btn col-span-2 bg-gray-600 hover:bg-gray-700">
-                                    Back
-                                </button>
-                            )}
-                        </>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                {(currentQ.choices || []).map((_: any, idx: number) => (
+                                    <button key={idx} disabled={isPaused} onClick={() => handleAnswer(idx)} className={`battle-btn ${getButtonClass(idx)}`}>
+                                        {getChoiceContent(idx)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
