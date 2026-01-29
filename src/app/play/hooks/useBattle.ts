@@ -442,7 +442,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   }, [searchParams, encounters, character, handleStartEncounter, mode]);
 
   useEffect(() => {
-    if (mode === 'battle' && !isPaused && !showInventory) {
+    if (mode === 'battle' && !isPaused) {
       if (timeLeft <= 0) {
         handleAnswer(-1);
         return;
@@ -453,7 +453,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     } else if (timer) {
       clearInterval(timer);
     }
-  }, [mode, isPaused, timeLeft, showInventory, handleAnswer]);
+  }, [mode, isPaused, timeLeft, handleAnswer]);
 
   const handleStartBattle = () => setMode('battle');
 
