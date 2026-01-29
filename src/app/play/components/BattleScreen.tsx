@@ -4,7 +4,7 @@ import { HealthBar, TimeBar } from "@/app/play/components/shared/Bars";
 import { BlockMath, InlineMath } from 'react-katex';
 import React, { useState, useEffect } from "react";
 
-// RENDER HELPERS (remain unchanged)
+// RENDER HELPERS
 const renderLegacyMixedText = (text: string | undefined): React.ReactNode => {
     if (!text) return null;
     if (!text.includes('$')) return text;
@@ -12,9 +12,7 @@ const renderLegacyMixedText = (text: string | undefined): React.ReactNode => {
     return <>{parts.map((part, index) => {
         if (part.startsWith('$') && part.endsWith('$')) {
             const math = part.slice(1, -1);
-            try { return <InlineMath key={index} math={math} />; } catch (error) {
-                return <span key={index} className="text-red-500 font-mono">{part}</span>;
-            }
+            try { return <InlineMath key={index} math={math} />; } catch (error) { return <span key={index} className="text-red-500 font-mono">{part}</span>; }
         }
         return <span key={index}>{part}</span>;
     })}</>;
@@ -33,6 +31,7 @@ const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = f
     })}</>;
 };
 
+// PROP TYPES
 interface BattleScreenProps {
   character: Character | null;
   foe: FoeDoc | null;
@@ -66,10 +65,11 @@ interface InfoBoxProps {
   isFoe?: boolean;
 }
 
+// MAIN COMPONENT
 export function BattleScreen(props: BattleScreenProps) {
   const {
     character, foe, questions, currentQIndex, playerHp, foeHp, msg, timeLeft, totalTime, 
-    isPaused, isEscaping, selectedChoice, gameItems, showInventory, setShowInventory, showEscapeConfirm, 
+    isPaused, selectedChoice, gameItems, showInventory, setShowInventory, showEscapeConfirm, 
     setShowEscapeConfirm, handleAnswer, nextQuestion, skipQuestion, executeEscape, usePotion, subArea
   } = props;
 
@@ -84,83 +84,155 @@ export function BattleScreen(props: BattleScreenProps) {
     return <div className="p-10 text-center font-bold text-gray-500 dark:text-gray-400 animate-pulse">Loading Battle...</div>;
   }
 
-  const QuestionPrompt = () => {
-    if (currentQ.promptContent) return <>{renderStructuredContent(currentQ.promptContent, true)}</>;
-    switch (currentQ.promptType) {
-        case 'latex': return <div className="py-2 overflow-x-auto"><BlockMath math={currentQ.promptLatex || ''} /></div>;
-        case 'image': return <img src={currentQ.promptImageUrl} alt="Question" className="max-h-48 rounded-lg shadow-md border bg-white" />;
-        default: return <div className="whitespace-pre-wrap dark:text-gray-100 text-sm md:text-base">{renderLegacyMixedText(currentQ.promptText)}</div>;
-    }
-  };
-
-  const getChoiceContent = (idx: number) => {
-    if (currentQ.choicesContent && currentQ.choicesContent[idx]) return renderStructuredContent(currentQ.choicesContent[idx].content);
-    const choiceText = currentQ.choices?.[idx];
-    if (currentQ.choiceType === 'latex') {
-        try { return <InlineMath math={choiceText || ""} />; } catch (e) { return <span className="text-red-500 font-mono">{choiceText}</span>; }
-    }
-    return renderLegacyMixedText(choiceText);
-  };
-
-  const defaultBg = "/backgrounds/default_battle_bg.png";
-  const bgUrl = subArea?.imageUrl || defaultBg;
+  const bgUrl = subArea?.imageUrl || "/backgrounds/default_battle_bg.png";
 
   return (
     <main style={{ backgroundImage: `url(${bgUrl})` }} className="h-screen bg-cover bg-center font-sans text-white relative flex flex-col justify-between">
       {/* Sprites */}
-      <div className="absolute inset-0 pointer-events-none">
-        {character?.imageUrl && <img src={character.imageUrl} alt="Character" className="absolute bottom-1/4 left-1/4 w-48 h-48" />}
-        {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/4 right-1/4 w-48 h-48" />}
-      </div>
+      <Sprites character={character} foe={foe} />
 
-      {/* Top Area (Info Boxes + Time Bar) */}
-      <div className="relative z-10 p-4 space-y-2">
-          <div className="flex justify-between items-start gap-4">
-              <InfoBox title={character?.name || "Player"} hp={playerHp} maxHp={character?.maxHp || 100} />
-              <InfoBox title={foe?.name || "Enemy"} hp={foeHp} maxHp={foe?.maxHp || 50} isFoe />
-          </div>
-          <div className="bg-black/60 backdrop-blur-sm p-2 rounded-lg border-2 border-white/20">
-              <TimeBar current={timeLeft} max={totalTime} />
-          </div>
-      </div>
+      {/* Top Area */}
+      <TopArea character={character} playerHp={playerHp} foe={foe} foeHp={foeHp} timeLeft={timeLeft} totalTime={totalTime} />
 
-      {/* Bottom Area (Question + Controls) */}
-      <div className="relative z-10 p-4">
-        <div className="flex justify-between items-end gap-4">
-            {/* Question Bubble */}
-            <div className="flex-1 bg-black/60 backdrop-blur-sm p-4 rounded-xl border-2 border-white/20 relative">
-                  <div className="absolute -top-3 right-1/2 bg-inherit w-6 h-6 transform rotate-45"></div>
-                  <QuestionPrompt />
-            </div>
+      {/* Bottom Area */}
+      <BottomArea 
+        currentQ={currentQ}
+        showAnswers={showAnswers}
+        setShowAnswers={setShowAnswers}
+        isPaused={isPaused}
+        handleAnswer={handleAnswer}
+        skipQuestion={skipQuestion}
+        setShowInventory={setShowInventory}
+        setShowEscapeConfirm={setShowEscapeConfirm}
+        selectedChoice={selectedChoice}
+        msg={msg}
+        nextQuestion={nextQuestion}
+      />
 
-            {/* Controls */}
-            <div className="w-1/3 grid grid-cols-2 gap-2 bg-black/60 backdrop-blur-sm p-3 rounded-xl border-2 border-white/20">
-                {!showAnswers ? (
-                    <>
-                        <button onClick={() => setShowAnswers(true)} disabled={isPaused} className="battle-btn">Answer</button>
-                        <button onClick={() => setShowInventory(true)} disabled={isPaused} className="battle-btn">Items</button>
-                        <button onClick={skipQuestion} disabled={isPaused} className="battle-btn">Skip</button>
-                        <button onClick={() => setShowEscapeConfirm(true)} disabled={isPaused} className="battle-btn">Escape</button>
-                    </>
-                ) : (
-                    (currentQ.choicesContent || currentQ.choices || []).map((_, idx) => (
-                        <button key={idx} disabled={isPaused} onClick={() => handleAnswer(idx)} className={`battle-btn col-span-1`}>
-                            {getChoiceContent(idx)}
-                        </button>
-                    ))
-                )}
-            </div>
-        </div>
-      </div>
-
-      {/* Other UI Elements (Modals, etc.) would go here, styled to fit the new theme */}
+      {/* Modals */}
+      {showInventory && <InventoryPanel items={character?.inventory || []} gameItems={gameItems} onUse={usePotion} onClose={() => setShowInventory(false)} />}
+      {showEscapeConfirm && <EscapeConfirm onConfirm={executeEscape} onCancel={() => setShowEscapeConfirm(false)} />}
     </main>
   );
 }
+
+// SUB-COMPONENTS
+const Sprites = ({ character, foe }: { character: Character | null, foe: FoeDoc | null }) => (
+    <div className="absolute inset-0 pointer-events-none">
+        {character?.imageUrl && <img src={character.imageUrl} alt="Character" className="absolute bottom-1/4 left-1/4 w-48 h-48" />}
+        {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/4 right-1/4 w-48 h-48" />}
+    </div>
+);
+
+const TopArea = ({ character, playerHp, foe, foeHp, timeLeft, totalTime }: any) => (
+    <div className="relative z-10 p-4 space-y-2">
+        <div className="flex justify-between items-start gap-4">
+            <InfoBox title={character?.name || "Player"} hp={playerHp} maxHp={character?.maxHp || 100} />
+            <InfoBox title={foe?.name || "Enemy"} hp={foeHp} maxHp={foe?.maxHp || 50} isFoe />
+        </div>
+        <div className="bg-black/60 backdrop-blur-sm p-2 rounded-lg border-2 border-white/20">
+            <TimeBar current={timeLeft} max={totalTime} />
+        </div>
+    </div>
+);
+
+const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAnswer, skipQuestion, setShowInventory, setShowEscapeConfirm, selectedChoice, msg, nextQuestion }: any) => {
+
+    const QuestionPrompt = () => {
+        if (currentQ.promptContent) return <>{renderStructuredContent(currentQ.promptContent, true)}</>;
+        switch (currentQ.promptType) {
+            case 'latex': return <div className="py-2 overflow-x-auto"><BlockMath math={currentQ.promptLatex || ''} /></div>;
+            case 'image': return <img src={currentQ.promptImageUrl} alt="Question" className="max-h-48 rounded-lg shadow-md border bg-white" />;
+            default: return <div className="whitespace-pre-wrap dark:text-gray-100 text-sm md:text-base">{renderLegacyMixedText(currentQ.promptText)}</div>;
+        }
+    };
+
+    const getChoiceContent = (idx: number) => {
+        if (currentQ.choicesContent && currentQ.choicesContent[idx]) return renderStructuredContent(currentQ.choicesContent[idx].content);
+        const choiceText = currentQ.choices?.[idx];
+        if (currentQ.choiceType === 'latex') {
+            try { return <InlineMath math={choiceText || ""} />; } catch (e) { return <span className="text-red-500 font-mono">{choiceText}</span>; }
+        }
+        return renderLegacyMixedText(choiceText);
+    };
+    
+    const getButtonClass = (idx: number) => {
+        if (isPaused && selectedChoice === idx) {
+            return selectedChoice === currentQ.correctChoice ? 'bg-green-500' : 'bg-red-500';
+        }
+        return '';
+    };
+
+    return (
+        <div className="relative z-10 p-4">
+            <div className="flex justify-between items-end gap-4">
+                <div className="flex-1 bg-black/60 backdrop-blur-sm p-4 rounded-xl border-2 border-white/20 relative">
+                    <div className="absolute -top-3 right-1/2 bg-inherit w-6 h-6 transform rotate-45"></div>
+                    {isPaused && msg ? <p className="text-center text-lg font-bold animate-pulse">{msg}</p> : <QuestionPrompt />}
+                </div>
+
+                <div className="w-1/3 grid grid-cols-2 gap-2 bg-black/60 backdrop-blur-sm p-3 rounded-xl border-2 border-white/20">
+                    {isPaused ? (
+                        <button onClick={nextQuestion} className="battle-btn col-span-2">Next</button>
+                    ) : !showAnswers ? (
+                        <>
+                            <button onClick={() => setShowAnswers(true)} disabled={isPaused} className="battle-btn">Answer</button>
+                            <button onClick={() => setShowInventory(true)} disabled={isPaused} className="battle-btn">Items</button>
+                            <button onClick={skipQuestion} disabled={isPaused} className="battle-btn">Skip</button>
+                            <button onClick={() => setShowEscapeConfirm(true)} disabled={isPaused} className="battle-btn">Escape</button>
+                        </>
+                    ) : (
+                        (currentQ.choices || []).map((_, idx) => (
+                            <button key={idx} disabled={isPaused} onClick={() => handleAnswer(idx)} className={`battle-btn col-span-1 ${getButtonClass(idx)}`}>
+                                {getChoiceContent(idx)}
+                            </button>
+                        ))
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const InfoBox = ({ title, hp, maxHp, isFoe = false }: InfoBoxProps) => (
     <div className={`w-1/3 bg-black/60 backdrop-blur-sm p-3 rounded-lg border-2 ${isFoe ? 'border-red-500' : 'border-blue-500'}`}>
         <h3 className="font-bold text-lg truncate">{title}</h3>
         <HealthBar label={isFoe ? "" : ""} current={hp} max={maxHp} />
+    </div>
+);
+
+const InventoryPanel = ({ items, gameItems, onUse, onClose }: { items: InventoryItem[], gameItems: Record<string, GameItem>, onUse: (item: InventoryItem) => void, onClose: () => void }) => (
+  <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div className="bg-gray-800 border-2 border-white/30 rounded-xl p-6 w-full max-w-md m-4 text-white">
+      <h2 className="text-2xl font-bold mb-4">Inventory</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+        {items.length > 0 ? items.map(item => {
+          const gameItem = gameItems[item.itemId];
+          return (
+            <div key={item.itemId} className="bg-gray-700 rounded-lg p-4 flex flex-col">
+              <div className="flex-1">
+                <h3 className="font-bold text-lg">{gameItem?.name || 'Unknown Item'} (x{item.quantity})</h3>
+                <p className="text-sm text-gray-400">{gameItem?.description}</p>
+              </div>
+              <button onClick={() => onUse(item)} className="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-all active:scale-95">Use</button>
+            </div>
+          );
+        }) : <p className="text-gray-400 col-span-full">Your inventory is empty.</p>}
+      </div>
+      <button onClick={onClose} className="mt-6 w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-all active:scale-95">Close</button>
+    </div>
+  </div>
+);
+
+const EscapeConfirm = ({ onConfirm, onCancel }: { onConfirm: () => void, onCancel: () => void }) => (
+    <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-50">
+        <div className="bg-gray-800 border-2 border-white/30 rounded-xl p-8 w-full max-w-sm m-4 text-center text-white">
+            <h2 className="text-2xl font-bold mb-4">Escape?</h2>
+            <p className="mb-6">Are you sure you want to escape? This will count as a loss.</p>
+            <div className="flex justify-around gap-4">
+                <button onClick={onConfirm} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-all active:scale-95">Confirm</button>
+                <button onClick={onCancel} className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-all active:scale-95">Cancel</button>
+            </div>
+        </div>
     </div>
 );
