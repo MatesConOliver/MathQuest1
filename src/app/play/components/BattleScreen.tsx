@@ -134,8 +134,8 @@ const Sprites = ({ character, foe }: { character: Character | null, foe: FoeDoc 
     
     return (
         <div className="absolute inset-0 pointer-events-none">
-            <img src={playerImage} alt="Character" className="absolute bottom-1/4 left-1/4 w-96 h-96 object-contain" />
-            {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/4 right-1/4 w-96 h-96 object-contain" />}
+            <img src={playerImage} alt="Character" className="absolute bottom-1/12 left-1/12 w-96 h-96 object-contain" />
+            {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/12 right-1/12 w-96 h-96 object-contain" />}
         </div>
     );
 };
