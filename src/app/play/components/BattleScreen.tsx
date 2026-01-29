@@ -102,44 +102,51 @@ export function BattleScreen(props: BattleScreenProps) {
   const bgUrl = subArea?.imageUrl || defaultBg;
 
   return (
-    <main style={{ backgroundImage: `url(${bgUrl})` }} className="h-screen bg-cover bg-center font-sans text-white relative flex flex-col justify-between p-4">
+    <main style={{ backgroundImage: `url(${bgUrl})` }} className="h-screen bg-cover bg-center font-sans text-white relative flex flex-col justify-between">
       {/* Sprites */}
-      <div className="absolute inset-0">
+      <div className="absolute inset-0 pointer-events-none">
         {character?.imageUrl && <img src={character.imageUrl} alt="Character" className="absolute bottom-1/4 left-1/4 w-48 h-48" />}
         {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/4 right-1/4 w-48 h-48" />}
       </div>
 
-      {/* Top Info Boxes */}
-      <div className="flex justify-between items-start">
-          <InfoBox title={character?.name || "Player"} hp={playerHp} maxHp={character?.maxHp || 100} />
-          <InfoBox title={foe?.name || "Enemy"} hp={foeHp} maxHp={foe?.maxHp || 50} isFoe />
+      {/* Top Area (Info Boxes + Time Bar) */}
+      <div className="relative z-10 p-4 space-y-2">
+          <div className="flex justify-between items-start gap-4">
+              <InfoBox title={character?.name || "Player"} hp={playerHp} maxHp={character?.maxHp || 100} />
+              <InfoBox title={foe?.name || "Enemy"} hp={foeHp} maxHp={foe?.maxHp || 50} isFoe />
+          </div>
+          <div className="bg-black/60 backdrop-blur-sm p-2 rounded-lg border-2 border-white/20">
+              <TimeBar current={timeLeft} max={totalTime} />
+          </div>
       </div>
 
-      {/* Bottom Area */}
-      <div className="flex justify-between items-end gap-4">
-          {/* Question Bubble */}
-          <div className="flex-1 bg-black/60 backdrop-blur-sm p-4 rounded-xl border-2 border-white/20 relative">
-                <div className="absolute -top-4 right-1/2 bg-inherit w-8 h-8 transform rotate-45"></div>
-                <QuestionPrompt />
-          </div>
+      {/* Bottom Area (Question + Controls) */}
+      <div className="relative z-10 p-4">
+        <div className="flex justify-between items-end gap-4">
+            {/* Question Bubble */}
+            <div className="flex-1 bg-black/60 backdrop-blur-sm p-4 rounded-xl border-2 border-white/20 relative">
+                  <div className="absolute -top-3 right-1/2 bg-inherit w-6 h-6 transform rotate-45"></div>
+                  <QuestionPrompt />
+            </div>
 
-          {/* Controls */}
-          <div className="w-1/3 grid grid-cols-2 gap-2 bg-black/60 backdrop-blur-sm p-3 rounded-xl border-2 border-white/20">
-              {!showAnswers ? (
-                  <>
-                      <button onClick={() => setShowAnswers(true)} className="battle-btn">Answer</button>
-                      <button onClick={() => setShowInventory(true)} disabled={isPaused} className="battle-btn">Items</button>
-                      <button onClick={skipQuestion} disabled={isPaused} className="battle-btn">Skip</button>
-                      <button onClick={() => setShowEscapeConfirm(true)} disabled={isPaused} className="battle-btn">Escape</button>
-                  </>
-              ) : (
-                  (currentQ.choicesContent || currentQ.choices || []).map((_, idx) => (
-                      <button key={idx} disabled={isPaused} onClick={() => { handleAnswer(idx); setShowAnswers(false); }} className={`battle-btn col-span-1`}>
-                          {getChoiceContent(idx)}
-                      </button>
-                  ))
-              )}
-          </div>
+            {/* Controls */}
+            <div className="w-1/3 grid grid-cols-2 gap-2 bg-black/60 backdrop-blur-sm p-3 rounded-xl border-2 border-white/20">
+                {!showAnswers ? (
+                    <>
+                        <button onClick={() => setShowAnswers(true)} className="battle-btn">Answer</button>
+                        <button onClick={() => setShowInventory(true)} disabled={isPaused} className="battle-btn">Items</button>
+                        <button onClick={skipQuestion} disabled={isPaused} className="battle-btn">Skip</button>
+                        <button onClick={() => setShowEscapeConfirm(true)} disabled={isPaused} className="battle-btn">Escape</button>
+                    </>
+                ) : (
+                    (currentQ.choicesContent || currentQ.choices || []).map((_, idx) => (
+                        <button key={idx} disabled={isPaused} onClick={() => { handleAnswer(idx); setShowAnswers(false); }} className={`battle-btn col-span-1`}>
+                            {getChoiceContent(idx)}
+                        </button>
+                    ))
+                )}
+            </div>
+        </div>
       </div>
 
       {/* Other UI Elements (Modals, etc.) would go here, styled to fit the new theme */}
@@ -150,6 +157,6 @@ export function BattleScreen(props: BattleScreenProps) {
 const InfoBox = ({ title, hp, maxHp, isFoe = false }: InfoBoxProps) => (
     <div className={`w-1/3 bg-black/60 backdrop-blur-sm p-3 rounded-lg border-2 ${isFoe ? 'border-red-500' : 'border-blue-500'}`}>
         <h3 className="font-bold text-lg truncate">{title}</h3>
-        <HealthBar label={isFoe ? "" : ""} current={hp} max={hp} />
+        <HealthBar label={isFoe ? "" : ""} current={hp} max={maxHp} />
     </div>
 );
