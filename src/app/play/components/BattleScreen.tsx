@@ -236,8 +236,8 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
                             <button onClick={() => setShowEscapeConfirm(true)} className="battle-btn">Escape</button>
                         </div>
                     ) : (
-                        <div className="flex flex-col gap-2">
-                            <div className="flex justify-end">
+                        <>
+                            <div className="flex justify-end mb-2">
                                 <button onClick={() => setShowAnswers(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded text-sm">
                                     ⏎ Back
                                 </button>
@@ -249,7 +249,7 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
                                     </button>
                                 ))}
                             </div>
-                        </div>
+                        </>
                     )}
                 </div>
             </div>
