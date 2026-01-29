@@ -1,7 +1,7 @@
-"use client";
+'use client';
 import { useState, useEffect, ChangeEvent } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, query, where, orderBy, addDoc } from 'firebase/firestore';
 import { GameLocation, SubArea, CharacterSkills } from '@/types/game';
 import { Input } from '@/app/gm/components/Input';
 import { TabButton } from '@/app/gm/components/TabButton';
@@ -11,26 +11,22 @@ const SubAreasPanel = () => {
   const [subAreas, setSubAreas] = useState<SubArea[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
 
-  // State for the form, separated for clarity
   const [editingSubArea, setEditingSubArea] = useState<Partial<SubArea> | null>(null);
   const [storyFlagsInput, setStoryFlagsInput] = useState('');
   const [isCreating, setIsCreating] = useState(true);
 
-  // Effect for fetching locations
   useEffect(() => {
     const q = query(collection(db, 'locations'), orderBy('order'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedLocations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GameLocation));
       setLocations(fetchedLocations);
-      // If no location is selected yet, and we have locations, select the first one.
       if (!selectedLocationId && fetchedLocations.length > 0) {
         setSelectedLocationId(fetchedLocations[0].id);
       }
     });
-    return () => unsubscribe(); // Cleanup subscription on unmount
-  }, []); // Empty dependency array means this runs once on mount
+    return () => unsubscribe();
+  }, []);
 
-  // Effect for fetching sub-areas based on selected location
   useEffect(() => {
     if (!selectedLocationId) {
       setSubAreas([]);
@@ -46,8 +42,8 @@ const SubAreasPanel = () => {
       setSubAreas([]);
     });
 
-    return () => unsubscribe(); // Cleanup subscription when selectedLocationId changes or on unmount
-  }, [selectedLocationId]); // Reruns whenever selectedLocationId changes
+    return () => unsubscribe();
+  }, [selectedLocationId]);
 
   const selectSubAreaToEdit = (sa: SubArea) => {
     setIsCreating(false);
@@ -58,7 +54,7 @@ const SubAreasPanel = () => {
   const startNewSubArea = () => {
     setIsCreating(true);
     setEditingSubArea({
-        id: '', name: '', description: '', order: subAreas.length + 1,
+        id: '', name: '', description: '', order: subAreas.length + 1, imageUrl: '',
         unlockRequirements: { skills: {} }
     });
     setStoryFlagsInput('');
@@ -89,14 +85,13 @@ const SubAreasPanel = () => {
   };
 
   const handleSave = async () => {
-    if (!editingSubArea || !editingSubArea.id || !editingSubArea.name || !selectedLocationId) {
-      alert("Sub-Area ID, Name, and a parent Location are required.");
+    if (!editingSubArea || !editingSubArea.name || !selectedLocationId) {
+      alert("Sub-Area Name and a parent Location are required.");
       return;
     }
 
     const subAreaToSave: Partial<SubArea> = JSON.parse(JSON.stringify(editingSubArea));
 
-    // Handle story flags from the separate input state
     const flags = storyFlagsInput.split(',').map((s: string) => s.trim()).filter(Boolean);
     if (flags.length > 0) {
         subAreaToSave.unlockRequirements = {
@@ -107,23 +102,27 @@ const SubAreasPanel = () => {
         delete subAreaToSave.unlockRequirements.storyFlags;
     }
     
-    // Clean up empty skills object
     if (subAreaToSave.unlockRequirements?.skills && Object.keys(subAreaToSave.unlockRequirements.skills).length === 0) {
         delete subAreaToSave.unlockRequirements.skills;
     }
 
-    // Clean up empty unlockRequirements object
     if (subAreaToSave.unlockRequirements && Object.keys(subAreaToSave.unlockRequirements).length === 0) {
         delete subAreaToSave.unlockRequirements;
     }
     
     const { id, ...data } = subAreaToSave;
 
-    await setDoc(doc(db, 'subAreas', id!),
-      { ...data, locationId: selectedLocationId }
-    );
-    
-    startNewSubArea(); // Reset form after save
+    try {
+        if (id) { // Editing existing
+            await setDoc(doc(db, 'subAreas', id), { ...data, locationId: selectedLocationId });
+        } else { // Creating new
+            await addDoc(collection(db, 'subAreas'), { ...data, locationId: selectedLocationId });
+        }
+        startNewSubArea();
+    } catch (error) {
+        console.error("Error saving sub-area: ", error);
+        alert("Failed to save sub-area. Check console for details.");
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -166,9 +165,10 @@ const SubAreasPanel = () => {
                 <>
                     <h3 className="font-bold text-xl mb-4 text-gray-900 dark:text-gray-100">{isCreating ? 'Create New Sub-Area' : `Edit: ${editingSubArea.name}`}</h3>
                      <div className="flex flex-col gap-4">
-                        <Input label="ID" value={editingSubArea.id ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('id', e.target.value)} placeholder="unique-sub-area-id" disabled={!isCreating}/>
+                        <Input label="ID (Optional)" value={editingSubArea.id ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('id', e.target.value)} placeholder="auto-generates if empty" disabled={!isCreating && !!editingSubArea.id}/>
                         <Input label="Name" value={editingSubArea.name ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('name', e.target.value)} />
                         <Input label="Description" value={editingSubArea.description ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('description', e.target.value)} />
+                        <Input label="Image URL" value={editingSubArea.imageUrl ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('imageUrl', e.target.value)} />
                         <Input label="Order" type="number" value={editingSubArea.order ?? 0} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('order', Number(e.target.value))} />
                         
                         <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
