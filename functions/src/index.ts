@@ -56,7 +56,8 @@ const createNewCharacter = (name: string, uid: string) => {
     updatedAt: FieldValue.serverTimestamp(),
     completedStoryEvents: [],
     unlockedContinents: ["bSL1XkrzgqQxqtCLNumD"],
-    encounterWins: {}
+    encounterWins: {},
+    imageUrl: "https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=c929fa4d-02f2-4da6-bf6f-12fd88656298"
   };
 };
 

@@ -131,8 +131,8 @@ export function BattleScreen(props: BattleScreenProps) {
 // SUB-COMPONENTS
 const Sprites = ({ character, foe }: { character: Character | null, foe: FoeDoc | null }) => (
     <div className="absolute inset-0 pointer-events-none">
-        {character?.imageUrl && <img src={character.imageUrl} alt="Character" className="absolute bottom-1/4 left-1/4 w-48 h-48" />}
-        {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/4 right-1/4 w-48 h-48" />}
+        {character?.imageUrl && <img src={character.imageUrl} alt="Character" className="absolute bottom-1/4 left-1/4 w-48 h-48 object-contain" />}
+        {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/4 right-1/4 w-48 h-48 object-contain" />}
     </div>
 );
 
