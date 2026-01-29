@@ -9,7 +9,6 @@ import {
 } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore"; 
 import { auth, db, callApi } from "@/lib/firebase";
-import { Character } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
 
 export default function LoginPage() {
