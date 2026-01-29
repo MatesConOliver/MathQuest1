@@ -73,7 +73,7 @@ export function FoesPanel() {
     }
     setMsg("Saving...");
 
-    const docData: FoeDoc = {
+    const docData: Partial<FoeDoc> = {
       name,
       description: desc,
       emoji,
@@ -87,10 +87,10 @@ export function FoesPanel() {
         await setDoc(doc(db, "foes", id), docData, { merge: true });
         setMsg("✅ Updated Foe!");
       } else {
-        await addDoc(collection(db, "foes"), docData);
+        const newDocRef = await addDoc(collection(db, "foes"), docData);
+        setId(newDocRef.id); // Set the new ID in the form
         setMsg("✅ Created New Foe!");
       }
-      if (!id) resetForm();
       loadFoes();
     } catch (e: any) {
       setMsg("Error: " + e.message);
@@ -100,6 +100,7 @@ export function FoesPanel() {
   async function deleteFoe(foeId: string) {
     if (!confirm("Delete this foe?")) return;
     await deleteDoc(doc(db, "foes", foeId));
+    resetForm();
     loadFoes();
   }
 
@@ -201,7 +202,7 @@ export function FoesPanel() {
                   <img
                     src={f.imageUrl}
                     alt={f.name}
-                    className="w-10 h-10 rounded-md"
+                    className="w-10 h-10 rounded-md object-cover"
                   />
                 ) : (
                   <div className="text-2xl">{f.emoji || "👾"}</div>

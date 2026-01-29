@@ -80,6 +80,7 @@ export interface Character {
   storyFlags: string[]; // e.g., ["DEFEATED_GOBLIN_KING"]
   unlockedContinents: string[];   // List of IDs like ["cont_1", "cont_2"]
   encounterWins: { [encounterId: string]: number };
+  imageUrl?: string;
 }
 
 export interface Monster {
@@ -144,6 +145,8 @@ export type QuestionDoc = {
 export type FoeDoc = {
   id?: string;
   name: string;
+  description?: string;
+  emoji?: string;
   maxHp: number;
   attackDamage: number;
   imageUrl?: string;
@@ -167,6 +170,7 @@ export type SubArea = {
   name: string;
   description: string;
   order: number; // To order sub-areas within a location
+  imageUrl?: string;
   unlockRequirements?: {
     storyFlags?: string[]; // e.g., ["DEFEATED_GOBLIN_KING"]
     skills?: Partial<CharacterSkills>; // e.g., { algebra: 10 }
