@@ -2,7 +2,7 @@
 import { Character, FoeDoc, QuestionDoc, GameItem, InventoryItem, ContentBlock, SubArea } from "@/types/game";
 import { HealthBar, TimeBar } from "@/app/play/components/shared/Bars";
 import { BlockMath, InlineMath } from 'react-katex';
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 // RENDER HELPERS (remain unchanged)
 const renderLegacyMixedText = (text: string | undefined): React.ReactNode => {
@@ -76,6 +76,10 @@ export function BattleScreen(props: BattleScreenProps) {
   const [showAnswers, setShowAnswers] = useState(false);
   const currentQ = questions[currentQIndex];
 
+  useEffect(() => {
+      setShowAnswers(false);
+  }, [currentQIndex]);
+
   if (!currentQ) {
     return <div className="p-10 text-center font-bold text-gray-500 dark:text-gray-400 animate-pulse">Loading Battle...</div>;
   }
@@ -133,14 +137,14 @@ export function BattleScreen(props: BattleScreenProps) {
             <div className="w-1/3 grid grid-cols-2 gap-2 bg-black/60 backdrop-blur-sm p-3 rounded-xl border-2 border-white/20">
                 {!showAnswers ? (
                     <>
-                        <button onClick={() => setShowAnswers(true)} className="battle-btn">Answer</button>
+                        <button onClick={() => setShowAnswers(true)} disabled={isPaused} className="battle-btn">Answer</button>
                         <button onClick={() => setShowInventory(true)} disabled={isPaused} className="battle-btn">Items</button>
                         <button onClick={skipQuestion} disabled={isPaused} className="battle-btn">Skip</button>
                         <button onClick={() => setShowEscapeConfirm(true)} disabled={isPaused} className="battle-btn">Escape</button>
                     </>
                 ) : (
                     (currentQ.choicesContent || currentQ.choices || []).map((_, idx) => (
-                        <button key={idx} disabled={isPaused} onClick={() => { handleAnswer(idx); setShowAnswers(false); }} className={`battle-btn col-span-1`}>
+                        <button key={idx} disabled={isPaused} onClick={() => handleAnswer(idx)} className={`battle-btn col-span-1`}>
                             {getChoiceContent(idx)}
                         </button>
                     ))
