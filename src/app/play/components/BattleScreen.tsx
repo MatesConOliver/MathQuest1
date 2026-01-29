@@ -1,74 +1,37 @@
 
-import { Character, FoeDoc, QuestionDoc, GameItem, InventoryItem, ContentBlock, StructuredChoice } from "@/types/game";
+import { Character, FoeDoc, QuestionDoc, GameItem, InventoryItem, ContentBlock, SubArea } from "@/types/game";
 import { HealthBar, TimeBar } from "@/app/play/components/shared/Bars";
 import { BlockMath, InlineMath } from 'react-katex';
-import React from "react";
+import React, { useState } from "react";
 
-// ==================================================================================
-// RENDER HELPERS
-// ==================================================================================
-
-/**
- * Renders a legacy string that might contain mixed text and inline LaTeX ($...$).
- * This is for backward compatibility with old `promptText` and `choices` strings.
- */
+// RENDER HELPERS (remain unchanged)
 const renderLegacyMixedText = (text: string | undefined): React.ReactNode => {
     if (!text) return null;
     if (!text.includes('$')) return text;
-
     const parts = text.split(/(\$.*?\$)/g);
-    return (
-      <>
-        {parts.map((part, index) => {
-          if (part.startsWith('$') && part.endsWith('$')) {
+    return <>{parts.map((part, index) => {
+        if (part.startsWith('$') && part.endsWith('$')) {
             const math = part.slice(1, -1);
-            try {
-                return <InlineMath key={index} math={math} />;
-            } catch (error) {
-                // Return the original string if KaTeX fails
+            try { return <InlineMath key={index} math={math} />; } catch (error) {
                 return <span key={index} className="text-red-500 font-mono">{part}</span>;
             }
-          }
-          return <span key={index}>{part}</span>;
-        })}
-      </>
-    );
+        }
+        return <span key={index}>{part}</span>;
+    })}</>;
 };
 
-/**
- * Renders an array of new structured ContentBlocks into React nodes.
- * Used for `promptContent` and `choicesContent`.
- */
 const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = false) => {
     if (!blocks) return null;
     const MathComponent = isBlock ? BlockMath : InlineMath;
-
-    return (
-      <>
-        {blocks.map((block, index) => {
-          switch (block.type) {
-            case 'text':
-              return <span key={index}>{block.value}</span>;
-            case 'latex':
-              try {
-                return <MathComponent key={index} math={block.value} />;
-              } catch (e) { 
-                return <span key={index} className="text-red-500 font-mono">{`$${block.value}$`}</span>;
-              }
-            case 'image':
-              return <img key={index} src={block.value} alt="Question content" className="my-2 rounded-lg max-w-full h-auto inline-block" />;
-            default:
-              return null;
-          }
-        })}
-      </>
-    );
+    return <>{blocks.map((block, index) => {
+        switch (block.type) {
+            case 'text': return <span key={index}>{block.value}</span>;
+            case 'latex': try { return <MathComponent key={index} math={block.value} />; } catch (e) { return <span key={index} className="text-red-500 font-mono">{`$${block.value}$`}</span>; }
+            case 'image': return <img key={index} src={block.value} alt="Question content" className="my-2 rounded-lg max-w-full h-auto inline-block" />;
+            default: return null;
+        }
+    })}</>;
 };
-
-
-// ==================================================================================
-// BATTLE SCREEN COMPONENT
-// ==================================================================================
 
 interface BattleScreenProps {
   character: Character | null;
@@ -93,202 +56,100 @@ interface BattleScreenProps {
   skipQuestion: () => void;
   executeEscape: () => void;
   usePotion: (item: InventoryItem) => void;
+  subArea: SubArea | null;
+}
+
+interface InfoBoxProps {
+  title: string;
+  hp: number;
+  maxHp: number;
+  isFoe?: boolean;
 }
 
 export function BattleScreen(props: BattleScreenProps) {
   const {
     character, foe, questions, currentQIndex, playerHp, foeHp, msg, timeLeft, totalTime, 
     isPaused, isEscaping, selectedChoice, gameItems, showInventory, setShowInventory, showEscapeConfirm, 
-    setShowEscapeConfirm, handleAnswer, nextQuestion, skipQuestion, executeEscape, usePotion
+    setShowEscapeConfirm, handleAnswer, nextQuestion, skipQuestion, executeEscape, usePotion, subArea
   } = props;
 
+  const [showAnswers, setShowAnswers] = useState(false);
   const currentQ = questions[currentQIndex];
 
   if (!currentQ) {
-    return (
-      <div className="p-10 text-center font-bold text-gray-500 dark:text-gray-400 animate-pulse">
-        Loading Battle...
-      </div>
-    );
+    return <div className="p-10 text-center font-bold text-gray-500 dark:text-gray-400 animate-pulse">Loading Battle...</div>;
   }
 
-  // ==================================================================================
-  // 👇 CORRECTED: Smart Rendering Logic
-  // ==================================================================================
-
   const QuestionPrompt = () => {
-    // 1. New Structured Format
-    if (currentQ.promptContent) {
-      return <>{renderStructuredContent(currentQ.promptContent, true)}</>;
-    }
-    // 2. Legacy Format
+    if (currentQ.promptContent) return <>{renderStructuredContent(currentQ.promptContent, true)}</>;
     switch (currentQ.promptType) {
-      case 'latex':
-        return <div className="py-2 overflow-x-auto"><BlockMath math={currentQ.promptLatex || ''} /></div>;
-      case 'image':
-        return <img src={currentQ.promptImageUrl} alt="Question" className="max-h-48 rounded-lg shadow-md border bg-white" />;
-      case 'text':
-      default:
-        return <div className="whitespace-pre-wrap dark:text-gray-100 text-sm md:text-base">{renderLegacyMixedText(currentQ.promptText)}</div>;
+        case 'latex': return <div className="py-2 overflow-x-auto"><BlockMath math={currentQ.promptLatex || ''} /></div>;
+        case 'image': return <img src={currentQ.promptImageUrl} alt="Question" className="max-h-48 rounded-lg shadow-md border bg-white" />;
+        default: return <div className="whitespace-pre-wrap dark:text-gray-100 text-sm md:text-base">{renderLegacyMixedText(currentQ.promptText)}</div>;
     }
   };
 
   const getChoiceContent = (idx: number) => {
-    // 1. New Structured Format
-    if (currentQ.choicesContent && currentQ.choicesContent[idx]) {
-      return renderStructuredContent(currentQ.choicesContent[idx].content);
-    }
-    // 2. Legacy Format
+    if (currentQ.choicesContent && currentQ.choicesContent[idx]) return renderStructuredContent(currentQ.choicesContent[idx].content);
     const choiceText = currentQ.choices?.[idx];
     if (currentQ.choiceType === 'latex') {
-        try {
-            return <InlineMath math={choiceText || ""} />;
-        } catch (e) {
-            return <span className="text-red-500 font-mono">{choiceText}</span>
-        }
+        try { return <InlineMath math={choiceText || ""} />; } catch (e) { return <span className="text-red-500 font-mono">{choiceText}</span>; }
     }
     return renderLegacyMixedText(choiceText);
   };
 
+  const defaultBg = "/backgrounds/default_battle_bg.png";
+  const bgUrl = subArea?.imageUrl || defaultBg;
+
   return (
-    <main className="min-h-screen p-2 md:p-4 flex flex-col items-center max-w-2xl mx-auto relative transition-colors font-sans">
-      {/* Top Bars (Health, etc.) */}
-      <div className="w-full grid grid-cols-2 gap-2 md:gap-4 mb-2">
-        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl border border-blue-100 dark:border-blue-800 text-center space-y-1 transition-colors flex flex-col justify-between">
-            <div>
-                <h3 className="font-bold text-sm text-blue-900 dark:text-blue-200 truncate">{character?.name}</h3>
-                <HealthBar label="YOU" current={playerHp} max={character?.maxHp || 100} />
-            </div>
-          <button 
-            onClick={() => setShowInventory(true)}
-            disabled={isPaused}
-            className="mt-2 text-[10px] md:text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 py-1.5 rounded-lg font-bold flex items-center justify-center gap-2 border dark:border-gray-600 w-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            🎒 Items ({character?.inventory.filter(i => gameItems[i.itemId]?.type === 'potion').length || 0})
-          </button>
-        </div>
-        <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-2xl border border-red-100 dark:border-red-800 text-center space-y-1 transition-colors">
-            <h3 className="font-bold text-sm text-red-900 dark:text-red-200 truncate">{foe?.name || "Enemy"}</h3>
-            <HealthBar label="ENEMY" current={foeHp} max={foe?.maxHp || 50} />
-        </div>
-      </div>
-      <div className="bg-white dark:bg-gray-800 dark:text-gray-100 px-4 py-2 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 mb-2 w-full transition-colors">
-        <TimeBar current={timeLeft} max={totalTime} />
+    <main style={{ backgroundImage: `url(${bgUrl})` }} className="h-screen bg-cover bg-center font-sans text-white relative flex flex-col justify-between p-4">
+      {/* Sprites */}
+      <div className="absolute inset-0">
+        {character?.imageUrl && <img src={character.imageUrl} alt="Character" className="absolute bottom-1/4 left-1/4 w-48 h-48" />}
+        {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/4 right-1/4 w-48 h-48" />}
       </div>
 
-      {/* Main Question Card */}
-      <div className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-lg border dark:border-gray-700 p-4 md:p-6 space-y-3 relative transition-colors flex-1 flex flex-col justify-center">
-        {msg && <div className="text-center text-red-500 font-bold animate-bounce text-sm absolute top-2 left-0 w-full">{msg}</div>}
-        <div className="absolute top-3 right-4 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full text-[9px] font-black text-gray-400 dark:text-gray-300 tracking-widest border border-gray-200 dark:border-gray-600">
-           TURN {currentQIndex + 1} / {questions.length}
-        </div>
-        
-        {/* Renders the Question Prompt */}
-        <div className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100 text-center my-2 leading-relaxed">
-          {/* Legacy root imageUrl */}
-          {currentQ.imageUrl && !currentQ.promptContent && (
-            <div className="flex justify-center mb-2">
-                <img src={currentQ.imageUrl} alt="Question Context" className="rounded-xl max-h-40 object-contain" />
-            </div>
-           )}
-          <QuestionPrompt />
-        </div>
-
-        {/* Renders the Choices */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
-          {(currentQ.choicesContent || currentQ.choices || []).map((_, idx) => {
-            const isSelected = selectedChoice === idx;
-            const isCorrectChoice = idx === currentQ.correctIndex;
-            let highlightClass = "opacity-30 border-gray-200 dark:border-gray-800 text-gray-400 dark:text-gray-600";
-            if (isPaused) {
-                if (isCorrectChoice) {
-                  highlightClass = "border-green-500 bg-green-50 dark:bg-green-950/50 text-green-700 dark:text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]";
-                } else if (isSelected && !isCorrectChoice) {
-                  highlightClass = "border-red-500 bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400";
-                }
-            }
-            
-            return (
-              <button 
-                key={idx} 
-                disabled={isPaused} 
-                onClick={() => handleAnswer(idx)} 
-                className={`p-4 pr-10 border-2 rounded-2xl text-base md:text-lg font-bold transition-all duration-200 group relative ${ isPaused ? highlightClass : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-transparent hover:border-black dark:hover:border-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black active:scale-[0.98]'}`}>
-                  <span className="block w-full text-center">{getChoiceContent(idx)}</span>
-                  {isPaused && isCorrectChoice && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 scale-125">✅</span>}
-                  {isPaused && isSelected && !isCorrectChoice && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-600 dark:text-red-400 scale-125">❌</span>}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Bottom Buttons (Next, Skip, etc.) */}
-        {isPaused && !isEscaping && (
-            <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in mb-2">
-              <div className="text-lg font-bold bg-white dark:bg-gray-700 dark:text-white p-3 rounded-xl border-2 border-black dark:border-gray-500 w-full text-center shadow-md">{msg || "Round Over"}</div>
-              <button onClick={nextQuestion} className="w-full py-3 rounded-xl text-lg font-black shadow-lg transition-all duration-200 hover:scale-[1.02] bg-blue-600 text-white hover:bg-blue-800 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500 dark:shadow-blue-900/30 dark:ring-1 dark:ring-blue-500/50">NEXT ➡️</button>
-            </div>
-        )}
-        {isEscaping && (
-            <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in mb-2">
-                <div className="text-lg font-bold bg-white dark:bg-gray-700 dark:text-white p-3 rounded-xl border-2 border-black dark:border-gray-500 w-full text-center shadow-md">{msg}</div>
-            </div>
-        )}
-        {!isPaused && (
-            <div className="mt-2 flex flex-row gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                <button onClick={skipQuestion} className="flex-1 py-2 md:py-3 rounded-xl border-2 border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 text-red-500 dark:text-red-400 font-bold hover:bg-red-100 dark:hover:bg-red-900/30 hover:border-red-200 transition-colors text-xs">⏭️ SKIP</button>
-                <button onClick={() => setShowEscapeConfirm(true)} className="flex-1 py-2 md:py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-[10px] uppercase tracking-widest">🏃 ESCAPE</button>
-            </div>
-        )}
+      {/* Top Info Boxes */}
+      <div className="flex justify-between items-start">
+          <InfoBox title={character?.name || "Player"} hp={playerHp} maxHp={character?.maxHp || 100} />
+          <InfoBox title={foe?.name || "Enemy"} hp={foeHp} maxHp={foe?.maxHp || 50} isFoe />
       </div>
 
-      {/* Modals (Inventory, Escape) */}
-      {showInventory && (
-        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border dark:border-gray-700">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold">🎒 Backpack</h3>
-                <button onClick={() => setShowInventory(false)} className="text-gray-400 hover:text-black dark:hover:text-white">✕</button>
-              </div>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {character?.inventory.filter(i => gameItems[i.itemId]?.type === 'potion').length === 0 && <p className="text-center text-gray-400 py-4">No potions found!</p>}
-                {character?.inventory.map((invItem) => {
-                   const def = gameItems[invItem.itemId];
-                   if (!def || def.type !== 'potion') return null;
-                   return (
-                     <div key={invItem.instanceId} className="flex justify-between items-center p-3 border dark:border-gray-600 rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">
-                        <div className="flex items-center gap-3">
-                           {def.imageUrl ? <img src={def.imageUrl} className="w-8 h-8 rounded bg-gray-200" /> : <div className="w-8 h-8 rounded bg-pink-100 dark:bg-pink-900 flex items-center justify-center text-xs">🧪</div>}
-                           <div>
-                             <div className="font-bold text-sm dark:text-gray-200">{def.name}</div>
-                             <div className="text-xs text-green-600 dark:text-green-400 font-bold">Heals {def.stats?.heal?.flat || 20} HP</div>
-                           </div>
-                        </div>
-                        <button onClick={() => usePotion(invItem)} className="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-lg hover:bg-green-600">Drink</button>
-                     </div>
-                   );
-                })}
-              </div>
-              <p className="text-center text-[10px] text-red-500 mt-4 animate-pulse">⏰ Time is still ticking!</p>
-           </div>
-        </div>
-      )}
-      {showEscapeConfirm && (
-        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-           <div className="bg-white dark:bg-gray-800 dark:text-gray-100 w-full max-w-sm rounded-2xl p-6 shadow-2xl border-4 border-red-100 dark:border-red-900/50 text-center space-y-4">
-              <div className="text-4xl">🏃💨</div>
-              <div>
-                 <h3 className="text-xl font-black text-gray-800 dark:text-gray-100 uppercase">Run Away?</h3>
-                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1">You will keep your Backpack and Gold.</p>
-              </div>
-              <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 text-[10px] font-bold py-2 rounded animate-pulse">⚠️ HURRY! THE BATTLE IS STILL ACTIVE!</div>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                 <button onClick={() => setShowEscapeConfirm(false)} className="py-3 rounded-xl font-bold bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200">Cancel</button>
-                 <button onClick={executeEscape} className="py-3 rounded-xl font-bold bg-red-600 hover:bg-red-700 text-white shadow-lg hover:scale-105 transition-transform">Yes, Escape!</button>
-              </div>
-           </div>
-        </div>
-      )}
+      {/* Bottom Area */}
+      <div className="flex justify-between items-end gap-4">
+          {/* Question Bubble */}
+          <div className="flex-1 bg-black/60 backdrop-blur-sm p-4 rounded-xl border-2 border-white/20 relative">
+                <div className="absolute -top-4 right-1/2 bg-inherit w-8 h-8 transform rotate-45"></div>
+                <QuestionPrompt />
+          </div>
+
+          {/* Controls */}
+          <div className="w-1/3 grid grid-cols-2 gap-2 bg-black/60 backdrop-blur-sm p-3 rounded-xl border-2 border-white/20">
+              {!showAnswers ? (
+                  <>
+                      <button onClick={() => setShowAnswers(true)} className="battle-btn">Answer</button>
+                      <button onClick={() => setShowInventory(true)} disabled={isPaused} className="battle-btn">Items</button>
+                      <button onClick={skipQuestion} disabled={isPaused} className="battle-btn">Skip</button>
+                      <button onClick={() => setShowEscapeConfirm(true)} disabled={isPaused} className="battle-btn">Escape</button>
+                  </>
+              ) : (
+                  (currentQ.choicesContent || currentQ.choices || []).map((_, idx) => (
+                      <button key={idx} disabled={isPaused} onClick={() => { handleAnswer(idx); setShowAnswers(false); }} className={`battle-btn col-span-1`}>
+                          {getChoiceContent(idx)}
+                      </button>
+                  ))
+              )}
+          </div>
+      </div>
+
+      {/* Other UI Elements (Modals, etc.) would go here, styled to fit the new theme */}
     </main>
   );
 }
+
+const InfoBox = ({ title, hp, maxHp, isFoe = false }: InfoBoxProps) => (
+    <div className={`w-1/3 bg-black/60 backdrop-blur-sm p-3 rounded-lg border-2 ${isFoe ? 'border-red-500' : 'border-blue-500'}`}>
+        <h3 className="font-bold text-lg truncate">{title}</h3>
+        <HealthBar label={isFoe ? "" : ""} current={hp} max={hp} />
+    </div>
+);

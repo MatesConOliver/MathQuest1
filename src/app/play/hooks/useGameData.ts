@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { Character, EncounterDoc, FoeDoc, GameItem, StoryEvent } from '@/types/game';
+import { Character, EncounterDoc, FoeDoc, GameItem, StoryEvent, SubArea } from '@/types/game';
 import { getAllDocs, getDoc, callApi, updateDoc } from '@/lib/firebase';
 
 export function useGameData(user: User | null) {
@@ -10,6 +10,7 @@ export function useGameData(user: User | null) {
   const [encounters, setEncounters] = useState<EncounterDoc[]>([]);
   const [gameItems, setGameItems] = useState<Record<string, GameItem>>({});
   const [foes, setFoes] = useState<Record<string, FoeDoc>>({});
+  const [subAreas, setSubAreas] = useState<Record<string, SubArea>>({});
   const [activeStory, setActiveStory] = useState<StoryEvent | null>(null);
   const [msg, setMsg] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -21,11 +22,12 @@ export function useGameData(user: User | null) {
     const fetchGameData = async () => {
       setIsLoading(true);
       try {
-        const [charData, encs, items, foeData] = await Promise.all([
+        const [charData, encs, items, foeData, subAreaData] = await Promise.all([
           getDoc<Character>('characters', user.uid),
           getAllDocs<EncounterDoc>('encounters'),
           getAllDocs<GameItem>('items'),
           getAllDocs<FoeDoc>('foes'),
+          getAllDocs<SubArea>('subAreas'),
         ]);
 
         if (charData) {
@@ -50,6 +52,14 @@ export function useGameData(user: User | null) {
         }, {});
         setFoes(foesMap);
 
+        const subAreasMap = subAreaData.reduce<Record<string, SubArea>>((acc, sa) => {
+            if (sa.id) {
+                acc[sa.id] = sa;
+            }
+            return acc;
+        }, {});
+        setSubAreas(subAreasMap);
+
         const storyEvent = await callApi<StoryEvent | null>('getStoryForTrigger', { trigger: 'LOGIN' });
 
         if (storyEvent && storyEvent.scenes && storyEvent.scenes.length > 0) {
@@ -68,7 +78,8 @@ export function useGameData(user: User | null) {
   }, [user, router]);
 
   const getFoe = useCallback((id: string) => foes[id], [foes]);
-  
+  const getSubArea = useCallback((id: string) => subAreas[id], [subAreas]);
+
   const completeStory = async () => {
     if (!user || !activeStory) return;
     try {
@@ -83,5 +94,5 @@ export function useGameData(user: User | null) {
   };
 
 
-  return { character, setCharacter, encounters, gameItems, foes, activeStory, msg, setMsg, isLoading, getFoe, completeStory, setActiveStory };
+  return { character, setCharacter, encounters, gameItems, foes, subAreas, activeStory, msg, setMsg, isLoading, getFoe, getSubArea, completeStory, setActiveStory };
 }

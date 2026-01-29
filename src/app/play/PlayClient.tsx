@@ -20,11 +20,13 @@ export default function PlayClient() {
     encounters,
     gameItems,
     foes,
+    subAreas,
     activeStory,
     msg: gameDataMsg,
     setMsg,
     isLoading: isGameDataLoading,
     getFoe,
+    getSubArea,
     completeStory,
   } = useGameData(user);
 
@@ -48,6 +50,8 @@ export default function PlayClient() {
   if (activeStory) {
     return <StoryPlayer story={activeStory} onComplete={completeStory} />;
   }
+  
+  const currentSubArea = battle.currentEncounter ? getSubArea(battle.currentEncounter.subAreaId) : null;
 
   switch (battle.mode) {
     case 'intro':
@@ -85,6 +89,7 @@ export default function PlayClient() {
           skipQuestion={battle.skipQuestion}
           executeEscape={battle.executeEscape}
           usePotion={battle.usePotion}
+          subArea={currentSubArea}
         />
       );
     case 'win':
