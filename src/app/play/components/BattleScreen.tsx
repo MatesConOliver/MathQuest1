@@ -104,7 +104,16 @@ export function BattleScreen(props: BattleScreenProps) {
       <Sprites character={character} foe={foe} />
 
       {/* Top Area */}
-      <TopArea character={character} playerHp={playerHp} foe={foe} foeHp={foeHp} timeLeft={timeLeft} totalTime={totalTime} />
+      <TopArea 
+        character={character} 
+        playerHp={playerHp} 
+        foe={foe} 
+        foeHp={foeHp} 
+        timeLeft={timeLeft} 
+        totalTime={totalTime}
+        currentQIndex={currentQIndex}
+        totalQuestions={questions.length} 
+      />
 
       {/* Bottom Area */}
       <BottomArea 
@@ -130,20 +139,26 @@ export function BattleScreen(props: BattleScreenProps) {
 
 // SUB-COMPONENTS
 const Sprites = ({ character, foe }: { character: Character | null, foe: FoeDoc | null }) => {
-    const playerImage = character?.imageUrl || "https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=bae93c5e-92ed-4958-9274-fb67a3f5f8c9";
+    const playerImage = character?.imageUrl || "https://storage.googleapis.com/mathquest-cdn/player_character/player_sprite.png";
     
     return (
         <div className="absolute inset-0 pointer-events-none">
-            <img src={playerImage} alt="Character" className="absolute bottom-1/12 left-1/12 w-96 h-96 object-contain" />
-            {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-1/12 right-1/12 w-96 h-96 object-contain" />}
+            <img src={playerImage} alt="Character" className="absolute bottom-[12%] left-[12%] w-96 h-96 object-contain" />
+            {foe?.imageUrl && <img src={foe.imageUrl} alt="Foe" className="absolute top-[12%] right-[12%] w-96 h-96 object-contain" />}
         </div>
     );
 };
 
-const TopArea = ({ character, playerHp, foe, foeHp, timeLeft, totalTime }: any) => (
+const TopArea = ({ character, playerHp, foe, foeHp, timeLeft, totalTime, currentQIndex, totalQuestions }: any) => (
     <div className="relative z-10 p-4 space-y-2">
         <div className="flex justify-between items-start gap-4">
             <InfoBox title={character?.name || "Player"} hp={playerHp} maxHp={character?.maxHp || 100} />
+            
+            <div className="w-1/4 bg-black/60 backdrop-blur-sm p-3 rounded-lg border-2 border-white/20 text-center">
+                <h3 className="font-bold text-lg uppercase tracking-wider">Turn</h3>
+                <p className="text-3xl font-black">{currentQIndex + 1} / {totalQuestions}</p>
+            </div>
+
             <InfoBox title={foe?.name || "Enemy"} hp={foeHp} maxHp={foe?.maxHp || 50} isFoe />
         </div>
         <div className="bg-black/60 backdrop-blur-sm p-2 rounded-lg border-2 border-white/20">
@@ -186,10 +201,20 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
     };
     
     const getButtonClass = (idx: number) => {
-        if (isPaused && selectedChoice === idx) {
-            return selectedChoice === currentQ.correctIndex ? 'bg-green-500' : 'bg-red-500';
+        if (!isPaused) return 'hover:bg-blue-900';
+
+        const isCorrectAnswer = idx === currentQ.correctIndex;
+        const isPlayerSelection = idx === selectedChoice;
+
+        if (isPlayerSelection) {
+            return isCorrectAnswer ? '!bg-green-500' : '!bg-red-500';
         }
-        return '';
+        
+        if (isCorrectAnswer) {
+            return '!bg-green-500';
+        }
+
+        return 'bg-gray-700/50 opacity-60'; 
     };
 
     return (
@@ -211,11 +236,18 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
                             <button onClick={() => setShowEscapeConfirm(true)} disabled={isPaused} className="battle-btn">Escape</button>
                         </>
                     ) : (
-                        (currentQ.choices || []).map((_: any, idx: number) => (
-                            <button key={idx} disabled={isPaused} onClick={() => handleAnswer(idx)} className={`battle-btn col-span-1 ${getButtonClass(idx)}`}>
-                                {getChoiceContent(idx)}
-                            </button>
-                        ))
+                        <>
+                            {(currentQ.choices || []).map((_: any, idx: number) => (
+                                <button key={idx} disabled={isPaused} onClick={() => handleAnswer(idx)} className={`battle-btn col-span-1 ${getButtonClass(idx)}`}>
+                                    {getChoiceContent(idx)}
+                                </button>
+                            ))}
+                             {!isPaused && (
+                                <button onClick={() => setShowAnswers(false)} className="battle-btn col-span-2 bg-gray-600 hover:bg-gray-700">
+                                    Back
+                                </button>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
