@@ -489,19 +489,25 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     if (itemIndex > -1) newInventory.splice(itemIndex, 1);
 
     try {
+      // Optimistic updates
       setPlayerHp(newHp);
       setCharacter((prev) =>
-        prev ? { ...prev, inventory: newInventory } : null
+        prev ? { ...prev, hp: newHp, inventory: newInventory } : null
       );
       setShowInventory(false);
       setMsg(`Healed for ${healAmount} HP!`);
 
-      await updateDoc('characters', user.uid, { inventory: newInventory });
+      // Persist to DB
+      await updateDoc('characters', user.uid, { hp: newHp, inventory: newInventory });
+
+      // Clear message after a delay
       setTimeout(() => setMsg(''), 2000);
+
     } catch (error) {
       console.error('Error using potion:', error);
-      setPlayerHp(playerHp); // Revert optimistic update
-      setCharacter(character); // Revert optimistic update
+      // Revert optimistic updates on failure
+      setPlayerHp(playerHp);
+      setCharacter(character);
       setMsg('Failed to use potion.');
     }
   };

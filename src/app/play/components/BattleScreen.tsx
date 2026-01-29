@@ -7,11 +7,11 @@ import React, { useState, useEffect } from "react";
 // RENDER HELPERS
 const renderLegacyMixedText = (text: string | undefined): React.ReactNode => {
     if (!text) return null;
-    if (!text.includes('$')) return text;
-    const parts = text.split(/(\$.*?\$)/g);
+    if (!text.includes('$$')) return text;
+    const parts = text.split(/(\$\$.*?\$\$)/g);
     return <>{parts.map((part, index) => {
-        if (part.startsWith('$') && part.endsWith('$')) {
-            const math = part.slice(1, -1);
+        if (part.startsWith('$$') && part.endsWith('$$')) {
+            const math = part.slice(2, -2);
             try { return <InlineMath key={index} math={math} />; } catch (error) { return <span key={index} className="text-red-500 font-mono">{part}</span>; }
         }
         return <span key={index}>{part}</span>;
@@ -24,7 +24,7 @@ const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = f
     return <>{blocks.map((block, index) => {
         switch (block.type) {
             case 'text': return <span key={index}>{block.value}</span>;
-            case 'latex': try { return <MathComponent key={index} math={block.value} />; } catch (e) { return <span key={index} className="text-red-500 font-mono">{`$${block.value}$`}</span>; }
+            case 'latex': try { return <MathComponent key={index} math={block.value} />; } catch (e) { return <span key={index} className="text-red-500 font-mono">{`$$${block.value}$$`}</span>; }
             case 'image': return <img key={index} src={block.value} alt="Question content" className="my-2 rounded-lg max-w-full h-auto inline-block" />;
             default: return null;
         }
@@ -203,7 +203,12 @@ const InfoBox = ({ title, hp, maxHp, isFoe = false }: InfoBoxProps) => (
 
 const InventoryPanel = ({ items, gameItems, onUse, onClose }: { items: InventoryItem[], gameItems: Record<string, GameItem>, onUse: (item: InventoryItem) => void, onClose: () => void }) => {
 
-  const groupedInventory = items.reduce((acc: Record<string, { item: InventoryItem, quantity: number }>, currentItem) => {
+  const potionItems = items.filter(item => {
+    const gameItem = gameItems[item.itemId];
+    return gameItem && gameItem.type === 'potion';
+  });
+
+  const groupedInventory = potionItems.reduce((acc: Record<string, { item: InventoryItem, quantity: number }>, currentItem) => {
     if (!acc[currentItem.itemId]) {
       acc[currentItem.itemId] = { item: currentItem, quantity: 0 };
     }
@@ -221,7 +226,7 @@ const InventoryPanel = ({ items, gameItems, onUse, onClose }: { items: Inventory
           {displayItems.length > 0 ? displayItems.map(({ item, quantity }) => {
             const gameItem = gameItems[item.itemId];
             return (
-              <div key={item.itemId} className="bg-gray-700 rounded-lg p-4 flex flex-col">
+              <div key={item.instanceId} className="bg-gray-700 rounded-lg p-4 flex flex-col">
                 <div className="flex-1">
                   <h3 className="font-bold text-lg">{gameItem?.name || 'Unknown Item'} (x{quantity})</h3>
                   <p className="text-sm text-gray-400">{gameItem?.description}</p>
