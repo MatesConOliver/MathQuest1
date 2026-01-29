@@ -1,18 +1,23 @@
 
 import { Character, FoeDoc, QuestionDoc, GameItem, InventoryItem, ContentBlock, SubArea } from "@/types/game";
 import { HealthBar, TimeBar } from "@/app/play/components/shared/Bars";
+import 'katex/dist/katex.min.css'; 
 import { BlockMath, InlineMath } from 'react-katex';
 import React, { useState, useEffect } from "react";
 
 // RENDER HELPERS
 const renderLegacyMixedText = (text: string | undefined): React.ReactNode => {
     if (!text) return null;
-    if (!text.includes('$$')) return text;
-    const parts = text.split(/(\$\$.*?\$\$)/g);
+    if (!text.includes('$')) return text;
+    const parts = text.split(/(\$.*?\$)/g);
     return <>{parts.map((part, index) => {
-        if (part.startsWith('$$') && part.endsWith('$$')) {
-            const math = part.slice(2, -2);
-            try { return <InlineMath key={index} math={math} />; } catch (error) { return <span key={index} className="text-red-500 font-mono">{part}</span>; }
+        if (part.startsWith('$') && part.endsWith('$')) {
+            const math = part.slice(1, -1);
+            try { 
+                return <span key={index} className="inline-block mx-1"><InlineMath math={math} /></span>;
+            } catch (error) { 
+                return <span key={index} className="text-red-500 font-mono">{part}</span>; 
+            }
         }
         return <span key={index}>{part}</span>;
     })}</>;
@@ -23,9 +28,16 @@ const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = f
     const MathComponent = isBlock ? BlockMath : InlineMath;
     return <>{blocks.map((block, index) => {
         switch (block.type) {
-            case 'text': return <span key={index}>{block.value}</span>;
-            case 'latex': try { return <MathComponent key={index} math={block.value} />; } catch (e) { return <span key={index} className="text-red-500 font-mono">{`$$${block.value}$$`}</span>; }
-            case 'image': return <img key={index} src={block.value} alt="Question content" className="my-2 rounded-lg max-w-full h-auto inline-block" />;
+            case 'text': 
+                return <span key={index}>{block.value}</span>;
+            case 'latex': 
+                try { 
+                    return <span key={index} className="inline-block mx-1"><MathComponent math={block.value} /></span>;
+                } catch (e) { 
+                    return <span key={index} className="text-red-500 font-mono">{`$${block.value}$`}</span>; 
+                }
+            case 'image': 
+                return <img key={index} src={block.value} alt="Question content" className="my-2 rounded-lg max-w-full h-auto inline-block" />;
             default: return null;
         }
     })}</>;
@@ -139,16 +151,29 @@ const TopArea = ({ character, playerHp, foe, foeHp, timeLeft, totalTime }: any) 
 const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAnswer, skipQuestion, setShowInventory, setShowEscapeConfirm, selectedChoice, msg, nextQuestion }: any) => {
 
     const QuestionPrompt = () => {
-        if (currentQ.promptContent) return <>{renderStructuredContent(currentQ.promptContent, true)}</>;
+        // New Unified Prompt Style
+        const promptContainerClasses = "leading-relaxed text-lg font-serif text-gray-800 dark:text-gray-100 text-center";
+
+        if (currentQ.promptContent) {
+            return <div className={promptContainerClasses}>{renderStructuredContent(currentQ.promptContent, true)}</div>;
+        }
+        
+        // Legacy Fallbacks
         switch (currentQ.promptType) {
-            case 'latex': return <div className="py-2 overflow-x-auto"><BlockMath math={currentQ.promptLatex || ''} /></div>;
-            case 'image': return <img src={currentQ.promptImageUrl} alt="Question" className="max-h-48 rounded-lg shadow-md border bg-white" />;
-            default: return <div className="whitespace-pre-wrap dark:text-gray-100 text-sm md:text-base">{renderLegacyMixedText(currentQ.promptText)}</div>;
+            case 'latex': 
+                return <div className={promptContainerClasses}><BlockMath math={currentQ.promptLatex || ''} /></div>;
+            case 'image': 
+                return <img src={currentQ.promptImageUrl} alt="Question" className="max-h-48 rounded-lg shadow-md border bg-white" />;
+            default: 
+                return <div className={promptContainerClasses}>{renderLegacyMixedText(currentQ.promptText)}</div>;
         }
     };
 
     const getChoiceContent = (idx: number) => {
-        if (currentQ.choicesContent && currentQ.choicesContent[idx]) return renderStructuredContent(currentQ.choicesContent[idx].content);
+        if (currentQ.choicesContent && currentQ.choicesContent[idx]) {
+            return renderStructuredContent(currentQ.choicesContent[idx].content);
+        }
+        // Legacy Fallback for choices
         const choiceText = currentQ.choices?.[idx];
         if (currentQ.choiceType === 'latex') {
             try { return <InlineMath math={choiceText || ""} />; } catch (e) { return <span className="text-red-500 font-mono">{choiceText}</span>; }
@@ -158,7 +183,7 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
     
     const getButtonClass = (idx: number) => {
         if (isPaused && selectedChoice === idx) {
-            return selectedChoice === currentQ.correctChoice ? 'bg-green-500' : 'bg-red-500';
+            return selectedChoice === currentQ.correctIndex ? 'bg-green-500' : 'bg-red-500';
         }
         return '';
     };
@@ -166,7 +191,7 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
     return (
         <div className="relative z-10 p-4">
             <div className="flex justify-between items-end gap-4">
-                <div className="flex-1 bg-black/60 backdrop-blur-sm p-4 rounded-xl border-2 border-white/20 relative">
+                <div className="flex-1 bg-black/60 backdrop-blur-sm p-4 rounded-xl border-2 border-white/20 relative min-h-[100px] flex items-center justify-center">
                     <div className="absolute -top-3 right-1/2 bg-inherit w-6 h-6 transform rotate-45"></div>
                     {isPaused && msg ? <p className="text-center text-lg font-bold animate-pulse">{msg}</p> : <QuestionPrompt />}
                 </div>
