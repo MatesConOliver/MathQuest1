@@ -154,7 +154,7 @@ const TopArea = ({ character, playerHp, foe, foeHp, timeLeft, totalTime, current
         <div className="flex justify-between items-start gap-4">
             <InfoBox title={character?.name || "Player"} hp={playerHp} maxHp={character?.maxHp || 100} />
             
-            <div className="w-1/4 bg-black/60 backdrop-blur-sm p-3 rounded-lg border-2 border-white/20 text-center">
+            <div className="bg-black/60 backdrop-blur-sm p-2 rounded-lg border-2 border-white/20 text-center">
                 <h3 className="font-bold text-base uppercase tracking-wider">Turn</h3>
                 <p className="text-2xl font-black">{currentQIndex + 1} / {totalQuestions}</p>
             </div>
@@ -169,7 +169,9 @@ const TopArea = ({ character, playerHp, foe, foeHp, timeLeft, totalTime, current
 
 const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAnswer, skipQuestion, setShowInventory, setShowEscapeConfirm, selectedChoice, msg, nextQuestion }: any) => {
 
-    const finalMsg = isPaused && selectedChoice === null ? "Time's Up!" : msg;
+    const choiceCount = currentQ.choicesContent?.length || currentQ.choices?.length || 0;
+    const isTimeout = isPaused && selectedChoice !== null && selectedChoice >= choiceCount;
+    const finalMsg = isTimeout ? "⌛️ Time's up" : msg;
 
     const QuestionPrompt = () => {
         const promptContainerClasses = "leading-relaxed text-lg font-serif text-gray-800 dark:text-gray-100 text-center";
@@ -225,7 +227,6 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
                         </div>
                     ) : (
                         <div className="flex flex-col gap-2">
-                            {/* Show Back button only when not paused */}
                             {!isPaused && (
                                 <div className="flex justify-end">
                                     <button onClick={() => setShowAnswers(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded text-sm mb-2">
@@ -233,18 +234,13 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
                                     </button>
                                 </div>
                             )}
-
-                            {/* Answer Grid */}
                             <div className="grid grid-cols-2 gap-2">
-                                {/* CORRECTED: Prioritize choicesContent over choices */}
                                 {(currentQ.choicesContent || currentQ.choices || []).map((_: any, idx: number) => (
                                     <button key={idx} disabled={isPaused} onClick={() => handleAnswer(idx)} className={`battle-btn ${getButtonClass(idx)}`}>
                                         {getChoiceContent(idx)}
                                     </button>
                                 ))}
                             </div>
-
-                            {/* Show Next button only when paused */}
                             {isPaused && (
                                 <div className="grid grid-cols-1 mt-2">
                                     <button onClick={nextQuestion} className="battle-btn">Next</button>

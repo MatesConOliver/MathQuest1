@@ -38,7 +38,7 @@ export function TimeBar({ current, max }: { current: number; max: number }) {
   return (
     <div className="w-full flex flex-col gap-1">
       <div className="flex justify-between items-end px-1">
-        <span className="text-xs font-bold uppercase text-gray-400 dark:text-gray-400 tracking-wider">Time Remaining</span>
+        <span className="text-xs font-bold uppercase text-gray-400 dark:text-gray-400 tracking-wider">⏳ Time Remaining</span>
         <span className={`text-2xl font-black ${current <= 5 ? 'text-red-600 dark:text-red-500' : 'text-gray-700 dark:text-gray-100'}`}>
            {timeString}
         </span>
