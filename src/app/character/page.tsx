@@ -945,7 +945,7 @@ export default function CharacterPage() {
                 <h2 className="text-xl font-bold">Skills</h2>
                 <div className="flex flex-wrap justify-around items-center gap-y-12 gap-x-4 pt-8">
                     <SkillCircle
-                        name="Algebra"
+                        name="Number and Algebra"
                         color="red"
                         value={char.skills?.algebra || 0}
                     />
@@ -955,12 +955,12 @@ export default function CharacterPage() {
                         value={char.skills?.functions || 0}
                     />
                     <SkillCircle
-                        name="Geometry"
+                        name="Geometry and Trigonometry"
                         color="blue"
                         value={char.skills?.geometry || 0}
                     />
                     <SkillCircle
-                        name="Stats"
+                        name="Statistics and Probability"
                         color="yellow"
                         value={char.skills?.probabilityAndStatistics || 0}
                     />
