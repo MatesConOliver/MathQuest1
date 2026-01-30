@@ -99,7 +99,7 @@ export default function MapPage() {
   useEffect(() => {
     playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3");
     setMapMounted(true);
-  }, []);
+  }, [playTrack]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {

@@ -16,7 +16,7 @@ export default function ShopPage() {
 
   useEffect(() => {
     playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); // 👈 Triggers the music
-  }, []);
+  }, [playTrack]);
 
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);

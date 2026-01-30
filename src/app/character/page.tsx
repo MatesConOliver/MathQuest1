@@ -325,7 +325,7 @@ export default function CharacterPage() {
 
   useEffect(() => {
     playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3");
-  }, []);
+  }, [playTrack]);
 
   const [user, setUser] = useState<User | null>(null);
   const [char, setChar] = useState<Character | null>(null);
