@@ -1,44 +1,35 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { StoryEvent, StoryScene } from '@/types/game';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { StoryEvent } from '@/types/game';
 import { TypewriterText } from './TypewriterText';
 import { callApi } from '@/lib/firebase';
+import { useAudio } from '@/context/AudioContext';
 
 interface StoryPlayerProps {
   story: StoryEvent;
   onComplete: () => void;
 }
 
-// Helper to preload a single image
-const preloadImage = (src: string) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.src = src;
-    img.onload = resolve;
-    img.onerror = reject;
-  });
-};
-
-// Helper to preload a single video
-const preloadVideo = (src: string) => {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    video.src = src;
-    video.oncanplaythrough = resolve; // This event is better than loadeddata
-    video.onerror = reject;
-  });
-};
-
-// Helper to preload a single audio file
-const preloadAudio = (src: string) => {
-  return new Promise((resolve, reject) => {
-    const audio = new Audio();
-    audio.src = src;
-    audio.oncanplaythrough = resolve;
-    audio.onerror = reject;
-  });
-};
+// --- Preloading Helpers (no changes) ---
+const preloadImage = (src: string) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.src = src;
+  img.onload = resolve;
+  img.onerror = reject;
+});
+const preloadVideo = (src: string) => new Promise((resolve, reject) => {
+  const video = document.createElement('video');
+  video.src = src;
+  video.oncanplaythrough = resolve;
+  video.onerror = reject;
+});
+const preloadAudio = (src: string) => new Promise((resolve, reject) => {
+  const audio = new Audio();
+  audio.src = src;
+  audio.oncanplaythrough = resolve;
+  audio.onerror = reject;
+});
 
 export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
   const [currentSceneId, setCurrentSceneId] = useState<string | 'END'>(
@@ -48,48 +39,48 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
   const [transitionDuration, setTransitionDuration] = useState(500);
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPreloading, setIsPreloading] = useState(true); // New state for preloading
+  const [isPreloading, setIsPreloading] = useState(true);
+  
+  const audio = useAudio();
+  const originalMusicTrack = useRef<string | null>(null);
 
-  // --- Preloading Effect ---
+  // --- Store and manage music ---
+  useEffect(() => {
+    if (audio) {
+      // 1. On component mount, store the current BGM
+      originalMusicTrack.current = audio.currentTrack;
+    }
+
+    return () => {
+      // 5. On component unmount, restore the original BGM
+      if (audio && originalMusicTrack.current) {
+        audio.playTrack(originalMusicTrack.current);
+      } else if (audio) {
+        audio.stopTrack();
+      }
+    };
+  }, [audio]);
+
+  // --- Preloading Effect (no changes) ---
   useEffect(() => {
     const preloadAssets = async () => {
-      // 1. Gather all unique asset URLs from all scenes
       const urlsToPreload = story.scenes.flatMap(scene =>
         [scene.videoUrl, scene.backgroundUrl, scene.speakerSprite, scene.musicUrl].filter(Boolean) as string[]
       );
       const uniqueUrls = [...new Set(urlsToPreload)];
-
-      // 2. Create an array of preloading promises for each asset
       const promises = uniqueUrls.map(url => {
-        if (url.match(/\.(jpeg|jpg|gif|png|svg)$/i)) {
-          return preloadImage(url);
-        } else if (url.match(/\.(mp4|webm|ogg)$/i)) {
-          return preloadVideo(url);
-        } else if (url.match(/\.(mp3|wav|ogg)$/i)) {
-          return preloadAudio(url);
-        }
-        console.warn(`Unknown asset type, skipping preload: ${url}`);
-        return Promise.resolve(); // Immediately resolve for unknown types
+        if (url.match(/\.(jpeg|jpg|gif|png|svg)$/i)) return preloadImage(url);
+        if (url.match(/\.(mp4|webm|ogg)$/i)) return preloadVideo(url);
+        if (url.match(/\.(mp3|wav|ogg)$/i)) return preloadAudio(url);
+        return Promise.resolve();
       });
-
-      // 3. Wait for all promises to settle (either resolve or reject)
-      const results = await Promise.allSettled(promises);
-
-      // 4. Log any assets that failed to load for debugging
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          console.warn(`Failed to preload asset: ${uniqueUrls[index]}`, result.reason);
-        }
-      });
-      
-      // 5. Preloading is complete, allow the story to start
+      await Promise.allSettled(promises);
       setIsPreloading(false);
     };
-
     if (story && story.scenes?.length > 0) {
       preloadAssets();
     } else {
-      setIsPreloading(false); // No scenes to preload, start immediately
+      setIsPreloading(false);
     }
   }, [story]);
 
@@ -97,18 +88,31 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
     return story.scenes.find((s) => s.id === currentSceneId);
   }, [currentSceneId, story.scenes]);
 
+  // --- Main Scene Logic & Music Control ---
   useEffect(() => {
-    if (isPreloading || !currentScene) {
-        if (!isPreloading && !currentScene) {
-            onComplete();
-        }
-        return;
+    if (isPreloading) return;
+
+    if (!currentScene) {
+      onComplete(); // This eventually triggers the unmount cleanup
+      return;
     }
+
+    // 2. Manage music for the current scene
+    if (audio) {
+      if (currentScene.musicUrl) {
+        audio.playTrack(currentScene.musicUrl); // Play scene-specific music
+      } else {
+        audio.stopTrack(); // Or stop music if the scene has none
+      }
+    }
+    
     setTransitionDuration(currentScene.fadeIn ?? true ? 500 : 0);
     const timer = setTimeout(() => setOpacity(1), 50);
     return () => clearTimeout(timer);
-  }, [currentScene, onComplete, isPreloading]);
 
+  }, [currentScene, onComplete, isPreloading, audio]);
+
+  // --- Transition and other handlers (no major changes) ---
   const transitionToScene = (nextId: string) => {
     const shouldFadeOut = currentScene?.fadeOut ?? true;
     setTransitionDuration(shouldFadeOut ? 500 : 0);
@@ -119,14 +123,8 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
         onComplete();
         return;
       }
-      const nextScene = story.scenes.find((s) => s.id === nextId);
-      if (!nextScene) {
-        onComplete();
-        return;
-      }
-      setTransitionDuration(nextScene.fadeIn ?? true ? 500 : 0);
       setCurrentSceneId(nextId);
-      setTimeout(() => setOpacity(1), 50);
+      // Opacity is set in the main useEffect after scene loads
     }, shouldFadeOut ? 500 : 10);
   };
 
@@ -135,9 +133,7 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
     transitionToScene(currentScene?.nextSceneId || 'END');
   };
 
-  const handleChoice = (nextId: string) => {
-    transitionToScene(nextId);
-  };
+  const handleChoice = (nextId: string) => transitionToScene(nextId);
 
   const handleNameSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,7 +155,7 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
       handleNext();
     }
   };
-
+  
   if (isPreloading) {
     return (
       <div className="fixed inset-0 bg-black z-50 flex items-center justify-center text-white">
@@ -172,13 +168,13 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
 
   const isClickableOverlay = !currentScene.text && !currentScene.choices && currentScene.command !== 'PROMPT_NAME';
 
+  // --- JSX (no changes) ---
   return (
     <div
       className={'fixed inset-0 z-50 flex flex-col justify-end'}
       style={{ transition: `opacity ${transitionDuration}ms ease-in-out`, opacity: opacity }}
       onClick={isClickableOverlay ? handleNext : undefined}
     >
-      {/* Media Layer */}
       <div className={`absolute inset-0 ${!currentScene.videoUrl ? 'bg-black' : ''}`}>
         {currentScene.videoUrl ? (
           <video
@@ -202,7 +198,6 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
         )}
       </div>
 
-      {/* Dialogue Box */}
       {currentScene.text && (
         <div className='relative m-4 p-6 bg-white/90 dark:bg-black/80 backdrop-blur-md rounded-xl border-2 border-gray-300 dark:border-gray-700 shadow-lg'>
           {currentScene.speakerName && currentScene.speakerName.toLowerCase() !== 'narrator' && (

@@ -5,6 +5,8 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 type AudioContextType = {
   playTrack: (url: string) => void; // For Background Music (loops)
   playSfx: (url: string) => void;   // For Sound Effects (one-shot)
+  stopTrack: () => void;           // To stop background music
+  currentTrack: string;            // URL of the current BGM track
 };
 
 const AudioContext = createContext<AudioContextType | null>(null);
@@ -17,7 +19,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   // Function A: Play Background Music (Loops, only one at a time)
   const playTrack = (url: string) => {
     if (!musicRef.current) return;
-    if (currentTrack === url) return; // Don't restart if already playing
+    if (currentTrack === url && !musicRef.current.paused) return; // Don't restart if already playing
 
     setCurrentTrack(url);
     musicRef.current.src = url;
@@ -25,7 +27,15 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     musicRef.current.play().catch(() => console.log("BGM waiting for interaction..."));
   };
 
-  // Function B: Play Sound Effect (Fire-and-forget, allows overlap)
+  // Function B: Stop Background Music
+  const stopTrack = () => {
+    if (musicRef.current) {
+      musicRef.current.pause();
+      setCurrentTrack(""); // Mark as no track playing
+    }
+  };
+
+  // Function C: Play Sound Effect (Fire-and-forget, allows overlap)
   const playSfx = (url: string) => {
     try {
       const sfx = new Audio(url);
@@ -52,7 +62,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [currentTrack]);
 
   return (
-    <AudioContext.Provider value={{ playTrack, playSfx }}>
+    <AudioContext.Provider value={{ playTrack, playSfx, stopTrack, currentTrack }}>
       {/* Hidden player for Background Music only */}
       <audio ref={musicRef} loop hidden />
       {children}
