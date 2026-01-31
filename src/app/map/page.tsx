@@ -267,7 +267,7 @@ export default function MapPage() {
                 doUpdate();
             }, 2500); 
 
-        }, 1500); // A short delay before the animation starts.
+        }, 1000); // A short delay before the animation starts.
     
     // CASE 2: The flag does NOT unlock any locations.
     // We can safely update the database immediately since no animation is needed.
@@ -378,7 +378,7 @@ export default function MapPage() {
                   {((!isFirstLocation && isStoryLocked) || animatingOutLocationIds.has(loc.id)) && (
                       <div className={classNames(
                           "absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none",
-                          "transition-all duration-[2500ms] ease-in-out", // Animation classes
+                          "transition-all duration-[3500ms] ease-in-out", // Animation classes
                           { 
                               'opacity-0 scale-150': animatingOutLocationIds.has(loc.id),
                               'opacity-100 scale-100': !animatingOutLocationIds.has(loc.id)
