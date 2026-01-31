@@ -213,51 +213,83 @@ export default function MapPage() {
     if (!user || !character || locations.length === 0) return;
 
     const pendingFlag = sessionStorage.getItem("pendingStoryFlag");
-    // Check if the character *doesn't* already have the flag to prevent re-animations on refresh
-    if (pendingFlag && !character.storyFlags?.includes(pendingFlag)) {
-        sessionStorage.removeItem("pendingStoryFlag");
-
-        const unlockedLocations = locations.filter(loc => loc.unlockRequirements?.storyFlags?.includes(pendingFlag));
-
-        if (unlockedLocations.length > 0) {
-            // Wait 2 seconds for the map to render before starting the animation
-            setTimeout(() => {
-                // 1. Start the animation for ALL newly unlocked locations
-                setAnimatingOutLocationIds(prev => {
-                    const newSet = new Set(prev);
-                    unlockedLocations.forEach(loc => newSet.add(loc.id));
-                    return newSet;
-                });
-
-                // 2. After the animation duration, update the character's data
-                setTimeout(() => {
-                    const doUpdate = async () => {
-                        try {
-                            await updateDoc(doc(db, "characters", user.uid), {
-                                storyFlags: arrayUnion(pendingFlag)
-                            });
-                            setCharacter(prev => ({...prev!, storyFlags: [...(prev?.storyFlags || []), pendingFlag]}));
-
-                            // 3. After state is updated, clean up the animation state
-                            setTimeout(() => {
-                                setAnimatingOutLocationIds(prev => {
-                                    const newSet = new Set(prev);
-                                    unlockedLocations.forEach(loc => newSet.delete(loc.id));
-                                    return newSet;
-                                });
-                            }, 200);
-
-                        } catch (error) {
-                            console.error("Failed to update story flag after animation:", error);
-                        }
-                    };
-                    doUpdate();
-                }, 2500); // Animation duration (2.5s)
-
-            }, 2000); // <-- New 2-second delay before animation starts
-        }
+    // Exit if there's no flag or the character already has it.
+    if (!pendingFlag || character.storyFlags?.includes(pendingFlag)) {
+        return;
     }
-  }, [user, character, locations]);
+
+    // It's a new, unique flag. Remove from storage so this logic doesn't run again on refresh.
+    sessionStorage.removeItem("pendingStoryFlag");
+
+    // Check if this flag is supposed to unlock any locations on the map.
+    const unlockedLocations = locations.filter(loc => 
+        loc.unlockRequirements?.storyFlags?.includes(pendingFlag)
+    );
+
+    // CASE 1: The flag unlocks one or more locations. We need to play the animation.
+    if (unlockedLocations.length > 0) {
+        // Wait a moment for the map to be stable before starting the animation.
+        setTimeout(() => {
+            // 1. Trigger the cloud disappearance animation for each unlocked location.
+            setAnimatingOutLocationIds(prev => {
+                const newSet = new Set(prev);
+                unlockedLocations.forEach(loc => newSet.add(loc.id));
+                return newSet;
+            });
+
+            // 2. After the animation finishes, update the character's data in Firestore.
+            // This delay MUST match the animation duration in the JSX (2500ms).
+            setTimeout(() => {
+                const doUpdate = async () => {
+                    try {
+                        await updateDoc(doc(db, "characters", user.uid), {
+                            storyFlags: arrayUnion(pendingFlag)
+                        });
+                        // Update local state to match, ensuring the UI reflects the change.
+                        setCharacter(prev => ({
+                            ...prev!, 
+                            storyFlags: [...(prev?.storyFlags || []), pendingFlag]
+                        }));
+
+                        // 3. Clean up the animation state after the data is updated.
+                        setTimeout(() => {
+                            setAnimatingOutLocationIds(prev => {
+                                const newSet = new Set(prev);
+                                unlockedLocations.forEach(loc => newSet.delete(loc.id));
+                                return newSet;
+                            });
+                        }, 200);
+
+                    } catch (error) {
+                        console.error("Failed to update story flag after animation:", error);
+                    }
+                };
+                doUpdate();
+            }, 2500); 
+
+        }, 1500); // A short delay before the animation starts.
+    
+    // CASE 2: The flag does NOT unlock any locations.
+    // We can safely update the database immediately since no animation is needed.
+    } else {
+        const updateUserStoryFlag = async () => {
+            try {
+                await updateDoc(doc(db, "characters", user.uid), {
+                    storyFlags: arrayUnion(pendingFlag)
+                });
+                // Update local state to match.
+                setCharacter(prev => {
+                    if (!prev) return null;
+                    return { ...prev, storyFlags: [...(prev.storyFlags || []), pendingFlag] };
+                });
+                console.log(`Successfully added story flag '${pendingFlag}' without location unlock.`);
+            } catch (error) {
+                console.error("Failed to update story flag directly:", error);
+            }
+        };
+        updateUserStoryFlag();
+    }
+  }, [user, character, locations, db]);
 
   const handleLocationClick = (loc: GameLocation, status: UnlockStatus) => {
     if (status.locked) return;
