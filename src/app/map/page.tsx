@@ -339,7 +339,7 @@ export default function MapPage() {
                      {isSkillLocked ? (
                         <span className="text-2xl">🔒</span>
                      ) : (
-                        <span className="text-2xl select-none">{loc.name.includes("Forest") ? "🌲" : loc.name.includes("Library") ? "📚" : loc.name.includes("Cave") ? "🦇" : loc.name.includes("Mountain") ? "⛰️" : loc.name.includes("Peak") ? "🏔️" : loc.name.includes("polis") ? "🏙️" : "📍"}</span>
+                      <span className="text-2xl select-none">{mapMeta?.emoji || "📍"}</span>
                      )}
                   </div>
                   {/* Animate cloud disappearance */}
