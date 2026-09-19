@@ -221,12 +221,16 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
 
                 <div className="w-1/3 bg-black/60 backdrop-blur-sm p-3 rounded-xl border-2 border-white/20">
                     {!showAnswers ? (
-                        <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => setShowAnswers(true)} className="battle-btn">Answer</button>
-                            <button onClick={() => setShowInventory(true)} className="battle-btn">Items</button>
-                            <button onClick={skipQuestion} className="battle-btn">Skip</button>
-                            <button onClick={() => setShowEscapeConfirm(true)} className="battle-btn">Escape</button>
-                        </div>
+                        isPaused ? (
+                            <button onClick={nextQuestion} className="battle-btn">Next</button>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                                <button onClick={() => setShowAnswers(true)} className="battle-btn">Answer</button>
+                                <button onClick={() => setShowInventory(true)} className="battle-btn">Items</button>
+                                <button onClick={skipQuestion} className="battle-btn">Skip</button>
+                                <button onClick={() => setShowEscapeConfirm(true)} className="battle-btn">Escape</button>
+                            </div>
+                        )
                     ) : (
                         <div className="flex flex-col gap-2">
                             {!isPaused && (
