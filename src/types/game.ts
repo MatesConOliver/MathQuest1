@@ -138,6 +138,7 @@ export type QuestionDoc = {
   tags: string[];
   packId?: string;
   order?: number;
+  groupId?: string; // Links questions that belong to the same multi-part exercise
   timeLimit: number;
   imageUrl?: string;
 };

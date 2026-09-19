@@ -46,8 +46,9 @@ const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = f
 interface BattleScreenProps {
   character: Character | null;
   foe: FoeDoc | null;
-  questions: QuestionDoc[];
+  currentQuestion: QuestionDoc | null;
   currentQIndex: number;
+  totalQuestions: number;
   playerHp: number;
     playerMaxHp: number;
   foeHp: number;
@@ -63,8 +64,11 @@ interface BattleScreenProps {
   setShowInventory: (show: boolean) => void;
   showEscapeConfirm: boolean;
   setShowEscapeConfirm: (show: boolean) => void;
+  showSubquestionMenu: boolean;
   handleAnswer: (choiceIndex: number) => void;
   nextQuestion: () => void;
+  continueSubquestion: () => void;
+  abandonGroup: () => void;
   skipQuestion: () => void;
   executeEscape: () => void;
   usePotion: (item: InventoryItem) => void;
@@ -81,13 +85,14 @@ interface InfoBoxProps {
 // MAIN COMPONENT
 export function BattleScreen(props: BattleScreenProps) {
   const {
-    character, foe, questions, currentQIndex, playerHp, playerMaxHp, foeHp, msg, timeLeft, totalTime,
+    character, foe, currentQuestion, currentQIndex, totalQuestions, playerHp, playerMaxHp, foeHp, msg, timeLeft, totalTime,
     isPaused, selectedChoice, gameItems, inventory, showInventory, setShowInventory, showEscapeConfirm,
-    setShowEscapeConfirm, handleAnswer, nextQuestion, skipQuestion, executeEscape, usePotion, subArea
+    setShowEscapeConfirm, showSubquestionMenu, handleAnswer, nextQuestion, continueSubquestion, abandonGroup,
+    skipQuestion, executeEscape, usePotion, subArea
   } = props;
 
   const [showAnswers, setShowAnswers] = useState(false);
-  const currentQ = questions[currentQIndex];
+  const currentQ = currentQuestion;
 
   useEffect(() => {
       setShowAnswers(false);
@@ -114,7 +119,7 @@ export function BattleScreen(props: BattleScreenProps) {
         timeLeft={timeLeft} 
         totalTime={totalTime}
         currentQIndex={currentQIndex}
-        totalQuestions={questions.length} 
+        totalQuestions={totalQuestions} 
       />
 
       {/* Bottom Area */}
@@ -130,6 +135,9 @@ export function BattleScreen(props: BattleScreenProps) {
         selectedChoice={selectedChoice}
         msg={msg}
         nextQuestion={nextQuestion}
+        showSubquestionMenu={showSubquestionMenu}
+        continueSubquestion={continueSubquestion}
+        abandonGroup={abandonGroup}
       />
 
       {/* Modals */}
@@ -169,11 +177,21 @@ const TopArea = ({ character, playerHp, playerMaxHp, foe, foeHp, timeLeft, total
     </div>
 );
 
-const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAnswer, skipQuestion, setShowInventory, setShowEscapeConfirm, selectedChoice, msg, nextQuestion }: any) => {
+const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAnswer, skipQuestion, setShowInventory, setShowEscapeConfirm, selectedChoice, msg, nextQuestion, showSubquestionMenu, continueSubquestion, abandonGroup }: any) => {
 
     const choiceCount = currentQ.choicesContent?.length || currentQ.choices?.length || 0;
     const isTimeout = isPaused && selectedChoice !== null && selectedChoice >= choiceCount;
     const finalMsg = isTimeout ? "⌛️ Time's up" : msg;
+
+    const NextControl = () => showSubquestionMenu ? (
+        <div className="flex flex-col gap-2">
+            <p className="text-center text-xs font-bold">¿Continuar con el ejercicio?</p>
+            <button onClick={continueSubquestion} className="battle-btn">Continuar con el siguiente apartado</button>
+            <button onClick={abandonGroup} className="battle-btn">Dejar ejercicio y buscar otro</button>
+        </div>
+    ) : (
+        <button onClick={nextQuestion} className="battle-btn">Next</button>
+    );
 
     const QuestionPrompt = () => {
         const promptContainerClasses = "leading-relaxed text-lg font-serif text-gray-800 dark:text-gray-100 text-center";
@@ -222,7 +240,7 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
                 <div className="w-1/3 bg-black/60 backdrop-blur-sm p-3 rounded-xl border-2 border-white/20">
                     {!showAnswers ? (
                         isPaused ? (
-                            <button onClick={nextQuestion} className="battle-btn">Next</button>
+                            <NextControl />
                         ) : (
                             <div className="grid grid-cols-2 gap-2">
                                 <button onClick={() => setShowAnswers(true)} className="battle-btn">Answer</button>
@@ -249,7 +267,7 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
                             </div>
                             {isPaused && (
                                 <div className="grid grid-cols-1 mt-2">
-                                    <button onClick={nextQuestion} className="battle-btn">Next</button>
+                                    <NextControl />
                                 </div>
                             )}
                         </div>

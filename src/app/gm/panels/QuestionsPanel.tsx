@@ -114,6 +114,7 @@ export function QuestionsPanel() {
     const [difficulty, setDifficulty] = useState(1);
     const [tagsText, setTagsText] = useState("level1");
     const [order, setOrder] = useState("");
+    const [groupId, setGroupId] = useState("");
     const [qMinutes, setQMinutes] = useState(0);
     const [qSeconds, setQSeconds] = useState(30);
 
@@ -180,6 +181,7 @@ export function QuestionsPanel() {
       setDifficulty(q.difficulty || 1);
       setTagsText(q.tags ? q.tags.join(",") : "level1");
       setOrder(q.order ? String(q.order) : "");
+      setGroupId(q.groupId || "");
       const totalSecs = q.timeLimit || 30; 
       setQMinutes(Math.floor(totalSecs / 60));
       setQSeconds(totalSecs % 60);
@@ -191,7 +193,7 @@ export function QuestionsPanel() {
       setChoices(["", "", "", ""]);
       setCorrectIndex(0); 
       setQMinutes(0); setQSeconds(30);
-      setDifficulty(1); setTagsText("level1"); setOrder(""); setMsg("");
+      setDifficulty(1); setTagsText("level1"); setOrder(""); setGroupId(""); setMsg("");
     }
   
     async function saveQuestion() {
@@ -209,6 +211,7 @@ export function QuestionsPanel() {
         tags: tagsArray,
         timeLimit: safeTime,
         order: order ? Number(order) : null,
+        groupId: groupId.trim() || null,
         updatedAt: serverTimestamp(),
       };
     
@@ -286,10 +289,14 @@ export function QuestionsPanel() {
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <Input type="number" label="Difficulty (1-5)" value={difficulty} onChange={(e:any) => setDifficulty(Number(e.target.value))} />
-            <Input type="number" label="Order" value={order} onChange={(e:any) => setOrder(e.target.value)} placeholder="1" />
             <Input label="Tags (comma sep)" value={tagsText} onChange={(e:any) => setTagsText(e.target.value)} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input type="number" label="Order" value={order} onChange={(e:any) => setOrder(e.target.value)} placeholder="1" />
+            <Input label="Group ID (para encadenar)" value={groupId} onChange={(e:any) => setGroupId(e.target.value)} placeholder="ej. ejercicio_derivadas_01" />
           </div>
 
           <div className="flex gap-2 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800">

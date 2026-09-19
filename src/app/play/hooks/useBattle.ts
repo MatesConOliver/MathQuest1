@@ -11,7 +11,7 @@ import {
   InventoryItem,
 } from '@/types/game';
 import { getDoc, updateDoc, db } from '@/lib/firebase';
-import { collection, getDocs as getFirebaseDocs, query, where, increment } from 'firebase/firestore';
+import { collection, getDocs as getFirebaseDocs, query, where, orderBy, increment } from 'firebase/firestore';
 
 interface UseBattleProps {
   user: User | null;
@@ -29,8 +29,16 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   const [mode, setMode] = useState('lobby');
   const [currentEncounter, setCurrentEncounter] = useState<EncounterDoc | null>(null);
   const [foe, setFoe] = useState<FoeDoc | null>(null);
+  // Full pool of questions matching the encounter tags (fetched once at battle start).
+  // Its length is used as the total "turn budget" for the encounter.
   const [questions, setQuestions] = useState<QuestionDoc[]>([]);
+  // Question currently displayed to the player.
+  const [currentQuestion, setCurrentQuestion] = useState<QuestionDoc | null>(null);
+  // Pending chained sub-questions (same groupId) waiting to be asked in order.
+  const [questionQueue, setQuestionQueue] = useState<QuestionDoc[]>([]);
+  // Turn counter (not an array index anymore since questions are drawn dynamically).
   const [currentQIndex, setCurrentQIndex] = useState(0);
+  const [showSubquestionMenu, setShowSubquestionMenu] = useState(false);
   const [playerHp, setPlayerHp] = useState(100);
   const [foeHp, setFoeHp] = useState(50);
   const [msg, setMsg] = useState('');
@@ -39,9 +47,28 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
   const totalTime = useMemo(
-    () => questions[currentQIndex]?.timeLimit || 30,
-    [questions, currentQIndex]
+    () => currentQuestion?.timeLimit || 30,
+    [currentQuestion]
   );
+
+  // Only questions with no groupId, or the first part (order 1) of a group, may be
+  // picked as a fresh random draw. Later parts can only appear via the chained queue.
+  const eligibleStarterPool = useMemo(
+    () => questions.filter((q) => !q.groupId || (q.order ?? 1) <= 1),
+    [questions]
+  );
+
+  const fetchGroupQuestions = useCallback(async (groupId: string, excludeId?: string) => {
+    const groupQuery = query(
+      collection(db, 'questions'),
+      where('groupId', '==', groupId),
+      orderBy('order', 'asc')
+    );
+    const snap = await getFirebaseDocs(groupQuery);
+    return snap.docs
+      .map((d) => ({ ...d.data(), id: d.id } as QuestionDoc))
+      .filter((q) => q.id !== excludeId);
+  }, []);
   const [isPaused, setIsPaused] = useState(false);
   const [isEscaping, setIsEscaping] = useState(false);
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
@@ -296,35 +323,87 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     }
   }, [user, character, battleStats, consumedPotionInstanceIds, router, setCharacter]);
 
-  const nextQuestion = useCallback(() => {
+  // Draws a new random question from the eligible starter pool. If it belongs to a
+  // group, fetches and queues up the rest of that group's parts in order.
+  const drawRandomQuestion = useCallback(async (): Promise<QuestionDoc | null> => {
+    if (eligibleStarterPool.length === 0) return null;
+    const picked =
+      eligibleStarterPool[Math.floor(Math.random() * eligibleStarterPool.length)];
+
+    if (picked.groupId) {
+      try {
+        const siblings = await fetchGroupQuestions(picked.groupId, picked.id);
+        setQuestionQueue(siblings);
+      } catch (e) {
+        console.error('Error fetching group questions:', e);
+        setQuestionQueue([]);
+      }
+    } else {
+      setQuestionQueue([]);
+    }
+
+    return picked;
+  }, [eligibleStarterPool, fetchGroupQuestions]);
+
+  const nextQuestion = useCallback(async () => {
     if (foeHp <= 0) {
       handleWin();
-    } else if (playerHp <= 0) {
-      handleLoss('You were defeated in battle!');
-    } else if (currentQIndex === questions.length - 1) {
-      handleLoss('You ran out of turns!');
-    } else {
-      setIsPaused(false);
-      setSelectedChoice(null);
-      setCurrentQIndex((prev) => prev + 1);
-      setTimeLeft(questions[currentQIndex + 1]?.timeLimit || 30);
-      setMsg('');
+      return;
     }
-  }, [foeHp, playerHp, currentQIndex, questions, handleWin, handleLoss]);
+    if (playerHp <= 0) {
+      handleLoss('You were defeated in battle!');
+      return;
+    }
+    if (currentQIndex >= questions.length - 1) {
+      handleLoss('You ran out of turns!');
+      return;
+    }
+
+    setIsPaused(false);
+    setSelectedChoice(null);
+    setShowSubquestionMenu(false);
+    setMsg('');
+    setCurrentQIndex((prev) => prev + 1);
+
+    if (questionQueue.length > 0) {
+      const [next, ...rest] = questionQueue;
+      setQuestionQueue(rest);
+      setCurrentQuestion(next);
+      setTimeLeft(next.timeLimit || 30);
+      return;
+    }
+
+    const drawn = await drawRandomQuestion();
+    if (!drawn) {
+      handleLoss('No more questions available!');
+      return;
+    }
+    setCurrentQuestion(drawn);
+    setTimeLeft(drawn.timeLimit || 30);
+  }, [foeHp, playerHp, currentQIndex, questions.length, questionQueue, drawRandomQuestion, handleWin, handleLoss]);
+
+  // Player fails a sub-question but chooses to keep going through the group's queue.
+  const continueSubquestion = useCallback(() => {
+    nextQuestion();
+  }, [nextQuestion]);
+
+  // Player fails a sub-question and gives up on the rest of the group.
+  const abandonGroup = useCallback(() => {
+    setQuestionQueue([]);
+    nextQuestion();
+  }, [nextQuestion]);
 
   const handleAnswer = useCallback(
     async (choiceIndex: number) => {
-      if (isPaused) return;
+      if (isPaused || !currentQuestion) return;
 
       setIsPaused(true);
       setSelectedChoice(choiceIndex);
 
-      const correct = choiceIndex === questions[currentQIndex].correctIndex;
+      const correct = choiceIndex === currentQuestion.correctIndex;
 
       if (correct) {
-        const foeDamage = calculatePlayerDamage(
-          questions[currentQIndex].difficulty || 1
-        );
+        const foeDamage = calculatePlayerDamage(currentQuestion.difficulty || 1);
         const newFoeHp = Math.max(0, foeHp - foeDamage);
         setMsg(`Correct! You dealt ${foeDamage} damage.`);
         setFoeHp(newFoeHp);
@@ -333,16 +412,21 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         const newPlayerHp = Math.max(0, playerHp - playerDamage);
         setMsg(`Incorrect! The enemy dealt ${playerDamage} damage.`);
         setPlayerHp(newPlayerHp);
+
+        // Only offer the "keep going / bail out" choice mid-way through a chained exercise.
+        if (currentQuestion.groupId && questionQueue.length > 0) {
+          setShowSubquestionMenu(true);
+        }
       }
     },
     [
       isPaused,
-      questions,
-      currentQIndex,
+      currentQuestion,
       foeHp,
       playerHp,
       calculatePlayerDamage,
       foe,
+      questionQueue,
     ]
   );
 
@@ -396,16 +480,33 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
             }
           }
 
-          if (!foeData || questionData.length === 0) {
+          const starterPool = questionData.filter((q) => !q.groupId || (q.order ?? 1) <= 1);
+          const starter =
+            starterPool.length > 0
+              ? starterPool[Math.floor(Math.random() * starterPool.length)]
+              : null;
+
+          if (!foeData || questionData.length === 0 || !starter) {
             let errorMsg = 'Failed to load battle data.';
             if (!foeData) {
               errorMsg = `Foe with ID '${foeToLoad}' not found.`;
             } else if (questionData.length === 0) {
               errorMsg = `No questions found for tags: ${tagsToFetch.join(', ')}.`;
+            } else if (!starter) {
+              errorMsg = 'No valid starting questions found (check groupId/order setup).';
             }
             setMsg(errorMsg);
             setMode('lobby');
             return;
+          }
+
+          let starterQueue: QuestionDoc[] = [];
+          if (starter.groupId) {
+            try {
+              starterQueue = await fetchGroupQuestions(starter.groupId, starter.id);
+            } catch (e) {
+              console.error('Error fetching group questions:', e);
+            }
           }
 
           setFoe(foeData);
@@ -421,7 +522,10 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
           }
 
           setCurrentQIndex(0);
-          setTimeLeft(questionData[0]?.timeLimit || 30);
+          setCurrentQuestion(starter);
+          setQuestionQueue(starterQueue);
+          setShowSubquestionMenu(false);
+          setTimeLeft(starter.timeLimit || 30);
           setIsPaused(false);
           setSelectedChoice(null);
           setLevelUpData(null);
@@ -440,7 +544,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
 
       setupBattle(encounter);
     },
-    [character, battleStats.maxHp]
+    [character, battleStats.maxHp, fetchGroupQuestions]
   );
 
   useEffect(() => {
@@ -559,6 +663,9 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     currentEncounter,
     foe,
     questions,
+    currentQuestion,
+    questionQueue,
+    showSubquestionMenu,
     currentQIndex,
     playerHp,
     playerMaxHp: battleStats.maxHp,
@@ -583,6 +690,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     handleStartBattle,
     handleAnswer,
     nextQuestion,
+    continueSubquestion,
+    abandonGroup,
     skipQuestion,
     executeEscape,
     usePotion,

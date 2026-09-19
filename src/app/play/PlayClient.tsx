@@ -69,8 +69,9 @@ export default function PlayClient() {
         <BattleScreen
           character={character}
           foe={battle.foe}
-          questions={battle.questions}
+          currentQuestion={battle.currentQuestion}
           currentQIndex={battle.currentQIndex}
+          totalQuestions={battle.questions.length}
           playerHp={battle.playerHp}
           playerMaxHp={battle.playerMaxHp}
           foeHp={battle.foeHp}
@@ -86,8 +87,11 @@ export default function PlayClient() {
           setShowInventory={battle.setShowInventory}
           showEscapeConfirm={battle.showEscapeConfirm}
           setShowEscapeConfirm={battle.setShowEscapeConfirm}
+          showSubquestionMenu={battle.showSubquestionMenu}
           handleAnswer={battle.handleAnswer}
           nextQuestion={battle.nextQuestion}
+          continueSubquestion={battle.continueSubquestion}
+          abandonGroup={battle.abandonGroup}
           skipQuestion={battle.skipQuestion}
           executeEscape={battle.executeEscape}
           usePotion={battle.usePotion}
