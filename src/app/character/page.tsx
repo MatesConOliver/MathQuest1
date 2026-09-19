@@ -608,13 +608,13 @@ export default function CharacterPage() {
     // Potion
     if (def.type === 'potion') {
         const currentHp = (char as any).hp ?? char.maxHp;
-        if (currentHp >= char.maxHp) {
+        if (currentHp >= derivedStats.maxHp) {
             alert("Health is full.");
             return;
         }
 
         const healAmt = def.stats?.heal?.flat || 20;
-        const newHp = Math.min(char.maxHp, currentHp + healAmt);
+        const newHp = Math.min(derivedStats.maxHp, currentHp + healAmt);
 
         if (!confirm(`Drink ${def.name}?`)) return;
 
@@ -624,7 +624,7 @@ export default function CharacterPage() {
             hp: newHp,
             inventory: newInventory
         });
-        setMsg(`🧪 Restored health to ${newHp}/${char.maxHp}`);
+        setMsg(`🧪 Restored health to ${newHp}/${derivedStats.maxHp}`);
         return;
     }
 
@@ -756,7 +756,7 @@ export default function CharacterPage() {
               {/* 1. HEALTH BOX */}
               {(() => {
                   const currentHp = char.hp ?? char.maxHp;
-                  const maxHp = char.maxHp;
+                  const maxHp = derivedStats.maxHp;
                   const hpPct = (currentHp / maxHp) * 100;
                   // Color Logic: Green > Orange > Red
                   const heartColor = hpPct < 15 ? "text-red-600 animate-pulse" : hpPct < 50 ? "text-orange-500" : "text-green-500";
