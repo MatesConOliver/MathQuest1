@@ -58,6 +58,7 @@ interface BattleScreenProps {
   isEscaping: boolean;
   selectedChoice: number | null;
   gameItems: Record<string, GameItem>;
+  inventory: InventoryItem[];
   showInventory: boolean;
   setShowInventory: (show: boolean) => void;
   showEscapeConfirm: boolean;
@@ -81,7 +82,7 @@ interface InfoBoxProps {
 export function BattleScreen(props: BattleScreenProps) {
   const {
     character, foe, questions, currentQIndex, playerHp, foeHp, msg, timeLeft, totalTime, 
-    isPaused, selectedChoice, gameItems, showInventory, setShowInventory, showEscapeConfirm, 
+    isPaused, selectedChoice, gameItems, inventory, showInventory, setShowInventory, showEscapeConfirm,
     setShowEscapeConfirm, handleAnswer, nextQuestion, skipQuestion, executeEscape, usePotion, subArea
   } = props;
 
@@ -131,7 +132,7 @@ export function BattleScreen(props: BattleScreenProps) {
       />
 
       {/* Modals */}
-      {showInventory && <InventoryPanel items={character?.inventory || []} gameItems={gameItems} onUse={usePotion} onClose={() => setShowInventory(false)} />}
+      {showInventory && <InventoryPanel items={inventory} gameItems={gameItems} onUse={usePotion} onClose={() => setShowInventory(false)} />}
       {showEscapeConfirm && <EscapeConfirm onConfirm={executeEscape} onCancel={() => setShowEscapeConfirm(false)} />}
     </main>
   );

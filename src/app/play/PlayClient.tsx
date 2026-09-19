@@ -80,6 +80,7 @@ export default function PlayClient() {
           isEscaping={battle.isEscaping}
           selectedChoice={battle.selectedChoice}
           gameItems={battle.gameItems}
+          inventory={battle.availableInventory}
           showInventory={battle.showInventory}
           setShowInventory={battle.setShowInventory}
           showEscapeConfirm={battle.showEscapeConfirm}

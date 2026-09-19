@@ -59,6 +59,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   const [isLoading, setIsLoading] = useState(false); // Battle-specific loading
   const [showInventory, setShowInventory] = useState(false);
   const [showEscapeConfirm, setShowEscapeConfirm] = useState(false);
+  // Instance IDs of potions consumed during the current battle; not persisted until the battle ends.
+  const [consumedPotionInstanceIds, setConsumedPotionInstanceIds] = useState<string[]>([]);
 
   const battleStats = useMemo(() => {
     if (!character) {
@@ -120,6 +122,15 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     };
   }, [character, gameItems]);
 
+  // Inventory as it should appear during the current battle: potions already used
+  // in this fight are hidden, without touching the persisted character/Firestore.
+  const availableInventory = useMemo(() => {
+    if (!character) return [];
+    return character.inventory.filter(
+      (i) => !consumedPotionInstanceIds.includes(i.instanceId)
+    );
+  }, [character, consumedPotionInstanceIds]);
+
   const calculatePlayerDamage = useCallback(
     (questionDifficulty: number) => {
       const { a, b, c, d, k, xBonus } = battleStats;
@@ -173,6 +184,12 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         setLootDrops(currentEncounter.winRewardItems.map(id => gameItems[id]?.name || 'Unknown Item'));
     }
 
+    // Consolidate potions consumed during this battle: start from the persisted inventory
+    // (untouched during combat) and remove exactly what was used.
+    const finalInventory = character.inventory.filter(
+      (i) => !consumedPotionInstanceIds.includes(i.instanceId)
+    );
+
     try {
         const updates: { [key:string]: any } = {
             hp: playerHp + hpGain,
@@ -182,7 +199,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
             maxHp: increment(hpGain),
             unspentPoints: increment(pointsGain),
             inventory: [
-                ...character.inventory,
+                ...finalInventory,
                 ...(currentEncounter.winRewardItems || []).map(itemId => ({
                     itemId,
                     instanceId: Date.now().toString() + Math.random(),
@@ -229,6 +246,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
             setLevelUpData({ oldLvl, newLvl, hpGain, pointsGain });
         }
 
+        setConsumedPotionInstanceIds([]);
         setIsBattleOver(true);
         setMode('win');
 
@@ -237,7 +255,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         setMsg('Could not save victory progress.');
         setMode('lobby');
     }
-  }, [user, character, currentEncounter, gameItems, playerHp, setCharacter]);
+  }, [user, character, currentEncounter, gameItems, playerHp, consumedPotionInstanceIds, setCharacter]);
 
   const handleReturnToMap = useCallback(() => {
     if (currentEncounter?.winRewardStoryFlag) {
@@ -252,14 +270,21 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     const goldLoss = Math.floor((character.gold || 0) * 0.20);
     const finalReason = `${reason} You lost ${goldLoss} gold.`;
 
+    // Potions consumed during this battle stay consumed even though the player lost.
+    const finalInventory = character.inventory.filter(
+      (i) => !consumedPotionInstanceIds.includes(i.instanceId)
+    );
+
     try {
         await updateDoc('characters', user.uid, {
             hp: battleStats.maxHp, // Restore to full health
-            gold: increment(-goldLoss)
+            gold: increment(-goldLoss),
+            inventory: finalInventory
         });
         
-        setCharacter(p => p ? ({ ...p, hp: battleStats.maxHp, gold: p.gold - goldLoss }) : null);
+        setCharacter(p => p ? ({ ...p, hp: battleStats.maxHp, gold: p.gold - goldLoss, inventory: finalInventory }) : null);
 
+        setConsumedPotionInstanceIds([]);
         router.push('/play', { scroll: false });
         setMsg(finalReason);
         setIsBattleOver(true);
@@ -269,7 +294,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         setMsg('Error saving character state.');
         setMode('lobby');
     }
-  }, [user, character, battleStats, router, setCharacter]);
+  }, [user, character, battleStats, consumedPotionInstanceIds, router, setCharacter]);
 
   const nextQuestion = useCallback(() => {
     if (foeHp <= 0) {
@@ -402,6 +427,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
           setLevelUpData(null);
           setLootDrops([]);
           setSkillGains(null);
+          setConsumedPotionInstanceIds([]);
           setMode('intro');
         } catch (error) {
           console.error('Error setting up battle:', error);
@@ -475,41 +501,26 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     }, 2000);
   };
 
-  const usePotion = async (item: InventoryItem) => {
+  const usePotion = (item: InventoryItem) => {
     if (!user || !character || !gameItems[item.itemId] || isPaused) return;
+
+    if (playerHp >= battleStats.maxHp) {
+      setMsg('HP is already full.');
+      setTimeout(() => setMsg(''), 2000);
+      return;
+    }
 
     const potion = gameItems[item.itemId];
     const healAmount = potion.stats?.heal?.flat || 20;
     const newHp = Math.min(battleStats.maxHp, playerHp + healAmount);
 
-    const newInventory = [...character.inventory];
-    const itemIndex = newInventory.findIndex(
-      (i) => i.instanceId === item.instanceId
-    );
-    if (itemIndex > -1) newInventory.splice(itemIndex, 1);
-
-    try {
-      // Optimistic updates
-      setPlayerHp(newHp);
-      setCharacter((prev) =>
-        prev ? { ...prev, hp: newHp, inventory: newInventory } : null
-      );
-      setShowInventory(false);
-      setMsg(`Healed for ${healAmount} HP!`);
-
-      // Persist to DB
-      await updateDoc('characters', user.uid, { hp: newHp, inventory: newInventory });
-
-      // Clear message after a delay
-      setTimeout(() => setMsg(''), 2000);
-
-    } catch (error) {
-      console.error('Error using potion:', error);
-      // Revert optimistic updates on failure
-      setPlayerHp(playerHp);
-      setCharacter(character);
-      setMsg('Failed to use potion.');
-    }
+    // Temporary, combat-only state: nothing is written to Firestore or to the
+    // persisted character until the battle is consolidated (win/loss).
+    setPlayerHp(newHp);
+    setConsumedPotionInstanceIds((prev) => [...prev, item.instanceId]);
+    setShowInventory(false);
+    setMsg(`Healed for ${healAmount} HP!`);
+    setTimeout(() => setMsg(''), 2000);
   };
 
   return {
@@ -529,6 +540,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     isEscaping,
     selectedChoice,
     gameItems,
+    availableInventory,
     showInventory,
     setShowInventory,
     showEscapeConfirm,
