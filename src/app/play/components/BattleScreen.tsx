@@ -49,6 +49,7 @@ interface BattleScreenProps {
   questions: QuestionDoc[];
   currentQIndex: number;
   playerHp: number;
+    playerMaxHp: number;
   foeHp: number;
   msg: string;
   timeLeft: number;
@@ -80,7 +81,7 @@ interface InfoBoxProps {
 // MAIN COMPONENT
 export function BattleScreen(props: BattleScreenProps) {
   const {
-    character, foe, questions, currentQIndex, playerHp, foeHp, msg, timeLeft, totalTime, 
+    character, foe, questions, currentQIndex, playerHp, playerMaxHp, foeHp, msg, timeLeft, totalTime,
     isPaused, selectedChoice, gameItems, inventory, showInventory, setShowInventory, showEscapeConfirm,
     setShowEscapeConfirm, handleAnswer, nextQuestion, skipQuestion, executeEscape, usePotion, subArea
   } = props;
@@ -107,6 +108,7 @@ export function BattleScreen(props: BattleScreenProps) {
       <TopArea 
         character={character} 
         playerHp={playerHp} 
+        playerMaxHp={playerMaxHp}
         foe={foe} 
         foeHp={foeHp} 
         timeLeft={timeLeft} 
@@ -149,10 +151,10 @@ const Sprites = ({ character, foe }: { character: Character | null, foe: FoeDoc 
     );
 };
 
-const TopArea = ({ character, playerHp, foe, foeHp, timeLeft, totalTime, currentQIndex, totalQuestions }: any) => (
+const TopArea = ({ character, playerHp, playerMaxHp, foe, foeHp, timeLeft, totalTime, currentQIndex, totalQuestions }: any) => (
     <div className="relative z-10 p-4 space-y-2">
         <div className="flex justify-between items-start gap-4">
-            <InfoBox title={character?.name || "Player"} hp={playerHp} maxHp={character?.maxHp || 100} />
+            <InfoBox title={character?.name || "Player"} hp={playerHp} maxHp={playerMaxHp} />
             
             <div className="bg-black/60 backdrop-blur-sm p-2 rounded-lg border-2 border-white/20 text-center">
                 <h3 className="font-bold text-base uppercase tracking-wider">Turn</h3>

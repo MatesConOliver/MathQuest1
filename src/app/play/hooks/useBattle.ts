@@ -533,6 +533,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     questions,
     currentQIndex,
     playerHp,
+    playerMaxHp: battleStats.maxHp,
     foeHp,
     timeLeft,
     totalTime,

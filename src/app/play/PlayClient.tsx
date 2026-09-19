@@ -72,6 +72,7 @@ export default function PlayClient() {
           questions={battle.questions}
           currentQIndex={battle.currentQIndex}
           playerHp={battle.playerHp}
+          playerMaxHp={battle.playerMaxHp}
           foeHp={battle.foeHp}
           msg={battle.msg}
           timeLeft={battle.timeLeft}
