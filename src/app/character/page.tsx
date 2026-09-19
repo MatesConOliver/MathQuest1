@@ -6,7 +6,6 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, onSnapshot, updateDoc, collection, getDocs, increment } from "firebase/firestore";
 import { GameItem, InventoryItem, Character } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
-import 'katex/dist/katex.min.css'; 
 import { BlockMath } from 'react-katex';
 import Link from "next/link";
 

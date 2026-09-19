@@ -16,7 +16,6 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
-import 'katex/dist/katex.min.css'; 
 import { InlineMath, BlockMath } from 'react-katex';
 import { QuestionDoc, ContentBlock } from "@/types/game";
 import { Input } from "@/app/gm/components/Input";

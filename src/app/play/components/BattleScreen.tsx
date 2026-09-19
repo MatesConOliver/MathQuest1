@@ -1,7 +1,6 @@
 
 import { Character, FoeDoc, QuestionDoc, GameItem, InventoryItem, ContentBlock, SubArea } from "@/types/game";
 import { HealthBar, TimeBar } from "@/app/play/components/shared/Bars";
-import 'katex/dist/katex.min.css'; 
 import { BlockMath, InlineMath } from 'react-katex';
 import React, { useState, useEffect } from "react";
 
