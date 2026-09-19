@@ -308,7 +308,7 @@ const EscapeConfirm = ({ onConfirm, onCancel }: { onConfirm: () => void, onCance
     <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-50">
         <div className="bg-gray-800 border-2 border-white/30 rounded-xl p-8 w-full max-w-sm m-4 text-center text-white">
             <h2 className="text-2xl font-bold mb-4">Escape?</h2>
-            <p className="mb-6">Are you sure you want to escape? This will count as a loss.</p>
+            <p className="mb-6">Are you sure you want to escape?</p>
             <div className="flex justify-around gap-4">
                 <button onClick={onConfirm} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-all active:scale-95">Confirm</button>
                 <button onClick={onCancel} className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-all active:scale-95">Cancel</button>

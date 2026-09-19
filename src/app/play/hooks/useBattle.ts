@@ -491,14 +491,42 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     }
   };
 
-  const executeEscape = () => {
+  const executeEscape = async () => {
     setShowEscapeConfirm(false);
     setIsPaused(true);
-    setMsg('You successfully escaped!');
-    setIsEscaping(true);
-    setTimeout(() => {
+
+    if (!user || !character) {
+      setMsg('Could not save escape.');
+      setIsPaused(false);
+      return;
+    }
+
+    const finalInventory = character.inventory.filter(
+      (i) => !consumedPotionInstanceIds.includes(i.instanceId)
+    );
+
+    try {
+      await updateDoc('characters', user.uid, {
+        hp: playerHp,
+        inventory: finalInventory
+      });
+
+      setCharacter((prev) =>
+        prev ? { ...prev, hp: playerHp, inventory: finalInventory } : null
+      );
+      setConsumedPotionInstanceIds([]);
+      setMsg('You successfully escaped!');
+      setIsEscaping(true);
+      setIsBattleOver(true);
+
+      setTimeout(() => {
         router.push('/map');
-    }, 2000);
+      }, 2000);
+    } catch (error) {
+      console.error('Error saving escape:', error);
+      setMsg('Could not save escape. Please try again.');
+      setIsPaused(false);
+    }
   };
 
   const usePotion = (item: InventoryItem) => {
