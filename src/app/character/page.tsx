@@ -189,7 +189,7 @@ function StatUpgradeBox({
 
       <div className="mt-auto flex items-center justify-between gap-2 z-10">
         {locked ? (
-           <div className="w-full text-center text-[10px] bg-gray-200 dark:bg-gray-800 rounded py-1 font-bold text-gray-500 dark:text-gray-400\">LOCKED AT LVL {unlockLevel}</div>
+           <div className="w-full text-center text-[10px] bg-gray-200 dark:bg-gray-800 rounded py-1 font-bold text-gray-500 dark:text-gray-400\">UNLOCK AT LVL {unlockLevel}</div>
         ) : (
           <>
             <button 
