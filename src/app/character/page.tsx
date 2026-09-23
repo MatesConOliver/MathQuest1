@@ -317,6 +317,34 @@ const SkillCircle = ({
   );
 };
 
+// Computes the effective max HP (base + equipment bonuses) for a given equipment map,
+// so we can diff "before" vs "after" equip/unequip and shift current HP by the same delta.
+const calculateMaxHpForEquipment = (
+  baseMaxHp: number,
+  equipment: Character["equipment"] | undefined,
+  inventory: InventoryItem[],
+  gameItems: Record<string, GameItem>
+) => {
+  let hpFlat = baseMaxHp;
+  let hpMult = 0;
+
+  Object.values(equipment || {}).forEach((equippedInstanceId) => {
+    if (!equippedInstanceId) return;
+    const instance = inventory.find((i) => i.instanceId === equippedInstanceId);
+    if (!instance) return;
+    const def = gameItems[instance.itemId];
+    if (!def || !def.stats) return;
+
+    const isBroken = (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
+    if (isBroken) return;
+
+    if (def.stats.maxHp?.flat) hpFlat += def.stats.maxHp.flat;
+    if (def.stats.maxHp?.mult) hpMult += def.stats.maxHp.mult;
+  });
+
+  return Math.floor(hpFlat * (1 + hpMult));
+};
+
 // --- MAIN PAGE ---
 
 export default function CharacterPage() {
@@ -515,6 +543,29 @@ export default function CharacterPage() {
   
   // --- HANDLERS ---
 
+  // Diffs effective max HP before/after an equipment change and returns the HP the
+  // character should end up with. Returns null if the player cancels a risky unequip.
+  const resolveHpAfterEquipmentChange = (newEquipment: Character["equipment"]): number | null => {
+    if (!char) return null;
+
+    const oldMax = calculateMaxHpForEquipment(char.maxHp, char.equipment, char.inventory, gameItems);
+    const newMax = calculateMaxHpForEquipment(char.maxHp, newEquipment, char.inventory, gameItems);
+    const delta = newMax - oldMax;
+
+    const currentHp = char.hp ?? char.maxHp;
+    const proposedHp = currentHp + delta;
+
+    if (proposedHp <= 0) {
+      const confirmed = confirm(
+        "Removing this item would drop your HP to 0 or below. Your HP will be set to 1 instead. Continue?"
+      );
+      if (!confirmed) return null;
+      return 1;
+    }
+
+    return proposedHp;
+  };
+
   const handleEquip = async (item: InventoryItem) => {
     if (!char || !user) return;
     const def = gameItems[item.itemId];
@@ -536,11 +587,15 @@ export default function CharacterPage() {
     }
 
     const newEquipment = { ...char.equipment, [slot]: item.instanceId };
-    setChar({ ...char, equipment: newEquipment });
+    const newHp = resolveHpAfterEquipmentChange(newEquipment);
+    if (newHp === null) return;
+
+    setChar({ ...char, equipment: newEquipment, hp: newHp });
 
     try {
         await updateDoc(doc(db, "characters", user.uid), {
-            [`equipment.${slot}`]: item.instanceId
+            [`equipment.${slot}`]: item.instanceId,
+            hp: newHp
         });
         setMsg(`⚔️ Equipped ${def.name}!`);
     } catch (e) { setMsg("Error equipping item."); }
@@ -548,8 +603,13 @@ export default function CharacterPage() {
 
   const handleUnequip = async (slot: string) => {
     if (!char || !user) return;
-    setChar({ ...char, equipment: { ...char.equipment, [slot as any]: null } });
-    await updateDoc(doc(db, "characters", user.uid), { [`equipment.${slot}`]: null });
+
+    const newEquipment = { ...char.equipment, [slot as any]: null };
+    const newHp = resolveHpAfterEquipmentChange(newEquipment);
+    if (newHp === null) return;
+
+    setChar({ ...char, equipment: newEquipment, hp: newHp });
+    await updateDoc(doc(db, "characters", user.uid), { [`equipment.${slot}`]: null, hp: newHp });
     setMsg(`Un-equipped item from ${slot}.`);
   };
 
