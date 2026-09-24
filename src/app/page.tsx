@@ -21,6 +21,9 @@ export default function HomePage() {
   const charUnsub = useRef<Unsubscribe | null>(null);
   const storyToPlayRef = useRef(storyToPlay);
   storyToPlayRef.current = storyToPlay;
+  // Guards against overlapping getStoryForTrigger calls when the new-character doc
+  // fires several onSnapshot events in quick succession (each field write triggers one).
+  const fetchingLoginStoryRef = useRef(false);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -41,12 +44,17 @@ export default function HomePage() {
           const charData = charSnap.data() as Character;
           setCharacter(charData);
 
-          if (!storyToPlayRef.current && (!charData.completedStoryEvents || charData.completedStoryEvents.length === 0)) {
-            setLoading(true);  
-            const loginStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_LOGIN' });
-              if (loginStory) {
-                  setStoryToPlay(loginStory);
+          if (!storyToPlayRef.current && !fetchingLoginStoryRef.current && (!charData.completedStoryEvents || charData.completedStoryEvents.length === 0)) {
+            fetchingLoginStoryRef.current = true;
+            setLoading(true);
+            try {
+              const loginStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_LOGIN' });
+              if (loginStory && !storyToPlayRef.current) {
+                setStoryToPlay(loginStory);
               }
+            } finally {
+              fetchingLoginStoryRef.current = false;
+            }
           }
           setLoading(false)
         } else {
