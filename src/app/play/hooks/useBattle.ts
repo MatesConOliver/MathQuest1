@@ -36,6 +36,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   const [currentQuestion, setCurrentQuestion] = useState<QuestionDoc | null>(null);
   // Pending chained sub-questions (same groupId) waiting to be asked in order.
   const [questionQueue, setQuestionQueue] = useState<QuestionDoc[]>([]);
+  // IDs of questions already shown this battle (answered, failed, or skipped) so they don't repeat.
+  const [usedQuestionIds, setUsedQuestionIds] = useState<string[]>([]);
   // Turn counter (not an array index anymore since questions are drawn dynamically).
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [showSubquestionMenu, setShowSubquestionMenu] = useState(false);
@@ -53,9 +55,13 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
 
   // Only questions with no groupId, or the first part (order 1) of a group, may be
   // picked as a fresh random draw. Later parts can only appear via the chained queue.
+  // Already-used questions (answered, failed, or skipped this battle) are excluded so they don't repeat.
   const eligibleStarterPool = useMemo(
-    () => questions.filter((q) => !q.groupId || (q.order ?? 1) <= 1),
-    [questions]
+    () =>
+      questions.filter(
+        (q) => (!q.groupId || (q.order ?? 1) <= 1) && (!q.id || !usedQuestionIds.includes(q.id))
+      ),
+    [questions, usedQuestionIds]
   );
 
   const fetchGroupQuestions = useCallback(async (groupId: string, excludeId?: string) => {
@@ -342,6 +348,9 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       setQuestionQueue([]);
     }
 
+    if (picked.id) {
+      setUsedQuestionIds((prev) => [...prev, picked.id as string]);
+    }
     return picked;
   }, [eligibleStarterPool, fetchGroupQuestions]);
 
@@ -524,6 +533,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
           setCurrentQIndex(0);
           setCurrentQuestion(starter);
           setQuestionQueue(starterQueue);
+          setUsedQuestionIds(starter.id ? [starter.id] : []);
           setShowSubquestionMenu(false);
           setTimeLeft(starter.timeLimit || 30);
           setIsPaused(false);
