@@ -2,8 +2,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { Character, EncounterDoc, FoeDoc, GameItem, StoryEvent, SubArea } from '@/types/game';
-import { getAllDocs, getDoc, callApi, updateDoc } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+import { Character, EncounterDoc, FoeDoc, GameItem, GameLocation, StoryEvent, SubArea, UnlockedSubArea } from '@/types/game';
+import { getAllDocs, getDoc, callApi, updateDoc, db } from '@/lib/firebase';
+import { getUnlockStatus } from '@/lib/unlock';
 
 export function useGameData(user: User | null) {
   const [character, setCharacter] = useState<Character | null>(null);
@@ -22,12 +24,14 @@ export function useGameData(user: User | null) {
     const fetchGameData = async () => {
       setIsLoading(true);
       try {
-        const [charData, encs, items, foeData, subAreaData] = await Promise.all([
+        const [charData, encs, items, foeData, subAreaData, locationData, unlockedSnap] = await Promise.all([
           getDoc<Character>('characters', user.uid),
           getAllDocs<EncounterDoc>('encounters'),
           getAllDocs<GameItem>('items'),
           getAllDocs<FoeDoc>('foes'),
           getAllDocs<SubArea>('subAreas'),
+          getAllDocs<GameLocation>('locations'),
+          getDocs(collection(db, `characters/${user.uid}/unlockedSubAreas`)),
         ]);
 
         if (charData) {
@@ -37,7 +41,6 @@ export function useGameData(user: User | null) {
           return;
         }
 
-        setEncounters(encs);
         const itemsMap = items.reduce(
           (acc, item) => ({ ...acc, [item.id]: item }),
           {}
@@ -59,6 +62,28 @@ export function useGameData(user: User | null) {
             return acc;
         }, {});
         setSubAreas(subAreasMap);
+
+        const locationsMap = locationData.reduce<Record<string, GameLocation>>((acc, loc) => {
+            if (loc.id) {
+                acc[loc.id] = loc;
+            }
+            return acc;
+        }, {});
+
+        const unlockedSubAreas: { [key: string]: UnlockedSubArea } = {};
+        unlockedSnap.forEach(doc => { unlockedSubAreas[doc.id] = doc.data() as UnlockedSubArea });
+
+        // Only expose encounters whose location AND sub-area are actually unlocked,
+        // so stray/test content or direct `?id=` links can't bypass progression.
+        const reachableEncounters = encs.filter((enc) => {
+          const location = locationsMap[enc.locationId];
+          const subArea = subAreasMap[enc.subAreaId];
+          if (!location || !subArea) return false;
+          if (getUnlockStatus(location, charData, unlockedSubAreas).locked) return false;
+          if (getUnlockStatus(subArea, charData, unlockedSubAreas).locked) return false;
+          return true;
+        });
+        setEncounters(reachableEncounters);
 
         const storyEvent = await callApi<StoryEvent | null>('getStoryForTrigger', { trigger: 'LOGIN' });
 
