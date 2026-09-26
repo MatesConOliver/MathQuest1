@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 type AudioContextType = {
   playTrack: (url: string) => void; // For Background Music (loops)
@@ -14,29 +14,31 @@ const AudioContext = createContext<AudioContextType | null>(null);
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   // 1. The Background Music Player (Persistent)
   const musicRef = useRef<HTMLAudioElement | null>(null);
+  const currentTrackRef = useRef("");
   const [currentTrack, setCurrentTrack] = useState<string>("");
 
   // Function A: Play Background Music (Loops, only one at a time)
-  const playTrack = (url: string) => {
+  const playTrack = useCallback((url: string) => {
     if (!musicRef.current) return;
-    if (currentTrack === url && !musicRef.current.paused) return; // Don't restart if already playing
+    if (currentTrackRef.current === url && !musicRef.current.paused) return;
 
+    currentTrackRef.current = url;
     setCurrentTrack(url);
     musicRef.current.src = url;
     musicRef.current.volume = 0.3; // Background music at 30% volume
     musicRef.current.play().catch(() => console.log("BGM waiting for interaction..."));
-  };
+  }, []);
 
   // Function B: Stop Background Music
-  const stopTrack = () => {
-    if (musicRef.current) {
-      musicRef.current.pause();
-      setCurrentTrack(""); // Mark as no track playing
-    }
-  };
+  const stopTrack = useCallback(() => {
+    if (!musicRef.current || !currentTrackRef.current) return;
+    musicRef.current.pause();
+    currentTrackRef.current = "";
+    setCurrentTrack("");
+  }, []);
 
   // Function C: Play Sound Effect (Fire-and-forget, allows overlap)
-  const playSfx = (url: string) => {
+  const playSfx = useCallback((url: string) => {
     try {
       const sfx = new Audio(url);
       sfx.volume = 0.5; // SFX slightly louder (50%)
@@ -44,7 +46,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.error("Audio error", e);
     }
-  };
+  }, []);
 
   // Global unlocker for Background Music
   useEffect(() => {
@@ -61,8 +63,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     };
   }, [currentTrack]);
 
+  const audioContextValue = useMemo(
+    () => ({ playTrack, playSfx, stopTrack, currentTrack }),
+    [playTrack, playSfx, stopTrack, currentTrack]
+  );
+
   return (
-    <AudioContext.Provider value={{ playTrack, playSfx, stopTrack, currentTrack }}>
+    <AudioContext.Provider value={audioContextValue}>
       {/* Hidden player for Background Music only */}
       <audio ref={musicRef} loop hidden />
       {children}

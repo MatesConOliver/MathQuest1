@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { auth, db, callApi } from "@/lib/firebase";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { doc, getDoc, updateDoc, arrayUnion, onSnapshot, Unsubscribe } from "firebase/firestore";
@@ -14,6 +14,7 @@ export default function HomePage() {
   const [user, setUser] = useState<User | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isStoryBootstrapping, setIsStoryBootstrapping] = useState(false);
   const [storyToPlay, setStoryToPlay] = useState<StoryEvent | null>(null);
   const [isGM, setIsGM] = useState(false);
   const [isCreatingNewGame, setIsCreatingNewGame] = useState(false);
@@ -21,8 +22,7 @@ export default function HomePage() {
   const charUnsub = useRef<Unsubscribe | null>(null);
   const storyToPlayRef = useRef(storyToPlay);
   storyToPlayRef.current = storyToPlay;
-  // Guards against overlapping getStoryForTrigger calls when the new-character doc
-  // fires several onSnapshot events in quick succession (each field write triggers one).
+  // Guards overlapping story fetches while Firestore emits multiple snapshots.
   const fetchingLoginStoryRef = useRef(false);
 
   useEffect(() => {
@@ -34,6 +34,9 @@ export default function HomePage() {
       setUser(u);
       setIsGM(u.email === "oliveru1996@gmail.com");
       setLoading(true);
+      setStoryToPlay(null);
+      storyToPlayRef.current = null;
+      fetchingLoginStoryRef.current = false;
 
       if (charUnsub.current) {
         charUnsub.current();
@@ -44,19 +47,34 @@ export default function HomePage() {
           const charData = charSnap.data() as Character;
           setCharacter(charData);
 
-          if (!storyToPlayRef.current && !fetchingLoginStoryRef.current && (!charData.completedStoryEvents || charData.completedStoryEvents.length === 0)) {
-            fetchingLoginStoryRef.current = true;
-            setLoading(true);
-            try {
-              const loginStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_LOGIN' });
-              if (loginStory && !storyToPlayRef.current) {
-                setStoryToPlay(loginStory);
-              }
-            } finally {
-              fetchingLoginStoryRef.current = false;
-            }
+          const needsLoginStory = !charData.completedStoryEvents || charData.completedStoryEvents.length === 0;
+          if (!needsLoginStory || storyToPlayRef.current) {
+            setIsStoryBootstrapping(false);
+            setLoading(false);
+            return;
           }
-          setLoading(false)
+
+          if (fetchingLoginStoryRef.current) {
+            setIsStoryBootstrapping(true);
+            return;
+          }
+
+          fetchingLoginStoryRef.current = true;
+          setIsStoryBootstrapping(true);
+          setLoading(true);
+          try {
+            const loginStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_LOGIN' });
+            if (loginStory && !storyToPlayRef.current) {
+              storyToPlayRef.current = loginStory;
+              setStoryToPlay(loginStory);
+            }
+          } catch (error) {
+            console.error("Error loading login story:", error);
+          } finally {
+            fetchingLoginStoryRef.current = false;
+            setIsStoryBootstrapping(false);
+            setLoading(false);
+          }
         } else {
           console.log("Waiting for character creation...");
           setLoading(true);
@@ -75,7 +93,7 @@ export default function HomePage() {
     };
   }, [router]);
 
-  const handleStoryComplete = async () => {
+  const handleStoryComplete = useCallback(async () => {
     if (!user || !storyToPlay) return;
 
     try {
@@ -89,20 +107,25 @@ export default function HomePage() {
     } catch(e) {
         console.error("Error updating completed stories", e);
     } finally {
+        storyToPlayRef.current = null;
+        setIsStoryBootstrapping(false);
         setStoryToPlay(null);
     }
-  };
+  }, [user, storyToPlay, router]);
 
   const handleMapClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     if (character?.name === "Nameless") {
+        setIsStoryBootstrapping(true);
         const nameStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_FIRST_MAP_ENTER' });
         if (nameStory) {
+          storyToPlayRef.current = nameStory;
             setStoryToPlay(nameStory);
         } else {
             // If for some reason the name story doesn't exist, let them proceed.
             router.push('/map');
         }
+        setIsStoryBootstrapping(false);
     } else {
         router.push('/map');
     }
@@ -118,14 +141,19 @@ export default function HomePage() {
 
     if (window.confirm("Are you sure you want to start a new game? Your current progress will be lost.")) {
         setIsCreatingNewGame(true);
+        setIsStoryBootstrapping(true);
+        setLoading(true);
+        storyToPlayRef.current = null;
+        setStoryToPlay(null);
         try {
-            setStoryToPlay(null);
             await callApi('newGame', {});
         } catch (error) {
             console.error("Error starting a new game:", error);
             alert("There was an error starting a new game. Please try again.");
-            setIsCreatingNewGame(false);
             setLoading(false);
+        } finally {
+            setIsStoryBootstrapping(false);
+            setIsCreatingNewGame(false);
         }
     }
   };
@@ -148,7 +176,7 @@ export default function HomePage() {
 
   const needsToName = character?.name === "Nameless";
 
-  if (loading) return (
+  if (loading || isStoryBootstrapping) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 animate-pulse font-bold">
       Loading World...
     </div>

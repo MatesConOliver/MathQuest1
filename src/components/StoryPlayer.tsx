@@ -40,6 +40,7 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPreloading, setIsPreloading] = useState(true);
+  const fadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const audio = useAudio();
   const originalMusicTrack = useRef<string | null>(null);
@@ -59,7 +60,7 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
         audio.stopTrack();
       }
     };
-  }, [audio]);
+  }, [audio?.playTrack, audio?.stopTrack]);
 
   // --- Preloading Effect (no changes) ---
   useEffect(() => {
@@ -89,6 +90,12 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
   }, [currentSceneId, story.scenes]);
 
   // --- Main Scene Logic & Music Control ---
+  useEffect(() => () => {
+    if (fadeTimeoutRef.current) {
+      clearTimeout(fadeTimeoutRef.current);
+    }
+  }, []);
+
   useEffect(() => {
     if (isPreloading) return;
 
@@ -110,15 +117,19 @@ export function StoryPlayer({ story, onComplete }: StoryPlayerProps) {
     const timer = setTimeout(() => setOpacity(1), 50);
     return () => clearTimeout(timer);
 
-  }, [currentScene, onComplete, isPreloading, audio]);
+  }, [currentScene, onComplete, isPreloading, audio?.playTrack, audio?.stopTrack]);
 
   // --- Transition and other handlers (no major changes) ---
   const transitionToScene = (nextId: string) => {
     const shouldFadeOut = currentScene?.fadeOut ?? true;
+    if (fadeTimeoutRef.current) {
+      clearTimeout(fadeTimeoutRef.current);
+    }
+
     setTransitionDuration(shouldFadeOut ? 500 : 0);
     setOpacity(0);
 
-    setTimeout(() => {
+    fadeTimeoutRef.current = setTimeout(() => {
       if (nextId === 'END') {
         onComplete();
         return;
