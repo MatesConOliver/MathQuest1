@@ -22,6 +22,8 @@ export default function HomePage() {
   const charUnsub = useRef<Unsubscribe | null>(null);
   const storyToPlayRef = useRef(storyToPlay);
   storyToPlayRef.current = storyToPlay;
+  // Firestore can emit a burst of snapshot updates around character creation/new-game resets.
+  // Keep a generation token so stale async story fetches cannot overwrite the active boot flow.
   const storyBootstrapGenerationRef = useRef(0);
   const storyBootstrapInFlightRef = useRef(false);
 
@@ -83,7 +85,9 @@ export default function HomePage() {
       charUnsub.current = onSnapshot(doc(db, "characters", u.uid), async (charSnap) => {
         if (!charSnap.exists()) {
           console.log("Waiting for character creation...");
-          setLoading(true);
+          if (!storyToPlayRef.current) {
+            setLoading(true);
+          }
           return;
         }
 

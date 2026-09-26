@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
   createUserWithEmailAndPassword, 
@@ -25,27 +25,36 @@ export default function LoginPage() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const provisioningUidRef = useRef<string | null>(null);
+  const characterUnsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
+      characterUnsubscribeRef.current?.();
+      characterUnsubscribeRef.current = null;
+      provisioningUidRef.current = null;
+
       if (user) {
-        const unsubSnapshot = onSnapshot(doc(db, "characters", user.uid), (charDoc) => {
+        characterUnsubscribeRef.current = onSnapshot(doc(db, "characters", user.uid), (charDoc) => {
           if (charDoc.exists()) {
             router.push("/");
-          } else {
-            // If character data doesn't exist, create it.
-            // This handles cases where registration was incomplete or data was lost.
-            callApi('newGame', {}).catch(err => {
-              console.error("Error creating character data for logged in user:", err);
-              setError("There was a problem setting up your character. Please log out and try again.");
-              auth.signOut(); // Sign out to prevent potential loops
-            });
+            return;
           }
+
+          if (provisioningUidRef.current === user.uid) return;
+          provisioningUidRef.current = user.uid;
+          callApi('newGame', {}).catch(err => {
+            console.error("Error creating character data for logged in user:", err);
+            setError("There was a problem setting up your character. Please log out and try again.");
+            auth.signOut();
+          });
         });
-        return () => unsubSnapshot();
       }
     });
-    return () => unsubAuth();
+    return () => {
+      unsubAuth();
+      characterUnsubscribeRef.current?.();
+    };
   }, [router]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -58,10 +67,7 @@ export default function LoginPage() {
     try {
       if (isRegistering) {
         await createUserWithEmailAndPassword(auth, cleanEmail, password);
-        // After creating the user, we immediately call the cloud function to create the character data.
-        // This avoids race conditions and keeps character creation logic on the server.
-        await callApi('newGame', {});
-        // The onSnapshot listener will then redirect the user to the main page.
+        // The auth listener provisions the character once the new user's document is missing.
       } else {
         await signInWithEmailAndPassword(auth, cleanEmail, password);
         // For existing users, the onSnapshot listener will also handle the redirection.
