@@ -22,8 +22,45 @@ export default function HomePage() {
   const charUnsub = useRef<Unsubscribe | null>(null);
   const storyToPlayRef = useRef(storyToPlay);
   storyToPlayRef.current = storyToPlay;
-  // Guards overlapping story fetches while Firestore emits multiple snapshots.
-  const fetchingLoginStoryRef = useRef(false);
+  const storyBootstrapGenerationRef = useRef(0);
+  const storyBootstrapInFlightRef = useRef(false);
+
+  const bootInitialStory = useCallback(async (charData: Character) => {
+    const needsLoginStory = !charData.completedStoryEvents || charData.completedStoryEvents.length === 0;
+
+    if (!needsLoginStory || storyToPlayRef.current || storyBootstrapInFlightRef.current) {
+      if (!needsLoginStory) {
+        setIsStoryBootstrapping(false);
+        setLoading(false);
+      }
+      return;
+    }
+
+    const generation = ++storyBootstrapGenerationRef.current;
+    storyBootstrapInFlightRef.current = true;
+    setIsStoryBootstrapping(true);
+    setLoading(true);
+
+    try {
+      const loginStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_LOGIN' });
+      if (generation !== storyBootstrapGenerationRef.current) {
+        return;
+      }
+
+      if (loginStory && !storyToPlayRef.current) {
+        storyToPlayRef.current = loginStory;
+        setStoryToPlay(loginStory);
+      }
+    } catch (error) {
+      console.error("Error loading login story:", error);
+    } finally {
+      if (generation === storyBootstrapGenerationRef.current) {
+        storyBootstrapInFlightRef.current = false;
+        setIsStoryBootstrapping(false);
+        setLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -36,49 +73,23 @@ export default function HomePage() {
       setLoading(true);
       setStoryToPlay(null);
       storyToPlayRef.current = null;
-      fetchingLoginStoryRef.current = false;
+      storyBootstrapGenerationRef.current += 1;
+      storyBootstrapInFlightRef.current = false;
 
       if (charUnsub.current) {
         charUnsub.current();
       }
 
       charUnsub.current = onSnapshot(doc(db, "characters", u.uid), async (charSnap) => {
-        if (charSnap.exists()) {
-          const charData = charSnap.data() as Character;
-          setCharacter(charData);
-
-          const needsLoginStory = !charData.completedStoryEvents || charData.completedStoryEvents.length === 0;
-          if (!needsLoginStory || storyToPlayRef.current) {
-            setIsStoryBootstrapping(false);
-            setLoading(false);
-            return;
-          }
-
-          if (fetchingLoginStoryRef.current) {
-            setIsStoryBootstrapping(true);
-            return;
-          }
-
-          fetchingLoginStoryRef.current = true;
-          setIsStoryBootstrapping(true);
-          setLoading(true);
-          try {
-            const loginStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_LOGIN' });
-            if (loginStory && !storyToPlayRef.current) {
-              storyToPlayRef.current = loginStory;
-              setStoryToPlay(loginStory);
-            }
-          } catch (error) {
-            console.error("Error loading login story:", error);
-          } finally {
-            fetchingLoginStoryRef.current = false;
-            setIsStoryBootstrapping(false);
-            setLoading(false);
-          }
-        } else {
+        if (!charSnap.exists()) {
           console.log("Waiting for character creation...");
           setLoading(true);
+          return;
         }
+
+        const charData = charSnap.data() as Character;
+        setCharacter(charData);
+        void bootInitialStory(charData);
       }, (error) => {
         console.error("Error listening to character data:", error);
         setLoading(false);
@@ -91,7 +102,7 @@ export default function HomePage() {
         charUnsub.current();
       }
     };
-  }, [router]);
+  }, [bootInitialStory, router]);
 
   const handleStoryComplete = useCallback(async () => {
     if (!user || !storyToPlay) return;
@@ -107,6 +118,8 @@ export default function HomePage() {
     } catch(e) {
         console.error("Error updating completed stories", e);
     } finally {
+        storyBootstrapGenerationRef.current += 1;
+        storyBootstrapInFlightRef.current = false;
         storyToPlayRef.current = null;
         setIsStoryBootstrapping(false);
         setStoryToPlay(null);
@@ -143,6 +156,8 @@ export default function HomePage() {
         setIsCreatingNewGame(true);
         setIsStoryBootstrapping(true);
         setLoading(true);
+        storyBootstrapGenerationRef.current += 1;
+        storyBootstrapInFlightRef.current = false;
         storyToPlayRef.current = null;
         setStoryToPlay(null);
         try {
