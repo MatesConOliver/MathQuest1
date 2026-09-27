@@ -65,6 +65,7 @@ interface BattleScreenProps {
   showEscapeConfirm: boolean;
   setShowEscapeConfirm: (show: boolean) => void;
   showSubquestionMenu: boolean;
+    abandonGroupTurnCost: number;
   handleAnswer: (choiceIndex: number) => void;
   nextQuestion: () => void;
   continueSubquestion: () => void;
@@ -87,7 +88,7 @@ export function BattleScreen(props: BattleScreenProps) {
   const {
     character, foe, currentQuestion, currentQIndex, totalQuestions, playerHp, playerMaxHp, foeHp, msg, timeLeft, totalTime,
     isPaused, selectedChoice, gameItems, inventory, showInventory, setShowInventory, showEscapeConfirm,
-    setShowEscapeConfirm, showSubquestionMenu, handleAnswer, nextQuestion, continueSubquestion, abandonGroup,
+    setShowEscapeConfirm, showSubquestionMenu, abandonGroupTurnCost, handleAnswer, nextQuestion, continueSubquestion, abandonGroup,
     skipQuestion, executeEscape, usePotion, subArea
   } = props;
 
@@ -136,6 +137,7 @@ export function BattleScreen(props: BattleScreenProps) {
         msg={msg}
         nextQuestion={nextQuestion}
         showSubquestionMenu={showSubquestionMenu}
+        abandonGroupTurnCost={abandonGroupTurnCost}
         continueSubquestion={continueSubquestion}
         abandonGroup={abandonGroup}
       />
@@ -177,7 +179,7 @@ const TopArea = ({ character, playerHp, playerMaxHp, foe, foeHp, timeLeft, total
     </div>
 );
 
-const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAnswer, skipQuestion, setShowInventory, setShowEscapeConfirm, selectedChoice, msg, nextQuestion, showSubquestionMenu, continueSubquestion, abandonGroup }: any) => {
+const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAnswer, skipQuestion, setShowInventory, setShowEscapeConfirm, selectedChoice, msg, nextQuestion, showSubquestionMenu, abandonGroupTurnCost, continueSubquestion, abandonGroup }: any) => {
 
     const choiceCount = currentQ.choicesContent?.length || currentQ.choices?.length || 0;
     const isTimeout = isPaused && selectedChoice !== null && selectedChoice >= choiceCount;
@@ -187,7 +189,7 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
         <div className="flex flex-col gap-2">
             <p className="text-center text-xs font-bold">¿Continuar con el ejercicio?</p>
             <button onClick={continueSubquestion} className="battle-btn">Continuar con el siguiente apartado</button>
-            <button onClick={abandonGroup} className="battle-btn">Dejar ejercicio y buscar otro</button>
+            <button onClick={abandonGroup} className="battle-btn">Dejar ejercicio y buscar otro (Lose {abandonGroupTurnCost} turns)</button>
         </div>
     ) : (
         <button onClick={nextQuestion} className="battle-btn">Next</button>

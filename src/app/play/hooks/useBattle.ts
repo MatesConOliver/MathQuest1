@@ -354,7 +354,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     return picked;
   }, [eligibleStarterPool, fetchGroupQuestions]);
 
-  const nextQuestion = useCallback(async () => {
+  const nextQuestion = useCallback(async (abandonCurrentGroup = false) => {
     if (foeHp <= 0) {
       handleWin();
       return;
@@ -363,7 +363,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       handleLoss('You were defeated in battle!');
       return;
     }
-    if (currentQIndex >= questions.length - 1) {
+    const skippedTurns = abandonCurrentGroup ? questionQueue.length : 0;
+    if (currentQIndex + skippedTurns >= questions.length - 1) {
       handleLoss('You ran out of turns!');
       return;
     }
@@ -372,9 +373,11 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     setSelectedChoice(null);
     setShowSubquestionMenu(false);
     setMsg('');
-    setCurrentQIndex((prev) => prev + 1);
+    setCurrentQIndex((prev) => prev + skippedTurns + 1);
 
-    if (questionQueue.length > 0) {
+    if (abandonCurrentGroup) {
+      setQuestionQueue([]);
+    } else if (questionQueue.length > 0) {
       const [next, ...rest] = questionQueue;
       setQuestionQueue(rest);
       setCurrentQuestion(next);
@@ -398,8 +401,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
 
   // Player fails a sub-question and gives up on the rest of the group.
   const abandonGroup = useCallback(() => {
-    setQuestionQueue([]);
-    nextQuestion();
+    nextQuestion(true);
   }, [nextQuestion]);
 
   const handleAnswer = useCallback(
@@ -675,6 +677,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     questions,
     currentQuestion,
     questionQueue,
+    abandonGroupTurnCost: questionQueue.length,
     showSubquestionMenu,
     currentQIndex,
     playerHp,

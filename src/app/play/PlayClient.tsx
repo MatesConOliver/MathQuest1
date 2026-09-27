@@ -88,6 +88,7 @@ export default function PlayClient() {
           showEscapeConfirm={battle.showEscapeConfirm}
           setShowEscapeConfirm={battle.setShowEscapeConfirm}
           showSubquestionMenu={battle.showSubquestionMenu}
+          abandonGroupTurnCost={battle.abandonGroupTurnCost}
           handleAnswer={battle.handleAnswer}
           nextQuestion={battle.nextQuestion}
           continueSubquestion={battle.continueSubquestion}
