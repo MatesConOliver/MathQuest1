@@ -354,8 +354,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     return picked;
   }, [eligibleStarterPool, fetchGroupQuestions]);
 
-  const nextQuestion = useCallback(async (abandonCurrentGroup = false) => {
-    if (foeHp <= 0) {
+  const advanceQuestion = useCallback(async (abandonCurrentGroup: boolean) => {
+    if (foeHp <= 0 && (abandonCurrentGroup || questionQueue.length === 0)) {
       handleWin();
       return;
     }
@@ -394,6 +394,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     setTimeLeft(drawn.timeLimit || 30);
   }, [foeHp, playerHp, currentQIndex, questions.length, questionQueue, drawRandomQuestion, handleWin, handleLoss]);
 
+  const nextQuestion = useCallback(() => advanceQuestion(false), [advanceQuestion]);
+
   // Player fails a sub-question but chooses to keep going through the group's queue.
   const continueSubquestion = useCallback(() => {
     nextQuestion();
@@ -401,8 +403,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
 
   // Player fails a sub-question and gives up on the rest of the group.
   const abandonGroup = useCallback(() => {
-    nextQuestion(true);
-  }, [nextQuestion]);
+    advanceQuestion(true);
+  }, [advanceQuestion]);
 
   const handleAnswer = useCallback(
     async (choiceIndex: number) => {
