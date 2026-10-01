@@ -30,7 +30,7 @@ const InventoryItemCard = ({
 }) => {
   const isBroken = (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
   const isGear = def.slot || ["armor", "head", "mainHand", "offHand", "weapon", "shield"].includes(def.type as string);
-  const isFirst = index === 0;
+  const isFirstRow = index < 2;
 
   // Sell Logic: Broken = 10%, Used = 50%
   const multiplier = isBroken ? 0.1 : 0.5;
@@ -43,7 +43,7 @@ const InventoryItemCard = ({
       
       {/* HOVER TOOLTIP */}
       <div className={`hidden group-hover:block absolute z-50 left-0 w-full p-3 rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in duration-200 border border-transparent dark:border-gray-700 bg-gray-900 dark:bg-black text-white text-xs ${
-          isFirst ? "top-full mt-2" : "bottom-full mb-2"
+          isFirstRow ? "top-full mt-2" : "bottom-full mb-2"
       }`}>
         <div className="font-bold border-b border-gray-600 pb-1 mb-1 text-gray-300 uppercase tracking-widest text-[10px]">Item Stats</div>
         <div className="space-y-1">
@@ -84,7 +84,7 @@ const InventoryItemCard = ({
         
         {/* Arrow */}
         <div className={`absolute left-1/2 -translate-x-1/2 border-8 border-transparent ${
-            isFirst ? "bottom-full border-b-gray-900 dark:border-b-black" : "top-full border-t-gray-900 dark:border-t-black"
+            isFirstRow ? "bottom-full border-b-gray-900 dark:border-b-black" : "top-full border-t-gray-900 dark:border-t-black"
         }`}></div>
       </div>
 
