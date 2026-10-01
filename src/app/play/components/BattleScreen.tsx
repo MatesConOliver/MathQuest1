@@ -196,7 +196,7 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
     );
 
     const QuestionPrompt = () => {
-        const promptContainerClasses = "leading-relaxed text-lg font-serif text-gray-800 dark:text-gray-100 text-center";
+        const promptContainerClasses = "leading-relaxed text-lg font-serif text-gray-100 text-center";
         if (currentQ.promptContent) {
             return <div className={promptContainerClasses}>{renderStructuredContent(currentQ.promptContent, true)}</div>;
         }
