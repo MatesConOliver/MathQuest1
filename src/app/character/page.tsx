@@ -80,7 +80,7 @@ const InventoryItemCard = ({
           {s.time?.flat && <div>⏳ Time: <span className="text-yellow-300 font-bold">+{s.time.flat}s</span></div>}
           {s.time?.mult && <div>⏳ Time: <span className="text-yellow-300 font-bold">+{Math.round(s.time.mult * 100)}%</span></div>}
 
-          {!def.stats && <div className="italic text-gray-500">No stats.</div>}
+          {!def.stats && <div className="italic text-gray-300">No stats.</div>}
         </div>
         
         {/* Arrow */}
@@ -104,7 +104,7 @@ const InventoryItemCard = ({
                 {item.maxDurability && (
                   <div className="mt-2">
                     <div className="flex justify-between items-center w-24 mb-0.5">
-                      <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500">DURABILITY</span>
+                      <span className="text-[9px] font-bold text-gray-600 dark:text-gray-300">DURABILITY</span>
                       <span className={`text-[9px] font-bold ${isBroken ? "text-red-500" : "text-gray-600 dark:text-gray-300"}`}>
                         {item.durability}/{item.maxDurability}
                       </span>
@@ -252,7 +252,7 @@ function EquipRow({ slotName, equippedId, gameItems, inventory, onUnequip }: any
       </div>
       
       {def && (
-        <button onClick={onUnequip} className="text-xs text-red-400 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-bold px-2">
+        <button onClick={onUnequip} className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 font-bold px-2">
             Unequip
         </button>
       )}
@@ -310,7 +310,7 @@ const SkillCircle = ({
             {value}
           </div>
         </div>
-        <div className="absolute -bottom-6 text-xs font-bold uppercase tracking-wider text-gray-400">
+        <div className="absolute -bottom-6 text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300">
           {name}
         </div>
       </div>
@@ -757,7 +757,7 @@ export default function CharacterPage() {
 
             return (
               <div className="w-full max-w-[220px] mt-1 group">
-                <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-0.5 uppercase tracking-wide">
+                <div className="flex justify-between items-center text-[10px] font-bold text-gray-600 dark:text-gray-300 mb-0.5 uppercase tracking-wide">
                   <span>XP Progress</span>
                   <span className="group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                     {char.xp} / {nextLevelXp}
@@ -778,7 +778,7 @@ export default function CharacterPage() {
 
         <div className="text-right">
             <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">🪙 {char.gold} G</div>
-            <Link href="/" className="text-sm underline text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">🏠 Main menu</Link>
+            <Link href="/" className="text-sm underline text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">🏠 Main menu</Link>
         </div>
       </header>
 
@@ -832,7 +832,7 @@ export default function CharacterPage() {
                   <span className="text-xl font-black text-purple-600 dark:text-purple-400">
                       x{derivedStats.k.toFixed(2)}
                   </span>
-                  <div className="mt-auto text-[9px] font-bold text-gray-400 text-right">
+                  <div className="mt-auto text-[9px] font-bold text-gray-600 dark:text-gray-300 text-right">
                       GEAR BONUS
                   </div>
               </div>
@@ -921,7 +921,7 @@ export default function CharacterPage() {
                         className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500 dark:accent-purple-400"
                       />
                       
-                      <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-600 mt-1 font-mono">
+                      <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-300 mt-1 font-mono">
                         <span>x=1 (Trivial)</span>
                         <span>x=15 (VERY Hard)</span>
                       </div>
@@ -930,7 +930,7 @@ export default function CharacterPage() {
               )}
             </div>
             
-            <div className="pt-2 border-t border-gray-100 dark:border-gray-700 text-center text-xs text-gray-400 italic">
+            <div className="pt-2 border-t border-gray-100 dark:border-gray-700 text-center text-xs text-gray-600 dark:text-gray-300 italic">
                 Values shown include equipment bonuses.
             </div>
           </section>
@@ -964,7 +964,7 @@ export default function CharacterPage() {
                 
                 <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                     {char.inventory.length === 0 && (
-                    <p className="col-span-2 text-gray-400 text-center py-8">Your bag is empty.</p>
+                    <p className="col-span-2 text-gray-600 dark:text-gray-300 text-center py-8">Your bag is empty.</p>
                     )}
                     
                     {char.inventory.map((item, index) => {

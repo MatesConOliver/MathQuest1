@@ -223,22 +223,22 @@ export function ItemsPanel() {
                
                {/* A */}
                <div>
-                 <label className="text-[10px] font-bold text-gray-500 uppercase">A (x³)</label>
+                 <label className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase">A (x³)</label>
                  <input type="number" className="input text-xs dark:bg-gray-800" placeholder="0" value={valA} onChange={(e:any) => setValA(e.target.value)} />
                </div>
                {/* B */}
                <div>
-                 <label className="text-[10px] font-bold text-gray-500 uppercase">B (x²)</label>
+                 <label className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase">B (x²)</label>
                  <input type="number" className="input text-xs dark:bg-gray-800" placeholder="0" value={valB} onChange={(e:any) => setValB(e.target.value)} />
                </div>
                {/* C */}
                <div>
-                 <label className="text-[10px] font-bold text-gray-500 uppercase">C (x)</label>
+                 <label className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase">C (x)</label>
                  <input type="number" className="input text-xs dark:bg-gray-800" placeholder="0" value={valC} onChange={(e:any) => setValC(e.target.value)} />
                </div>
                {/* D */}
                <div>
-                 <label className="text-[10px] font-bold text-gray-500 uppercase">D (Const)</label>
+                 <label className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase">D (Const)</label>
                  <input type="number" className="input text-xs dark:bg-gray-800" placeholder="0" value={valD} onChange={(e:any) => setValD(e.target.value)} />
                </div>
             </div>
@@ -248,12 +248,12 @@ export function ItemsPanel() {
                <div>
                  <label className="text-[10px] font-bold text-red-800 dark:text-red-300 uppercase">Global Multiplier (k)</label>
                  <input type="number" step="0.01" className="input text-xs dark:bg-gray-800" placeholder="x1.0" value={dmgMult} onChange={(e:any) => setDmgMult(e.target.value)} />
-                 <p className="text-[9px] text-gray-500 mt-1">Multiplies FINAL damage.</p>
+                 <p className="text-[9px] text-gray-700 dark:text-gray-300 mt-1">Multiplies FINAL damage.</p>
                </div>
                <div>
                  <label className="text-[10px] font-bold text-red-800 dark:text-red-300 uppercase">Difficulty Bonus (x)</label>
                  <input type="number" className="input text-xs dark:bg-gray-800" placeholder="+0" value={valX} onChange={(e:any) => setValX(e.target.value)} />
-                 <p className="text-[9px] text-gray-500 mt-1">Adds to difficulty 'x' before calc.</p>
+                 <p className="text-[9px] text-gray-700 dark:text-gray-300 mt-1">Adds to difficulty 'x' before calc.</p>
                </div>
             </div>
   
@@ -275,7 +275,7 @@ export function ItemsPanel() {
                   <input type="number" className="input text-xs dark:bg-gray-800 dark:border-pink-900/50" placeholder="Flat" value={healFlat} onChange={(e: any) => setHealFlat(e.target.value)} />
                   <input type="number" step="0.01" className="input text-xs dark:bg-gray-800 dark:border-pink-900/50" placeholder="% (0.5)" value={healMult} onChange={(e: any) => setHealMult(e.target.value)} />
                 </div>
-                <p className="text-[8px] text-gray-500 mt-1">Use 0.5 for 50% Max HP</p>
+                <p className="text-[8px] text-gray-700 dark:text-gray-300 mt-1">Use 0.5 for 50% Max HP</p>
               </div>
   
               {/* 🟢 TIME BOX */}

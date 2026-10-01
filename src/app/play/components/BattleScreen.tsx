@@ -228,7 +228,7 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
         if (isCorrectAnswer) {
             return '!bg-green-500 !opacity-100';
         }
-        return 'bg-gray-700/50 opacity-60'; 
+        return 'bg-gray-700/50 !text-gray-200'; 
     };
 
     return (
@@ -281,9 +281,9 @@ const BottomArea = ({ currentQ, showAnswers, setShowAnswers, isPaused, handleAns
 };
 
 const InfoBox = ({ title, hp, maxHp, isFoe = false }: InfoBoxProps) => (
-    <div className={`w-1/3 bg-black/60 backdrop-blur-sm p-3 rounded-lg border-2 ${isFoe ? 'border-red-500' : 'border-blue-500'}`}>
+    <div className={`w-1/3 bg-black/60 backdrop-blur-sm p-3 rounded-lg border-2 text-white ${isFoe ? 'border-red-500' : 'border-blue-500'}`}>
         <h3 className="font-bold text-lg truncate">{title}</h3>
-        <HealthBar label={isFoe ? "" : ""} current={hp} max={maxHp} />
+        <HealthBar label="" current={hp} max={maxHp} valueClassName="text-gray-100" />
     </div>
 );
 

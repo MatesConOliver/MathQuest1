@@ -41,7 +41,7 @@ export default function GMPage() {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-700 pb-4">
         <div>
           <h1 className="text-3xl font-bold">🛠️ GM Dashboard</h1>
-          <p className="text-sm text-gray-400">Master Control Panel</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300">Master Control Panel</p>
         </div>
 
         <div className="flex flex-wrap gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl transition-colors">

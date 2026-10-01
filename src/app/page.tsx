@@ -247,7 +247,7 @@ export default function HomePage() {
           </div>
 
           {isGM && (
-            <Link href="/gm" className="p-3 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <Link href="/gm" className="p-3 text-xs text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors">
                (GM Panel)
             </Link>
           )}

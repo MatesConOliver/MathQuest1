@@ -267,7 +267,7 @@ export default function MapPage() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900">
         <div className="animate-pulse flex flex-col items-center gap-2">
           <span className="text-4xl">🗺️</span>
-          <span className="text-gray-400 font-bold tracking-widest">LOADING MAP...</span>
+          <span className="text-gray-600 dark:text-gray-300 font-bold tracking-widest">LOADING MAP...</span>
         </div>
       </div>
     );
@@ -284,7 +284,7 @@ export default function MapPage() {
               <h1 className="text-3xl md:text-4xl font-black text-white">World Map</h1>
               <p className="text-gray-200 font-medium">Select a region to explore</p>
             </div>
-            <Link href="/" className="btn-secondary-sm">🏠 Main menu</Link>
+            <Link href="/" className="btn-secondary-sm text-white">🏠 Main menu</Link>
           </header>
 
           <div
@@ -380,10 +380,10 @@ export default function MapPage() {
 
                               if (unlockStatus.locked && unlockStatus.reason === 'story') {
                                   return (
-                                      <div key={sa.id} className="w-full text-center flex flex-col items-center justify-center p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl opacity-60">
+                                        <div key={sa.id} className="w-full text-center flex flex-col items-center justify-center p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl">
                                           <span className="text-3xl mb-1">☁️</span>
-                                          <h4 className="font-bold text-gray-400 text-sm">Locked</h4>
-                                          <p className="text-xs text-gray-500">Keep playing to unlock.</p>
+                                          <h4 className="font-bold text-gray-200 text-sm">Locked</h4>
+                                          <p className="text-xs text-gray-300">Keep playing to unlock.</p>
                                       </div>
                                   )
                               }
@@ -481,7 +481,7 @@ export default function MapPage() {
             </div>
 
             <div className="p-4 bg-gray-900/50 border-t border-gray-700 text-center shrink-0">
-              <button onClick={handlePanelClose} className="text-sm text-gray-400 hover:text-white font-bold transition-colors hidden md:block">Close Panel</button>
+              <button onClick={handlePanelClose} className="text-sm text-gray-300 hover:text-white font-bold transition-colors hidden md:block">Close Panel</button>
             </div>
           </div>
         </aside>

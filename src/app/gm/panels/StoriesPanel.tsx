@@ -204,7 +204,7 @@ export function StoriesPanel() {
         </div>
 
         <div className='p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl space-y-3 border dark:border-gray-600'>
-          <h3 className='text-xs font-bold uppercase text-gray-400'>
+          <h3 className='text-xs font-bold uppercase text-gray-600 dark:text-gray-300'>
             Trigger Logic
           </h3>
           <div className='grid grid-cols-2 gap-4'>

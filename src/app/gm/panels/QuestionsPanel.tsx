@@ -260,7 +260,7 @@ export function QuestionsPanel() {
           
           {promptString && (
              <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-lg">
-               <span className="font-bold text-[10px] uppercase text-gray-400 block mb-2">Prompt Preview:</span>
+               <span className="font-bold text-[10px] uppercase text-gray-600 dark:text-gray-300 block mb-2">Prompt Preview:</span>
                <div className="leading-relaxed text-lg font-serif text-gray-800 dark:text-gray-200 text-center">
                  {renderContent(promptPreview, true)}
                </div>
@@ -281,7 +281,7 @@ export function QuestionsPanel() {
                   placeholder={`Answer ${i+1}`}
                 />
                 {c && (
-                  <div className="text-xs text-blue-600 mt-2 p-2 bg-white dark:bg-gray-800 rounded border dark:border-gray-600">
+                  <div className="text-xs text-blue-600 dark:text-blue-300 mt-2 p-2 bg-white dark:bg-gray-800 rounded border dark:border-gray-600">
                     {renderContent(choicesPreview[i])}
                   </div>
                 )}

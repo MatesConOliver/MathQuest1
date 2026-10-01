@@ -184,7 +184,7 @@ export default function ShopPage() {
           <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
             🪙 {character ? character.gold : 0} G
           </div>
-          <button onClick={() => router.push("/")} className="text-sm underline text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+          <button onClick={() => router.push("/")} className="text-sm underline text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">
             🏠 Main menu
           </button>
         </div>
@@ -346,15 +346,15 @@ export default function ShopPage() {
 
       {/* Empty Shop State */}
       {items.length === 0 && !loading && (
-          <div className="text-center mt-20 opacity-50">
-            <h2 className="text-2xl font-bold text-gray-400">Shop Closed</h2>
-            <p className="dark:text-gray-500">No items available right now.</p>
+          <div className="text-center mt-20">
+            <h2 className="text-2xl font-bold text-gray-700 dark:text-gray-300">Shop Closed</h2>
+            <p className="text-gray-600 dark:text-gray-400">No items available right now.</p>
           </div>
       )}
 
       {/* DEV TOOLS (Hidden unless you scroll down) */}
       <div className="mt-20 border-t dark:border-gray-700 pt-10 text-center">
-        <button onClick={restockShop} className="text-xs text-gray-400 hover:text-red-500 dark:text-gray-600">
+        <button onClick={restockShop} className="text-xs text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-300">
             [Dev] Restock Default Items
         </button>
       </div>
