@@ -28,7 +28,7 @@ export function getUnlockStatus(item: GameLocation | SubArea, character: Charact
     const skillOrder: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
     for (const skill of skillOrder) {
       const requiredLevel = reqs.skills[skill];
-      if (requiredLevel && requiredLevel > 0 && (character.skills[skill] || 0) < requiredLevel) {
+      if (requiredLevel && requiredLevel > 0 && (character.skills?.[skill] ?? 0) < requiredLevel) {
         missingSkills.push({ skill, required: requiredLevel });
       }
     }

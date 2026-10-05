@@ -33,6 +33,8 @@ const formatSkillName = (skill: string) => {
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+const isStoryLockedStatus = (status: UnlockStatus) => status.locked && status.reason === 'story';
+
 
 export default function MapPage() {
   const { playTrack } = useAudio()!;
@@ -260,8 +262,8 @@ export default function MapPage() {
       const afterCharacter = { ...character, storyFlags: [...new Set([...currentFlags, pendingFlag])] };
       const unlockedLocations = locations.filter(location =>
         location.unlockRequirements?.storyFlags?.includes(pendingFlag) &&
-        getUnlockStatus(location, beforeCharacter).locked &&
-        !getUnlockStatus(location, afterCharacter).locked
+        isStoryLockedStatus(getUnlockStatus(location, beforeCharacter)) &&
+        !isStoryLockedStatus(getUnlockStatus(location, afterCharacter))
       );
 
       try {
@@ -401,11 +403,11 @@ export default function MapPage() {
               const isPendingUnlock = Boolean(
                 pendingFlag &&
                 loc.unlockRequirements?.storyFlags?.includes(pendingFlag) &&
-                !unlockStatus.locked &&
-                getUnlockStatus(loc, {
+                !isStoryLocked &&
+                isStoryLockedStatus(getUnlockStatus(loc, {
                   ...character,
                   storyFlags: (character.storyFlags || []).filter(flag => flag !== pendingFlag),
-                }).locked
+                }))
               );
               const shouldShowFog = !isFirstLocation && (isStoryLocked || isPendingUnlock);
               const isClickable = !shouldShowFog && !isSkillLocked;
