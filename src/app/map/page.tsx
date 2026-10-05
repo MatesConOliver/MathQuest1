@@ -35,6 +35,8 @@ const formatSkillName = (skill: string) => {
 
 const isStoryLockedStatus = (status: UnlockStatus) => status.locked && status.reason === 'story';
 
+const SKILL_ORDER: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
+
 
 export default function MapPage() {
   const { playTrack } = useAudio()!;
@@ -411,9 +413,16 @@ export default function MapPage() {
               );
               const shouldShowFog = !isFirstLocation && (isStoryLocked || isPendingUnlock);
               const isClickable = !shouldShowFog && !isSkillLocked;
-              
-              const title = isSkillLocked 
-                ? `Locked. Requires: ${unlockStatus.missing.map(m => `${formatSkillName(m.skill)} Lvl ${m.required}`).join(', ')}` 
+
+              const skillRequirements = isSkillLocked && !shouldShowFog
+                ? SKILL_ORDER.flatMap(skill => {
+                    const required = loc.unlockRequirements?.skills?.[skill] ?? 0;
+                    return required > 0 ? [{ skill, required, current: character.skills?.[skill] ?? 0 }] : [];
+                  })
+                : [];
+
+              const title = isSkillLocked
+                ? `Locked. Requires: ${skillRequirements.map(r => `${formatSkillName(r.skill)} ${r.current}/${r.required}`).join(', ')}`
                 : isStoryLocked
                 ? "Keep playing to unlock"
                 : loc.name;
@@ -422,10 +431,11 @@ export default function MapPage() {
                 <button
                   key={loc.id}
                   onClick={() => handleLocationClick(loc, unlockStatus)}
-                  title={title}
+                  title={skillRequirements.length > 0 ? undefined : title}
+                  aria-label={title}
                   disabled={!isClickable}
                   className={classNames(
-                    `group absolute w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ease-out focus:outline-none`,
+                    `group absolute w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ease-out focus:outline-none hover:z-30`,
                     { 'opacity-90 cursor-not-allowed': !isClickable },
                     { 'opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-blue-300/60 cursor-pointer': isClickable },
                   )}
@@ -454,6 +464,29 @@ export default function MapPage() {
                               ☁️
                           </span>
                       </div>
+                  )}
+                  {skillRequirements.length > 0 && (
+                    <div
+                      role="tooltip"
+                      className={classNames(
+                        "pointer-events-none absolute left-1/2 z-20 hidden w-max -translate-x-1/2 flex-col gap-1.5 whitespace-nowrap rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-left text-xs shadow-lg group-hover:flex",
+                        mapMeta.y < 0.3 ? "top-full mt-2" : "bottom-full mb-2"
+                      )}
+                    >
+                      <span className="font-bold text-gray-200">Locked - required skills</span>
+                      {skillRequirements.map(({ skill, required, current }) => {
+                        const met = current >= required;
+                        return (
+                          <span key={skill} className="flex items-center justify-between gap-4">
+                            <span className={classNames("font-bold", SKILL_COLORS[skill] || 'text-gray-300')}>{formatSkillName(skill)}</span>
+                            <span className={classNames("font-bold", met ? 'text-green-400' : 'text-red-400')}>
+                              {current} / {required} <span aria-hidden="true">{met ? '✓' : '✗'}</span>
+                              <span className="sr-only">{met ? ' achieved' : ' not achieved'}</span>
+                            </span>
+                          </span>
+                        );
+                      })}
+                    </div>
                   )}
                 </button>
               );
