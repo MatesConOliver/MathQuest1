@@ -376,7 +376,7 @@ export default function MapPage() {
                   </button>
                 </form>
                 <Link href="/character" className={topActionClass}>🦉 Character</Link>
-                <Link href="/shop" className={topActionClass}>🛍️ Shop</Link>
+                <Link href="/shop" className={topActionClass}>🔮 Store</Link>
                 <Link href="/" className={topActionClass}>🏠 Home</Link>
               </div>
               {codeMessage && <p role="status" aria-live="polite" className="text-sm font-medium text-white">{codeMessage}</p>}

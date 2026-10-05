@@ -156,14 +156,14 @@ export default function ShopPage() {
       for (const item of initialItems) {
         await setDoc(doc(db, "items", item.id), item);
       }
-      alert("Shop restocked! Refresh the page.");
+      alert("Store restocked! Refresh the page.");
       window.location.reload();
     } catch (e) {
-      alert("Error restocking shop.");
+      alert("Error restocking store.");
     }
   };
 
-  if (loading) return <div className="p-8 dark:text-white">Loading Shop...</div>;
+  if (loading) return <div className="p-8 dark:text-white">Loading Store...</div>;
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto dark:text-gray-100">
@@ -177,7 +177,7 @@ export default function ShopPage() {
 
       <header className="flex flex-col md:flex-row justify-between items-center mb-8 border-b dark:border-gray-700 pb-4 gap-4">
         <div>
-          <h1 className="text-4xl font-bold">Item Shop</h1>
+          <h1 className="text-4xl font-bold">Item Store</h1>
           <p className="text-gray-500 dark:text-gray-400">Spend your hard-earned gold!</p>
         </div>
         <div className="text-right flex flex-col items-end">

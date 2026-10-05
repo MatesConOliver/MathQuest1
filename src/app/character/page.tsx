@@ -958,7 +958,7 @@ export default function CharacterPage() {
                     href="/shop" 
                     className="text-xs bg-black text-white dark:bg-white dark:text-black px-3 py-1 rounded-lg hover:opacity-80 transition-opacity"
                     >
-                    Visit Shop
+                    Visit Store
                     </Link>
                 </div>
                 
