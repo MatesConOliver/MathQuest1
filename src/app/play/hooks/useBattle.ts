@@ -11,7 +11,7 @@ import {
   InventoryItem,
 } from '@/types/game';
 import { getDoc, updateDoc, db } from '@/lib/firebase';
-import { collection, getDocs as getFirebaseDocs, query, where, orderBy, increment } from 'firebase/firestore';
+import { arrayUnion, collection, getDocs as getFirebaseDocs, query, where, orderBy, increment } from 'firebase/firestore';
 
 interface UseBattleProps {
   user: User | null;
@@ -242,6 +242,10 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
             [`encounterWins.${encounterId}`]: increment(1)
         };
 
+          if (currentEncounter.winRewardStoryFlag) {
+            updates.pendingProgressionFlags = arrayUnion(currentEncounter.winRewardStoryFlag);
+          }
+
         for (const [skill, amount] of Object.entries(skillsGained)) {
             if (amount && amount > 0) {
                 updates[`skills.${skill}`] = increment(amount);
@@ -271,7 +275,10 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
                 },
                 inventory: updates.inventory,
                 encounterWins: newWins,
-                storyFlags: prev.storyFlags
+                storyFlags: prev.storyFlags,
+                pendingProgressionFlags: currentEncounter.winRewardStoryFlag
+                  ? [...new Set([...(prev.pendingProgressionFlags || []), currentEncounter.winRewardStoryFlag])]
+                  : prev.pendingProgressionFlags
             };
         });
 

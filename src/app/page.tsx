@@ -15,6 +15,7 @@ export default function HomePage() {
   const [character, setCharacter] = useState<Character | null>(null);
   const [loading, setLoading] = useState(true);
   const [isStoryBootstrapping, setIsStoryBootstrapping] = useState(false);
+  const [mapStoryError, setMapStoryError] = useState("");
   const [storyToPlay, setStoryToPlay] = useState<StoryEvent | null>(null);
   const [isGM, setIsGM] = useState(false);
   const [isCreatingNewGame, setIsCreatingNewGame] = useState(false);
@@ -133,16 +134,29 @@ export default function HomePage() {
   const handleMapClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     if (character?.name === "Nameless") {
+        if (storyBootstrapInFlightRef.current) return;
+        const generation = ++storyBootstrapGenerationRef.current;
+        storyBootstrapInFlightRef.current = true;
+        setMapStoryError("");
         setIsStoryBootstrapping(true);
-        const nameStory = await callApi<StoryEvent>('getStoryForTrigger', { trigger: 'ON_FIRST_MAP_ENTER' });
-        if (nameStory) {
-          storyToPlayRef.current = nameStory;
-            setStoryToPlay(nameStory);
-        } else {
-            // If for some reason the name story doesn't exist, let them proceed.
-            router.push('/map');
+        try {
+            const nameStory = await callApi<StoryEvent | null>('getStoryForTrigger', { trigger: 'ON_FIRST_MAP_ENTER' });
+            if (generation !== storyBootstrapGenerationRef.current) return;
+            if (nameStory) {
+              storyToPlayRef.current = nameStory;
+              setStoryToPlay(nameStory);
+            } else {
+              router.push('/map');
+            }
+        } catch (error) {
+            console.error("Error loading first map story:", error);
+            setMapStoryError("Could not load the starting story. Check your connection and try again.");
+        } finally {
+            if (generation === storyBootstrapGenerationRef.current) {
+                storyBootstrapInFlightRef.current = false;
+                setIsStoryBootstrapping(false);
+            }
         }
-        setIsStoryBootstrapping(false);
     } else {
         router.push('/map');
     }
@@ -217,6 +231,12 @@ export default function HomePage() {
         </div>
 
         <div className="grid gap-4">
+
+          {mapStoryError && needsToName && (
+            <p role="alert" className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+              {mapStoryError}
+            </p>
+          )}
 
           <Link
             href="/map"

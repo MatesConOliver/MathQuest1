@@ -78,6 +78,7 @@ export interface Character {
   updatedAt?: any;
   completedStoryEvents: string[]; // List of IDs like ["intro_01", "chapter_1_done"]
   storyFlags: string[]; // e.g., ["DEFEATED_GOBLIN_KING"]
+  pendingProgressionFlags?: string[];
   unlockedContinents: string[];   // List of IDs like ["cont_1", "cont_2"]
   encounterWins: { [encounterId: string]: number };
   imageUrl?: string;

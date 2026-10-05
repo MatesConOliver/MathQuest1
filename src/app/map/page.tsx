@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState } from "react";
-import { auth, db } from "@/lib/firebase";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { auth, callApi, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { collection, getDocs, orderBy, query, doc, getDoc, where, updateDoc, arrayUnion } from "firebase/firestore";
+import { arrayRemove, arrayUnion, collection, getDocs, orderBy, query, doc, getDoc, where, updateDoc } from "firebase/firestore";
 import Link from "next/link";
-import { GameLocation, EncounterDoc, Character, SubArea, UnlockedSubArea, CharacterSkills } from "@/types/game";
+import { GameLocation, EncounterDoc, Character, SubArea, UnlockedSubArea, CharacterSkills, StoryEvent } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
 import { MAP_LOCATIONS, MapLocationMeta } from "@/config/mapLayout";
 import classNames from "classnames";
 import { UnlockStatus, getUnlockStatus } from "@/lib/unlock";
+import { StoryPlayer } from "@/components/StoryPlayer";
 
 // --- HELPER FUNCTIONS ---
 
@@ -48,13 +49,90 @@ export default function MapPage() {
   const [panelLoading, setPanelLoading] = useState(false);
 
   const [mapMounted, setMapMounted] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
+  const [codeMessage, setCodeMessage] = useState("");
+  const [isRedeeming, setIsRedeeming] = useState(false);
+  const [activeStory, setActiveStory] = useState<StoryEvent | null>(null);
   
   const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(null);
   const [selectedSubArea, setSelectedSubArea] = useState<SubArea | null>(null);
 
   const [animatingOutLocationIds, setAnimatingOutLocationIds] = useState<Set<string>>(new Set());
+  const processingFlagRef = useRef<string | null>(null);
   
   const selectedLocationMeta = selectedLocation ? getMapMetaForLocation(selectedLocation.id) : null;
+
+  const finalizeProgression = useCallback(async (flag: string, storyId?: string) => {
+    if (!user) return;
+
+    const updates: { [key: string]: any } = {
+      pendingProgressionFlags: arrayRemove(flag),
+    };
+    if (storyId) updates.completedStoryEvents = arrayUnion(storyId);
+
+    await updateDoc(doc(db, "characters", user.uid), updates);
+    setCharacter(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        pendingProgressionFlags: (prev.pendingProgressionFlags || []).filter(pendingFlag => pendingFlag !== flag),
+        ...(storyId && {
+          completedStoryEvents: [...new Set([...(prev.completedStoryEvents || []), storyId])],
+        }),
+      };
+    });
+    setAnimatingOutLocationIds(prev => {
+      const next = new Set(prev);
+      locations
+        .filter(location => location.unlockRequirements?.storyFlags?.includes(flag))
+        .forEach(location => next.delete(location.id));
+      return next;
+    });
+    if (sessionStorage.getItem("pendingStoryFlag") === flag) {
+      sessionStorage.removeItem("pendingStoryFlag");
+    }
+    processingFlagRef.current = null;
+    setActiveStory(null);
+  }, [user, locations]);
+
+  const handleCodeSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isRedeeming) return;
+    if (!codeInput.trim()) {
+      setCodeMessage("That code does not exist or is incorrect.");
+      return;
+    }
+
+    setIsRedeeming(true);
+    setCodeMessage("");
+    try {
+      const result = await callApi<{ status: "redeemed" | "already-redeemed" | "invalid"; storyFlag?: string }>(
+        "redeemEncounterCode",
+        { code: codeInput }
+      );
+      if (result.status === "invalid") {
+        setCodeMessage("That code does not exist or is incorrect.");
+      } else if (result.status === "already-redeemed" || !result.storyFlag) {
+        setCodeMessage("This code has already been redeemed and has no effect.");
+      } else {
+        setCharacter(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            storyFlags: [...new Set([...(prev.storyFlags || []), result.storyFlag!])],
+            pendingProgressionFlags: [...new Set([...(prev.pendingProgressionFlags || []), result.storyFlag!])],
+          };
+        });
+        setCodeInput("");
+        setCodeMessage("Code redeemed.");
+      }
+    } catch (error) {
+      console.error("Could not redeem encounter code:", error);
+      setCodeMessage("Could not redeem the code. Please try again.");
+    } finally {
+      setIsRedeeming(false);
+    }
+  };
 
   useEffect(() => {
     playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3");
@@ -170,86 +248,74 @@ export default function MapPage() {
   }, [selectedLocation, selectedLocationMeta]);
 
   useEffect(() => {
-    if (!user || !character || locations.length === 0) return;
+    if (!user || !character || locations.length === 0 || activeStory) return;
 
-    const pendingFlag = sessionStorage.getItem("pendingStoryFlag");
-    // Exit if there's no flag or the character already has it.
-    if (!pendingFlag || character.storyFlags?.includes(pendingFlag)) {
-        return;
+    const pendingFlag = character.pendingProgressionFlags?.[0] || sessionStorage.getItem("pendingStoryFlag");
+    if (!pendingFlag || processingFlagRef.current === pendingFlag) return;
+    processingFlagRef.current = pendingFlag;
+
+    const processProgression = async () => {
+      const currentFlags = character.storyFlags || [];
+      const beforeCharacter = { ...character, storyFlags: currentFlags.filter(flag => flag !== pendingFlag) };
+      const afterCharacter = { ...character, storyFlags: [...new Set([...currentFlags, pendingFlag])] };
+      const unlockedLocations = locations.filter(location =>
+        location.unlockRequirements?.storyFlags?.includes(pendingFlag) &&
+        getUnlockStatus(location, beforeCharacter).locked &&
+        !getUnlockStatus(location, afterCharacter).locked
+      );
+
+      try {
+        if (unlockedLocations.length > 0) {
+          await new Promise(resolve => window.setTimeout(resolve, 1000));
+          setAnimatingOutLocationIds(prev => new Set([...prev, ...unlockedLocations.map(location => location.id)]));
+          await new Promise(resolve => window.setTimeout(resolve, 3500));
+        }
+
+        await updateDoc(doc(db, "characters", user.uid), {
+          storyFlags: arrayUnion(pendingFlag),
+        });
+        setCharacter(prev => prev ? {
+          ...prev,
+          storyFlags: [...new Set([...(prev.storyFlags || []), pendingFlag])],
+        } : null);
+
+        const story = await callApi<StoryEvent | null>("getStoryForTrigger", {
+          trigger: "ON_OBJECT_CONDITIONS",
+          triggerCondition: pendingFlag,
+        });
+        if (story?.scenes?.length) {
+          setActiveStory(story);
+          return;
+        }
+
+        await finalizeProgression(pendingFlag);
+      } catch (error) {
+        console.error("Could not finish encounter progression:", error);
+        setAnimatingOutLocationIds(prev => {
+          const next = new Set(prev);
+          unlockedLocations.forEach(location => next.delete(location.id));
+          return next;
+        });
+        processingFlagRef.current = null;
+        setCodeMessage("Progress could not be saved. Refresh the map to retry.");
+      }
+    };
+
+    void processProgression();
+  }, [user, character, locations, activeStory, finalizeProgression]);
+
+  const handleStoryComplete = useCallback(async () => {
+    const flag = processingFlagRef.current;
+    if (!flag || !activeStory) return;
+    try {
+      await finalizeProgression(flag, activeStory.id);
+    } catch (error) {
+      console.error("Could not save story completion:", error);
+      processingFlagRef.current = flag;
+      setActiveStory(null);
+      setCodeMessage("Story progress could not be saved. Refresh the map to retry.");
     }
-
-    // It's a new, unique flag. Remove from storage so this logic doesn't run again on refresh.
-    sessionStorage.removeItem("pendingStoryFlag");
-
-    // Check if this flag is supposed to unlock any locations on the map.
-    const unlockedLocations = locations.filter(loc => 
-        loc.unlockRequirements?.storyFlags?.includes(pendingFlag)
-    );
-
-    // CASE 1: The flag unlocks one or more locations. We need to play the animation.
-    if (unlockedLocations.length > 0) {
-        // Wait a moment for the map to be stable before starting the animation.
-        setTimeout(() => {
-            // 1. Trigger the cloud disappearance animation for each unlocked location.
-            setAnimatingOutLocationIds(prev => {
-                const newSet = new Set(prev);
-                unlockedLocations.forEach(loc => newSet.add(loc.id));
-                return newSet;
-            });
-
-            // 2. After the animation finishes, update the character's data in Firestore.
-            // This delay MUST match the animation duration in the JSX (2500ms).
-            setTimeout(() => {
-                const doUpdate = async () => {
-                    try {
-                        await updateDoc(doc(db, "characters", user.uid), {
-                            storyFlags: arrayUnion(pendingFlag)
-                        });
-                        // Update local state to match, ensuring the UI reflects the change.
-                        setCharacter(prev => ({
-                            ...prev!, 
-                            storyFlags: [...(prev?.storyFlags || []), pendingFlag]
-                        }));
-
-                        // 3. Clean up the animation state after the data is updated.
-                        setTimeout(() => {
-                            setAnimatingOutLocationIds(prev => {
-                                const newSet = new Set(prev);
-                                unlockedLocations.forEach(loc => newSet.delete(loc.id));
-                                return newSet;
-                            });
-                        }, 200);
-
-                    } catch (error) {
-                        console.error("Failed to update story flag after animation:", error);
-                    }
-                };
-                doUpdate();
-            }, 2500); 
-
-        }, 1000); // A short delay before the animation starts.
-    
-    // CASE 2: The flag does NOT unlock any locations.
-    // We can safely update the database immediately since no animation is needed.
-    } else {
-        const updateUserStoryFlag = async () => {
-            try {
-                await updateDoc(doc(db, "characters", user.uid), {
-                    storyFlags: arrayUnion(pendingFlag)
-                });
-                // Update local state to match.
-                setCharacter(prev => {
-                    if (!prev) return null;
-                    return { ...prev, storyFlags: [...(prev.storyFlags || []), pendingFlag] };
-                });
-                console.log(`Successfully added story flag '${pendingFlag}' without location unlock.`);
-            } catch (error) {
-                console.error("Failed to update story flag directly:", error);
-            }
-        };
-        updateUserStoryFlag();
-    }
-  }, [user, character, locations, db]);
+  }, [activeStory, finalizeProgression]);
 
   const handleLocationClick = (loc: GameLocation, status: UnlockStatus) => {
     if (status.locked) return;
@@ -272,6 +338,12 @@ export default function MapPage() {
       </div>
     );
   }
+
+  if (activeStory) {
+    return <StoryPlayer story={activeStory} onComplete={handleStoryComplete} />;
+  }
+
+  const topActionClass = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-gray-800 shadow-sm transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700";
   
   const showSubAreaList = panelSubAreas.length > 0 && !selectedSubArea;
 
@@ -279,12 +351,32 @@ export default function MapPage() {
     <main className="min-h-screen bg-gray-900 md:flex">
       <div className="flex-grow p-4 md:p-8">
           <div className="max-w-7xl mx-auto h-full flex flex-col">
-          <header className="flex justify-between items-end pb-4 border-b border-gray-700">
-             <div>
+          <header className="flex flex-col gap-4 border-b border-gray-700 pb-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
               <h1 className="text-3xl md:text-4xl font-black text-white">World Map</h1>
               <p className="text-gray-200 font-medium">Select a region to explore</p>
             </div>
-            <Link href="/" className="btn-secondary-sm text-white">🏠 Main menu</Link>
+            <div className="flex flex-col items-start gap-2 lg:items-end">
+              <div className="flex flex-wrap items-center gap-2">
+                <form onSubmit={handleCodeSubmit} className="flex min-w-0 gap-2">
+                  <input
+                    aria-label="Encounter code"
+                    autoComplete="off"
+                    value={codeInput}
+                    onChange={event => setCodeInput(event.target.value)}
+                    placeholder="Enter code"
+                    className="h-10 w-32 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400 sm:w-40"
+                  />
+                  <button type="submit" disabled={isRedeeming} className={`${topActionClass} disabled:cursor-wait disabled:opacity-60`}>
+                    {isRedeeming ? "Checking..." : "Redeem"}
+                  </button>
+                </form>
+                <Link href="/character" className={topActionClass}>🦉 Character</Link>
+                <Link href="/shop" className={topActionClass}>🛍️ Shop</Link>
+                <Link href="/" className={topActionClass}>🏠 Home</Link>
+              </div>
+              {codeMessage && <p role="status" aria-live="polite" className="text-sm font-medium text-white">{codeMessage}</p>}
+            </div>
           </header>
 
           <div
@@ -305,7 +397,17 @@ export default function MapPage() {
 
               // The very first location should always be visible.
               const isFirstLocation = loc.order === 1;
-              const shouldShowFog = !isFirstLocation && isStoryLocked;
+              const pendingFlag = character.pendingProgressionFlags?.[0];
+              const isPendingUnlock = Boolean(
+                pendingFlag &&
+                loc.unlockRequirements?.storyFlags?.includes(pendingFlag) &&
+                !unlockStatus.locked &&
+                getUnlockStatus(loc, {
+                  ...character,
+                  storyFlags: (character.storyFlags || []).filter(flag => flag !== pendingFlag),
+                }).locked
+              );
+              const shouldShowFog = !isFirstLocation && (isStoryLocked || isPendingUnlock);
               const isClickable = !shouldShowFog && !isSkillLocked;
               
               const title = isSkillLocked 
@@ -335,7 +437,7 @@ export default function MapPage() {
                      )}
                   </div>
                   {/* Animate cloud disappearance */}
-                  {((!isFirstLocation && isStoryLocked) || animatingOutLocationIds.has(loc.id)) && (
+                  {(shouldShowFog || animatingOutLocationIds.has(loc.id)) && (
                       <div className={classNames(
                           "absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none",
                           "transition-all duration-[3500ms] ease-in-out", // Animation classes

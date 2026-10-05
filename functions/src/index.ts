@@ -19,10 +19,12 @@ const allowedOrigins = [
   'https://math-quest1-8pmprtdfs-mates-con-olivers-projects.vercel.app',
   'https://9000-firebase-mathquest1-1768313495270.cluster-fbfjltn375c6wqxlhoehbz44sk.cloudworkstations.dev',
 ];
+const isWorkspacePreviewOrigin = (origin: string) =>
+  /^https:\/\/(?:[a-z0-9-]+\.)*(?:app\.github\.dev|cloudworkstations\.dev)$/i.test(origin);
 
 const corsHandler = cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || isWorkspacePreviewOrigin(origin)) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -87,7 +89,7 @@ export const getStoryForTrigger = https.onRequest((req, res) => {
     }
     authenticate(req, res, async () => {
       const uid = (req as any).user.uid;
-      const { trigger } = req.body;
+      const { trigger, triggerCondition } = req.body;
 
       if (!trigger) {
         res.status(400).send({ error: "Trigger not specified." });
@@ -117,14 +119,85 @@ export const getStoryForTrigger = https.onRequest((req, res) => {
         }
 
         // Find the first story that hasn't been completed yet
-        const storyToDo = storiesSnap.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .find(story => !completedStories.includes(story.id));
+        const storyToDo = storiesSnap.docs.find(storyDoc => {
+          const story = storyDoc.data();
+          return !completedStories.includes(storyDoc.id) &&
+            (!triggerCondition || story.triggerCondition === triggerCondition);
+        });
 
-        res.status(200).send(storyToDo || null);
+        res.status(200).send(storyToDo ? { id: storyToDo.id, ...storyToDo.data() } : null);
       } catch (error) {
         console.error(`Error in getStoryForTrigger for trigger ${trigger}:`, error);
         res.status(500).send({ error: "An error occurred while fetching the story." });
+      }
+    });
+  });
+});
+
+export const redeemEncounterCode = https.onRequest((req, res) => {
+  corsHandler(req, res, () => {
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    if (req.method !== 'POST') {
+      res.status(405).send({ error: 'Method not allowed.' });
+      return;
+    }
+
+    authenticate(req, res, async () => {
+      const rawCode = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+      const normalizedCode = rawCode.toLocaleUpperCase();
+      if (!normalizedCode) {
+        res.status(200).send({ status: 'invalid' });
+        return;
+      }
+
+      try {
+        const encountersSnap = await db.collection('encounters').get();
+        const matchingFlags = new Set<string>();
+        encountersSnap.forEach(encounterDoc => {
+          const configuredFlag = encounterDoc.data().winRewardStoryFlag;
+          if (
+            typeof configuredFlag === 'string' &&
+            configuredFlag.trim().toLocaleUpperCase() === normalizedCode
+          ) {
+            matchingFlags.add(configuredFlag.trim());
+          }
+        });
+
+        if (matchingFlags.size !== 1) {
+          res.status(200).send({ status: 'invalid' });
+          return;
+        }
+
+        const storyFlag = matchingFlags.values().next().value as string;
+        const characterRef = db.collection('characters').doc((req as any).user.uid);
+        const status = await db.runTransaction(async transaction => {
+          const characterSnap = await transaction.get(characterRef);
+          if (!characterSnap.exists) return 'missing-character';
+
+          const storyFlags = characterSnap.data()?.storyFlags;
+          if (Array.isArray(storyFlags) && storyFlags.includes(storyFlag)) {
+            return 'already-redeemed';
+          }
+
+          transaction.update(characterRef, {
+            storyFlags: FieldValue.arrayUnion(storyFlag),
+            pendingProgressionFlags: FieldValue.arrayUnion(storyFlag),
+          });
+          return 'redeemed';
+        });
+
+        if (status === 'missing-character') {
+          res.status(404).send({ error: 'Character not found.' });
+          return;
+        }
+
+        res.status(200).send({ status, storyFlag });
+      } catch (error) {
+        console.error('Error redeeming encounter code:', error);
+        res.status(500).send({ error: 'Could not redeem code.' });
       }
     });
   });
