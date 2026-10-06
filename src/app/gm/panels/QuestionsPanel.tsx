@@ -19,6 +19,7 @@ import {
 import { InlineMath, BlockMath } from 'react-katex';
 import { QuestionDoc, ContentBlock } from "@/types/game";
 import { Input } from "@/app/gm/components/Input";
+import { QuestionBatchImporter } from "./QuestionBatchImporter";
 
 // ==================================================================================
 // 👇 NEW HELPERS for migrating to structured content
@@ -240,6 +241,8 @@ export function QuestionsPanel() {
     }
   
     return (
+      <>
+        <QuestionBatchImporter />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border dark:border-gray-700 shadow-sm transition-colors">
         {/* FORM SIDE */}
         <div className="space-y-4">
@@ -366,5 +369,6 @@ export function QuestionsPanel() {
           </div>
         </div>
       </div>
+      </>
     );
   }
