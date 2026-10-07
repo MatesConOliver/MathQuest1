@@ -10,6 +10,7 @@ import {
 import { Character, GameItem } from "@/types/game";
 import { useRouter } from "next/navigation";
 import { useAudio } from "@/context/AudioContext";
+import Link from "next/link";
 
 export default function ShopPage() {
   const { playTrack } = useAudio()!; 
@@ -184,9 +185,11 @@ export default function ShopPage() {
           <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
             🪙 {character ? character.gold : 0} G
           </div>
-          <button onClick={() => router.push("/")} className="text-sm underline text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">
-            🏠 Main menu
-          </button>
+          <nav aria-label="Page navigation" className="flex flex-wrap justify-end gap-2">
+            <Link href="/character" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🦉 Character</Link>
+            <Link href="/map" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🗺️ Map</Link>
+            <Link href="/" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🏠 Main menu</Link>
+          </nav>
         </div>
       </header>
 
