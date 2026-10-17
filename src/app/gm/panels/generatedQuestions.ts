@@ -10,263 +10,263 @@ export type GeneratedQuestion = {
 // Add a batch here, then upload it from GM Dashboard > Questions.
 export const generatedQuestions: GeneratedQuestion[] = [
   {
-    title: "Functions 2.1: Axis of Symmetry",
-    prompt: "Find the equation for the axis of symmetry of the quadratic function $f(x) = -2x^2 - 4x + 10$[cite: 51].",
+    title: "Functions 3.1: Discriminant with Parameter",
+    prompt: "Find the set of values of $k$ for which the equation $kx^2 - 3x + (k + 2) = 0$ has two distinct real roots.",
     choices: [
-      "$x = 2$",
-      "$x = 1$",
-      "$x = -1$",
-      "$x = -2$"
-    ],
-    correctIndex: 2,
-    difficulty: 2,
-    tags: ["functions1", "quadratics", "paper1"]
-  },
-  {
-    title: "Functions 2.2: Solving by Factorisation",
-    prompt: "Solve the quadratic equation $x^2 + 2x - 8 = 0$ by using factorisation[cite: 51].",
-    choices: [
-      "$x = -2, x = 4$",
-      "$x = -4, x = 2$",
-      "$x = -8, x = 1$",
-      "$x = -1, x = 8$"
-    ],
-    correctIndex: 1,
-    difficulty: 2,
-    tags: ["functions1", "quadratics", "paper1"]
-  },
-  {
-    title: "Functions 2.3: Coordinates of the Vertex",
-    prompt: "Determine the coordinates of the vertex for the quadratic function $f(x) = x^2 - 10x + 32$[cite: 51].",
-    choices: [
-      "$(-5, 107)$",
-      "$(5, -7)$",
-      "$(-5, 7)$",
-      "$(5, 7)$"
-    ],
-    correctIndex: 3,
-    difficulty: 2,
-    tags: ["functions1", "quadratics", "paper1"]
-  },
-  {
-    title: "Functions 2.4: Completing the Square",
-    prompt: "Use the method of completing the square to solve the quadratic equation $x^2 + 4x - 3 = 0$[cite: 51].",
-    choices: [
-      "$x = -2 \\pm \\sqrt{7}$",
-      "$x = 2 \\pm \\sqrt{7}$",
-      "$x = -2 \\pm \\sqrt{3}$",
-      "$x = -4 \\pm \\sqrt{19}$"
+      "$-3 < k < 1, k \\neq 0$",
+      "$k < -3 \\text{ or } k > 1$",
+      "$-1 < k < 3, k \\neq 0$",
+      "$k < -1 \\text{ or } k > 3$"
     ],
     correctIndex: 0,
-    difficulty: 2,
-    tags: ["functions1", "quadratics", "paper1"]
+    difficulty: 3,
+    tags: ["functions3"]
   },
   {
-    title: "Functions 2.5: Minimum Value of a Quadratic",
-    prompt: "Find the minimum value of the quadratic function $f(x) = x^2 + 6x + 8$[cite: 51].",
+    title: "Functions 3.2: Roots in Geometric Progression",
+    prompt: "The zeros of the equation $x^3 - 6x^2 - 24x + 64 = 0$ are consecutive terms in a geometric sequence. Find the sum of the squares of these three zeros.",
     choices: [
-      "$-3$",
-      "$8$",
+      "$84$",
+      "$116$",
+      "$56$",
+      "$98$"
+    ],
+    correctIndex: 1,
+    difficulty: 3,
+    tags: ["functions3"]
+  },
+  {
+    title: "Functions 3.3: Cubic Roots with Arithmetic Progression",
+    prompt: "Find the value of $k$ such that the zeros of the equation $x^3 - 6x^2 + kx + 10 = 0$ are in an arithmetic progression.",
+    choices: [
+      "$k = 3$",
+      "$k = -3$",
+      "$k = -9$",
+      "$k = 9$"
+    ],
+    correctIndex: 1,
+    difficulty: 3,
+    tags: ["functions3"]
+  },
+  {
+    title: "Functions 3.4: Equal Remainder Theorem",
+    prompt: "The polynomial $f(x) = x^3 + 3x^2 + ax + b$ leaves the same remainder when divided by $(x - 2)$ as when divided by $(x + 1)$. Find the value of $a$.",
+    choices: [
+      "$a = -7$",
+      "$a = 7$",
+      "$a = -3$",
+      "$a = 5$"
+    ],
+    correctIndex: 0,
+    difficulty: 3,
+    tags: ["functions3"]
+  },
+  {
+    title: "Functions 3.5: System of Polynomial Remainders",
+    prompt: "The polynomial $6x^3 + 7x^2 + ax + b$ has a remainder of $72$ when divided by $(x - 2)$ and is exactly divisible by $(x + 1)$. Find the values of $a$ and $b$.",
+    choices: [
+      "$a = -16, b = -15$",
+      "$a = 16, b = 15$",
+      "$a = -16, b = 15$",
+      "$a = 16, b = -15$"
+    ],
+    correctIndex: 0,
+    difficulty: 3,
+    tags: ["functions3"]
+  },
+  {
+    title: "Functions 3.6: Quadratic Inequality with Parameter",
+    prompt: "Find the range of values of $k$ such that $3x^2 - 12x + k > 0$ for all real values of $x$.",
+    choices: [
+      "$k > 12$",
+      "$k < 12$",
+      "$k > 36$",
+      "$k < 0$"
+    ],
+    correctIndex: 0,
+    difficulty: 3,
+    tags: ["functions3"]
+  },
+  {
+    title: "Functions 3.7: Absolute Value Equation",
+    prompt: "Find all real solutions to the equation $|x - 1| + |x| = 3$.",
+    choices: [
+      "$x = -1 \\text{ or } x = 2$",
+      "$x = 1 \\text{ or } x = -2$",
+      "$x = 2 \\text{ only}$",
+      "$x = -1 \\text{ only}$"
+    ],
+    correctIndex: 0,
+    difficulty: 3,
+    tags: ["functions3"]
+  },
+  {
+    title: "Functions 3.8: Equation with Square Roots",
+    prompt: "Solve for $x$ in the equation $\\sqrt{2x + 3} - \\sqrt{x - 2} = 2$.",
+    choices: [
+      "$x = 3 \\text{ or } x = 27$",
+      "$x = 3 \\text{ only}$",
+      "$x = 27 \\text{ only}$",
+      "$x = -1 \\text{ or } x = 3$"
+    ],
+    correctIndex: 0,
+    difficulty: 3,
+    tags: ["functions3"]
+  },
+  {
+    title: "Functions 3.9: Equation in Quadratic Form",
+    prompt: "Find all real solutions to the equation $2x^{\\frac{2}{3}} - x^{\\frac{1}{3}} - 15 = 0$.",
+    choices: [
+      "$x = 27 \\text{ or } x = -\\frac{125}{8}$",
+      "$x = 3 \\text{ or } x = -\\frac{5}{2}$",
+      "$x = 27 \\text{ or } x = \\frac{125}{8}$",
+      "$x = -27 \\text{ or } x = -\\frac{125}{8}$"
+    ],
+    correctIndex: 0,
+    difficulty: 3,
+    tags: ["functions3"]
+  },
+  {
+    title: "Functions 3.10: Fractional Equation with Extraneous Solutions",
+    prompt: "Find all real solutions to the equation $\\frac{2x}{1 - x^2} + \\frac{1}{x + 1} = 2$.",
+    choices: [
+      "$x = -1 \\text{ or } x = \\frac{3}{2}$",
+      "$x = \\frac{3}{2} \\text{ only}$",
+      "$x = -1 \\text{ only}$",
+      "$x = 1 \\text{ or } x = -\\frac{3}{2}$"
+    ],
+    correctIndex: 1,
+    difficulty: 3,
+    tags: ["functions3"]
+  },
+  {
+    title: "Functions 3.11: Absolute Value Inequality",
+    prompt: "Find the set of values of $x$ satisfying the inequality $|x| < 5|x - 6|$.",
+    choices: [
+      "$x < 5 \\text{ or } x > 7.5$",
+      "$5 < x < 7.5$",
+      "$x < 5$",
+      "$x < -7.5 \\text{ or } x > 5$"
+    ],
+    correctIndex: 0,
+    difficulty: 3,
+    tags: ["functions3"]
+  },
+  {
+    title: "Functions 3.12: Rational Inequality Analysis",
+    prompt: "Find the complete solution set for the inequality $\\frac{x}{x - 2} > \\frac{1}{x + 1}$.",
+    choices: [
+      "$-1 < x < 2$",
+      "$x < -1 \\text{ or } 2 < x$",
+      "$x < -1 \\text{ or } -1 < x < 2 \\text{ or } x > 2$",
+      "$x < -1 \\text{ or } 2 < x \\text{ (excluding } x = 1)$"
+    ],
+    correctIndex: 1,
+    difficulty: 3,
+    tags: ["functions3"]
+  },
+  {
+    title: "Functions 3.13: Double Zero of Quartic",
+    prompt: "Given that $x = 2$ is a double root of the polynomial $x^4 - 5x^3 + 7x^2 - 4$, find the sum of the remaining two zeros.",
+    choices: [
+      "$1$",
       "$-1$",
+      "$2$",
       "$0$"
     ],
-    correctIndex: 2,
-    difficulty: 2,
-    tags: ["functions1", "quadratics", "paper1"]
+    correctIndex: 0,
+    difficulty: 3,
+    tags: ["functions3"]
   },
   {
-    title: "Functions 2.6: Sum of Roots",
-    prompt: "Find the sum of the roots for the quadratic equation $2x^2 + 6x - 5 = 0$[cite: 51].",
+    title: "Functions 3.14: Partial Fractions with Repeated Linear Factor",
+    prompt: "Decompose $\\frac{3x + 4}{(x + 2)^2}$ into partial fractions.",
     choices: [
-      "$3$",
-      "$-\\frac{5}{2}$",
-      "$\\frac{5}{2}$",
-      "$-3$"
-    ],
-    correctIndex: 3,
-    difficulty: 2,
-    tags: ["functions1", "quadratics", "roots"]
-  },
-  {
-    title: "Functions 2.7: Product of Roots",
-    prompt: "Find the product of the roots for the quadratic equation $x^2 = 1 - 3x$[cite: 51].",
-    choices: [
-      "$-1$",
-      "$1$",
-      "$-3$",
-      "$3$"
+      "$\\frac{3}{x + 2} - \\frac{2}{(x + 2)^2}$",
+      "$\\frac{3}{x + 2} + \\frac{2}{(x + 2)^2}$",
+      "$\\frac{4}{x + 2} - \\frac{3}{(x + 2)^2}$",
+      "$\\frac{3}{x + 2} + \\frac{4}{(x + 2)^2}$"
     ],
     correctIndex: 0,
-    difficulty: 2,
-    tags: ["functions1", "quadratics", "roots"]
+    difficulty: 3,
+    tags: ["functions3"]
   },
   {
-    title: "Functions 2.8: Polynomial Remainder",
-    prompt: "Use the remainder theorem to find the remainder when $P(x) = 3x^2 + 5x - 5$ is divided by $x + 3$[cite: 51].",
+    title: "Functions 3.15: Partial Fractions with Irreducible Quadratic",
+    prompt: "Find the partial fraction decomposition for $\\frac{2}{x^3 + x}$.",
     choices: [
-      "$-17$",
-      "$7$",
-      "$37$",
-      "$-5$"
-    ],
-    correctIndex: 1,
-    difficulty: 2,
-    tags: ["functions1", "polynomials", "remainder_theorem"]
-  },
-  {
-    title: "Functions 2.9: Evaluating Remainder",
-    prompt: "Find the remainder when $P(x) = 2x^3 - 3x^2 + 4x - 7$ is divided by $x - 2$[cite: 51].",
-    choices: [
-      "$5$",
-      "$-27$",
-      "$-7$",
-      "$9$"
+      "$\\frac{2}{x} - \\frac{2x}{x^2 + 1}$",
+      "$\\frac{2}{x} + \\frac{2x}{x^2 + 1}$",
+      "$\\frac{1}{x} - \\frac{x}{x^2 + 1}$",
+      "$\\frac{2}{x} - \\frac{2}{x^2 + 1}$"
     ],
     correctIndex: 0,
-    difficulty: 2,
-    tags: ["functions1", "polynomials", "remainder_theorem"]
+    difficulty: 3,
+    tags: ["functions3"]
   },
   {
-    title: "Functions 2.10: Unknown Coefficient",
-    prompt: "Find the value of $k$ such that $3$ is a zero of $f(x) = x^3 + x^2 + kx + 1$[cite: 51].",
+    title: "Functions 3.16: Rational Function Transformations Form",
+    prompt: "Express $f(x) = \\frac{2x^2 + 8x + 7}{x^2 + 4x + 5}$ in the form $a - \\frac{b}{(x + c)^2 + d}$.",
     choices: [
-      "$k = \\frac{37}{3}$",
-      "$k = -9$",
-      "$k = -\\frac{37}{3}$",
-      "$k = 12$"
-    ],
-    correctIndex: 2,
-    difficulty: 2,
-    tags: ["functions1", "polynomials", "factor_theorem"]
-  },
-  {
-    title: "Functions 2.11: Sum of Reciprocal Roots",
-    prompt: "The roots of the equation $x^2 + x + 4 = 0$ are $\\alpha$ and $\\beta$. Find the value of the expression $\\frac{1}{\\alpha} + \\frac{1}{\\beta}$[cite: 51].",
-    choices: [
-      "$-\\frac{1}{4}$",
-      "$\\frac{1}{4}$",
-      "$-4$",
-      "$4$"
+      "$2 - \\frac{1}{(x + 2)^2 + 1}$",
+      "$2 - \\frac{3}{(x + 2)^2 + 1}$",
+      "$1 - \\frac{2}{(x + 2)^2 + 1}$",
+      "$2 + \\frac{1}{(x + 2)^2 + 1}$"
     ],
     correctIndex: 0,
-    difficulty: 2,
-    tags: ["functions1", "quadratics", "roots"]
+    difficulty: 3,
+    tags: ["functions3"]
   },
   {
-    title: "Functions 2.12: Sum of Squared Roots",
-    prompt: "If $\\alpha$ and $\\beta$ are the roots of the equation $3x^2 + 5x + 4 = 0$, find the value of $\\alpha^2 + \\beta^2$[cite: 51].",
+    title: "Functions 3.17: Rational Function Inequality",
+    prompt: "Find the set of values of $x$ for which $\\frac{x + 4}{x + 1} \\le \\frac{x - 2}{x - 4}$.",
     choices: [
-      "$\\frac{49}{9}$",
-      "$\\frac{1}{9}$",
-      "$\\frac{25}{9}$",
-      "$-\\frac{23}{9}$"
-    ],
-    correctIndex: 1,
-    difficulty: 2,
-    tags: ["functions1", "quadratics", "roots"]
-  },
-  {
-    title: "Functions 2.13: Partial Fractions Constants",
-    prompt: "Given that $\\frac{2x - 48}{x^2 - 9} = \\frac{A}{x + 3} + \\frac{B}{x - 3}$, find the values of $A$ and $B$[cite: 51].",
-    choices: [
-      "$A = -9, B = 7$",
-      "$A = 7, B = -9$",
-      "$A = -7, B = 9$",
-      "$A = 9, B = -7$"
-    ],
-    correctIndex: 3,
-    difficulty: 2,
-    tags: ["functions1", "rational_functions", "partial_fractions"]
-  },
-  {
-    title: "Functions 2.14: Higher Degree Remainder",
-    prompt: "Use the remainder theorem to find the remainder when $P(x) = x^5 - 2x^4 + 3x^2 - 20x + 3$ is divided by $x + 1$[cite: 51].",
-    choices: [
-      "$23$",
-      "$15$",
-      "$-13$",
-      "$-21$"
+      "$-1 < x \\le \\frac{12}{11} \\text{ or } x > 4$",
+      "$x < -1 \\text{ or } \\frac{12}{11} \\le x < 4$",
+      "$-1 < x < 4$",
+      "$x \\le \\frac{12}{11}, x \\neq -1$"
     ],
     correctIndex: 0,
-    difficulty: 2,
-    tags: ["functions1", "polynomials", "remainder_theorem"]
+    difficulty: 3,
+    tags: ["functions3"]
   },
   {
-    title: "Functions 2.15: Absolute Value Inequality",
-    prompt: "Solve the inequality $|x - 2| \\geq |2x + 1|$[cite: 51].",
+    title: "Functions 3.18: Absolute Value Rational Inequality",
+    prompt: "Solve the inequality $\\left| \\frac{x + 9}{x - 9} \\right| \\le 2$.",
     choices: [
-      "$x \\leq -3 \\text{ or } x \\geq \\frac{1}{3}$",
-      "$-3 \\leq x \\leq \\frac{1}{3}$",
-      "$x \\leq -\\frac{1}{3} \\text{ or } x \\geq 3$",
-      "$-\\frac{1}{3} \\leq x \\leq 3$"
-    ],
-    correctIndex: 1,
-    difficulty: 2,
-    tags: ["functions1", "inequalities", "absolute_value"]
-  },
-  {
-    title: "Functions 2.16: Linear Rational Inequality",
-    prompt: "Find the values of $x$ that solve this inequality: $\\frac{3x - 2}{5} + 3 \\geq \\frac{4x - 1}{3}$[cite: 51].",
-    choices: [
-      "$x \\leq 4$",
-      "$x \\geq 4$",
-      "$x \\leq -4$",
-      "$x \\geq -4$"
+      "$x \\le 3 \\text{ or } x \\ge 27$",
+      "$3 \\le x \\le 27 \\text{ and } x \\neq 9$",
+      "$x \\le -27 \\text{ or } x \\ge -3$",
+      "$-27 \\le x \\le 3$"
     ],
     correctIndex: 0,
-    difficulty: 2,
-    tags: ["functions1", "inequalities", "paper1"]
+    difficulty: 3,
+    tags: ["functions3"]
   },
   {
-    title: "Functions 2.17: Quadratic Inequality",
-    prompt: "Find the values of $x$ for which $4x + 1 < x^2 + 4$[cite: 51].",
+    title: "Functions 3.19: Quadratic Inequality for All Real x",
+    prompt: "Find the range of values of $m$ such that the inequality $m(x + 1) \\le x^2$ is true for all real values of $x$.",
     choices: [
-      "$1 < x < 3$",
-      "$x < -3 \\text{ or } x > -1$",
-      "$-1 < x < -3$",
-      "$x < 1 \\text{ or } x > 3$"
+      "$-4 \\le m \\le 0$",
+      "$0 \\le m \\le 4$",
+      "$m \\le 0 \\text{ or } m \\ge 4$",
+      "$m \\ge -4$"
     ],
-    correctIndex: 3,
-    difficulty: 2,
-    tags: ["functions1", "inequalities", "quadratics"]
+    correctIndex: 0,
+    difficulty: 3,
+    tags: ["functions3"]
   },
   {
-    title: "Functions 2.18: Absolute Value Rational Inequality",
-    prompt: "Find all values of $x$ that satisfy the inequality $\\frac{2x}{|x - 1|} < 1$[cite: 51].",
+    title: "Functions 3.20: Polynomial Equation with Geometric Roots",
+    prompt: "The roots of $x^3 - 19x^2 + bx - 216 = 0$ are consecutive terms in a geometric sequence. Find the value of $b$.",
     choices: [
-      "$x < -1$",
-      "$-1 < x < \\frac{1}{3}$",
-      "$x < \\frac{1}{3}$",
-      "$x > 1$"
+      "$b = 114$",
+      "$b = 57$",
+      "$b = 133$",
+      "$b = 76$"
     ],
-    correctIndex: 2,
-    difficulty: 2,
-    tags: ["functions1", "inequalities", "absolute_value"]
-  },
-  {
-    title: "Functions 2.19: Partial Fractions Decomposition",
-    prompt: "Decompose the rational expression $\\frac{5x + 1}{x^2 + x - 2}$ into partial fractions[cite: 51].",
-    choices: [
-      "$\\frac{2}{x + 2} + \\frac{3}{x - 1}$",
-      "$\\frac{3}{x + 2} + \\frac{2}{x - 1}$",
-      "$\\frac{4}{x + 2} + \\frac{1}{x - 1}$",
-      "$\\frac{1}{x + 2} + \\frac{4}{x - 1}$"
-    ],
-    correctIndex: 1,
-    difficulty: 2,
-    tags: ["functions1", "rational_functions", "partial_fractions"]
-  },
-  {
-    title: "Functions 2.20: Finding Constant from Vertex",
-    prompt: "Find the value of $c$ such that the vertex of the parabola $y = 3x^2 - 8x + c$ is $(\\frac{4}{3}, -\\frac{1}{3})$[cite: 51].",
-    choices: [
-      "$c = -5$",
-      "$c = \\frac{17}{3}$",
-      "$c = 5$",
-      "$c = 3$"
-    ],
-    correctIndex: 2,
-    difficulty: 2,
-    tags: ["functions1", "quadratics", "paper1"]
+    correctIndex: 0,
+    difficulty: 3,
+    tags: ["functions3"]
   }
 ];

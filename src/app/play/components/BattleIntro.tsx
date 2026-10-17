@@ -19,12 +19,12 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
   return (
     <main className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center p-4 transition-colors duration-500">
       <div className="max-w-lg w-full bg-white dark:bg-gray-800 dark:text-gray-100 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-200 dark:border-gray-700">
-        <div className="relative h-64 w-full bg-gray-900">
+        <div className="relative h-64 w-full bg-gray-900 overflow-hidden">
           {heroImage ? (
             <img 
               src={heroImage} 
               alt="Enemy" 
-              className="w-full h-full object-cover opacity-90 hover:scale-105 transition-transform duration-700 ease-in-out" 
+              className="w-full h-full object-contain object-center p-2 pb-24 opacity-90 hover:scale-105 transition-transform duration-700 ease-in-out" 
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 via-slate-900 to-black">
