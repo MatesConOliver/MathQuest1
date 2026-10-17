@@ -24,7 +24,7 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
             <img 
               src={heroImage} 
               alt="Enemy" 
-              className="w-full h-full object-contain object-center p-2 pb-24 opacity-90 hover:scale-105 transition-transform duration-700 ease-in-out" 
+              className="w-full h-full object-contain object-center p-2 opacity-90 hover:scale-105 transition-transform duration-700 ease-in-out" 
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 via-slate-900 to-black">
