@@ -15,7 +15,7 @@ export function DefeatScreen({ msg, onTryAgain }: DefeatScreenProps) {
         <div className="text-6xl animate-pulse">💀</div>
         <div className="text-center">
           <h1 className="text-4xl font-black text-red-600 dark:text-red-500 uppercase tracking-widest drop-shadow-md">Defeat</h1>
-          <p className="text-gray-500 dark:text-gray-400 font-bold mt-2 italic">"You have fallen..."</p>
+          <p className="text-gray-500 dark:text-gray-400 font-bold mt-2 italic">&ldquo;You have fallen...&rdquo;</p>
         </div>
         <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-200 dark:border-gray-600">
            <p className="font-bold text-gray-500 dark:text-gray-400 text-xs uppercase mb-2">Outcome</p>

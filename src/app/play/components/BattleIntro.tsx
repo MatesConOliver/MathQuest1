@@ -56,7 +56,7 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
         <div className="p-8 space-y-6 bg-white dark:bg-gray-800">
           <div className="relative pl-4 border-l-4 border-slate-300 dark:border-slate-500">
             <p className="text-gray-600 dark:text-gray-300 text-lg leading-relaxed italic">
-              "{encounter?.description || "A shadow moves in the darkness. Prepare yourself..."}"
+              &ldquo;{encounter?.description || "A shadow moves in the darkness. Prepare yourself..."}&rdquo;
             </p>
           </div>
           

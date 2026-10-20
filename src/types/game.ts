@@ -142,6 +142,8 @@ export type QuestionDoc = {
   groupId?: string; // Links questions that belong to the same multi-part exercise
   timeLimit: number;
   imageUrl?: string;
+  solutionUrl?: string; // Optional URL to video walkthrough, image solution, or interactive applet
+  solutionText?: string; // Optional text / LaTeX explanation of the solution
 };
 
 export type FoeDoc = {

@@ -323,7 +323,7 @@ export default function ShopPage() {
 
                 {/* 3. DESCRIPTION */}
                 <p className="text-sm text-gray-500 dark:text-gray-400 italic mb-6 leading-relaxed border-t dark:border-gray-700 pt-3">
-                  "{item.description || "A mysterious item found in the void..."}"
+                  &ldquo;{item.description || "A mysterious item found in the void..."}&rdquo;
                 </p>
 
               </div>

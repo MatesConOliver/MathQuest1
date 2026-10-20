@@ -97,6 +97,7 @@ export default function PlayClient() {
           executeEscape={battle.executeEscape}
           usePotion={battle.usePotion}
           subArea={currentSubArea}
+          combatEffect={battle.combatEffect}
         />
       );
     case 'win':

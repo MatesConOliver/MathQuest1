@@ -12,6 +12,14 @@ import {
 } from '@/types/game';
 import { getDoc, updateDoc, db } from '@/lib/firebase';
 import { arrayUnion, collection, getDocs as getFirebaseDocs, query, where, orderBy, increment } from 'firebase/firestore';
+import { useAudio } from '@/context/AudioContext';
+
+export interface CombatEffect {
+  target: 'foe' | 'player';
+  amount: number;
+  id: number;
+  isCorrect: boolean;
+}
 
 interface UseBattleProps {
   user: User | null;
@@ -25,6 +33,8 @@ interface UseBattleProps {
 export function useBattle({ user, character, encounters, gameItems, foes, setCharacter }: UseBattleProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const audio = useAudio();
+  const playSfx = useCallback((s: string) => audio?.playSfx(s), [audio]);
 
   const [mode, setMode] = useState('lobby');
   const [currentEncounter, setCurrentEncounter] = useState<EncounterDoc | null>(null);
@@ -94,6 +104,16 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   const [showEscapeConfirm, setShowEscapeConfirm] = useState(false);
   // Instance IDs of potions consumed during the current battle; not persisted until the battle ends.
   const [consumedPotionInstanceIds, setConsumedPotionInstanceIds] = useState<string[]>([]);
+  // Local battle inventory that tracks durability degradation in real time
+  const [battleInventory, setBattleInventory] = useState<InventoryItem[]>([]);
+  // Floating combat text and sprite damage animation state
+  const [combatEffect, setCombatEffect] = useState<CombatEffect | null>(null);
+
+  useEffect(() => {
+    if (character?.inventory) {
+      setBattleInventory(character.inventory);
+    }
+  }, [character?.inventory]);
 
   const battleStats = useMemo(() => {
     if (!character) {
@@ -115,10 +135,12 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     let hpFlat = baseHp;
     let hpMult = 0;
 
+    const inventoryToUse = battleInventory.length > 0 ? battleInventory : character.inventory;
+
     if (character.equipment) {
         Object.values(character.equipment).forEach((equippedInstanceId) => {
           if (!equippedInstanceId) return;
-          const instance = character.inventory.find(
+          const instance = inventoryToUse.find(
             (i) => i.instanceId === equippedInstanceId
           );
           if (!instance) return;
@@ -153,16 +175,17 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       xBonus: totalXBonus,
       maxHp: finalMaxHp,
     };
-  }, [character, gameItems]);
+  }, [character, gameItems, battleInventory]);
 
   // Inventory as it should appear during the current battle: potions already used
   // in this fight are hidden, without touching the persisted character/Firestore.
   const availableInventory = useMemo(() => {
     if (!character) return [];
-    return character.inventory.filter(
+    const sourceInventory = battleInventory.length > 0 ? battleInventory : character.inventory;
+    return sourceInventory.filter(
       (i) => !consumedPotionInstanceIds.includes(i.instanceId)
     );
-  }, [character, consumedPotionInstanceIds]);
+  }, [character, battleInventory, consumedPotionInstanceIds]);
 
   const calculatePlayerDamage = useCallback(
     (questionDifficulty: number) => {
@@ -217,9 +240,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         setLootDrops(currentEncounter.winRewardItems.map(id => gameItems[id]?.name || 'Unknown Item'));
     }
 
-    // Consolidate potions consumed during this battle: start from the persisted inventory
-    // (untouched during combat) and remove exactly what was used.
-    const finalInventory = character.inventory.filter(
+    // Consolidate inventory with updated durabilities from this battle (minus consumed potions)
+    const finalInventory = (battleInventory.length > 0 ? battleInventory : character.inventory).filter(
       (i) => !consumedPotionInstanceIds.includes(i.instanceId)
     );
 
@@ -295,7 +317,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         setMsg('Could not save victory progress.');
         setMode('lobby');
     }
-  }, [user, character, currentEncounter, gameItems, playerHp, consumedPotionInstanceIds, setCharacter]);
+  }, [user, character, currentEncounter, gameItems, playerHp, consumedPotionInstanceIds, battleInventory, setCharacter]);
 
   const handleReturnToMap = useCallback(() => {
     if (currentEncounter?.winRewardStoryFlag) {
@@ -310,8 +332,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     const goldLoss = Math.floor((character.gold || 0) * 0.20);
     const finalReason = `${reason} You lost ${goldLoss} gold.`;
 
-    // Potions consumed during this battle stay consumed even though the player lost.
-    const finalInventory = character.inventory.filter(
+    // Consolidate inventory with updated durabilities from this battle (minus consumed potions)
+    const finalInventory = (battleInventory.length > 0 ? battleInventory : character.inventory).filter(
       (i) => !consumedPotionInstanceIds.includes(i.instanceId)
     );
 
@@ -334,7 +356,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         setMsg('Error saving character state.');
         setMode('lobby');
     }
-  }, [user, character, battleStats, consumedPotionInstanceIds, router, setCharacter]);
+  }, [user, character, battleStats, consumedPotionInstanceIds, battleInventory, router, setCharacter]);
 
   // Draws a new random question from the eligible starter pool. If it belongs to a
   // group, fetches and queues up the rest of that group's parts in order.
@@ -362,7 +384,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   }, [eligibleStarterPool, fetchGroupQuestions]);
 
   const advanceQuestion = useCallback(async (abandonCurrentGroup: boolean) => {
-    if (foeHp <= 0 && (abandonCurrentGroup || questionQueue.length === 0)) {
+    if (foeHp <= 0) {
       handleWin();
       return;
     }
@@ -378,6 +400,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
 
     setIsPaused(false);
     setSelectedChoice(null);
+    setCombatEffect(null);
     setShowSubquestionMenu(false);
     setMsg('');
     setCurrentQIndex((prev) => prev + skippedTurns + 1);
@@ -422,19 +445,60 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
 
       const correct = choiceIndex === currentQuestion.correctIndex;
 
+      // Durability degradation rules:
+      // - Main hand weapon: loses 1 durability on correct answer
+      // - Armor & Head gear: lose 1 durability on wrong answer / timeout
+      // - Off hand weapon/shield: loses 1 durability on EVERY answer regardless
+      setBattleInventory((prevInventory) => {
+        const source = prevInventory.length > 0 ? prevInventory : (character?.inventory || []);
+        return source.map((item) => {
+          if (!item.maxDurability) return item;
+
+          const isMainHand = correct && character?.equipment?.mainHand === item.instanceId;
+          const isOffHand = character?.equipment?.offHand === item.instanceId;
+          const isArmorOrHead = !correct && (
+            character?.equipment?.armor === item.instanceId ||
+            character?.equipment?.head === item.instanceId
+          );
+
+          if (isMainHand || isOffHand || isArmorOrHead) {
+            const currentDur = typeof item.durability === 'number' ? item.durability : item.maxDurability;
+            const nextDurability = Math.max(0, currentDur - 1);
+            return { ...item, durability: nextDurability };
+          }
+          return item;
+        });
+      });
+
       if (correct) {
         const foeDamage = calculatePlayerDamage(currentQuestion.difficulty || 1);
         const newFoeHp = Math.max(0, foeHp - foeDamage);
         setMsg(`Correct! You dealt ${foeDamage} damage.`);
         setFoeHp(newFoeHp);
+        setCombatEffect({
+          target: 'foe',
+          amount: foeDamage,
+          id: Date.now(),
+          isCorrect: true,
+        });
+        playSfx('attack');
+        setTimeout(() => playSfx('hit'), 140);
       } else {
         const playerDamage = foe?.attackDamage || 5;
         const newPlayerHp = Math.max(0, playerHp - playerDamage);
-        setMsg(`Incorrect! The enemy dealt ${playerDamage} damage.`);
+        const failText = choiceIndex === -1 ? `Time's up! The enemy dealt ${playerDamage} damage.` : `Incorrect! The enemy dealt ${playerDamage} damage.`;
+        setMsg(failText);
         setPlayerHp(newPlayerHp);
+        setCombatEffect({
+          target: 'player',
+          amount: playerDamage,
+          id: Date.now(),
+          isCorrect: false,
+        });
+        playSfx('hit');
 
-        // Only offer the "keep going / bail out" choice mid-way through a chained exercise.
-        if (currentQuestion.groupId && questionQueue.length > 0) {
+        // Only offer the "keep going / bail out" choice mid-way through a chained exercise if player survived.
+        if (currentQuestion.groupId && questionQueue.length > 0 && newPlayerHp > 0 && foeHp > 0) {
           setShowSubquestionMenu(true);
         }
       }
@@ -442,11 +506,14 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     [
       isPaused,
       currentQuestion,
+      character?.equipment,
+      character?.inventory,
       foeHp,
       playerHp,
       calculatePlayerDamage,
       foe,
       questionQueue,
+      playSfx,
     ]
   );
 
@@ -549,6 +616,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
           setTimeLeft(starter.timeLimit || 30);
           setIsPaused(false);
           setSelectedChoice(null);
+          setCombatEffect(null);
+          if (character?.inventory) setBattleInventory(character.inventory);
           setLevelUpData(null);
           setLootDrops([]);
           setSkillGains(null);
@@ -626,7 +695,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       return;
     }
 
-    const finalInventory = character.inventory.filter(
+    const finalInventory = (battleInventory.length > 0 ? battleInventory : character.inventory).filter(
       (i) => !consumedPotionInstanceIds.includes(i.instanceId)
     );
 
@@ -718,6 +787,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     executeEscape,
     usePotion,
     handleFightAgain,
-    handleReturnToMap
+    handleReturnToMap,
+    combatEffect,
+    battleInventory,
   };
 }

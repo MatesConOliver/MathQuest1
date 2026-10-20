@@ -1,0 +1,8 @@
+{
+  "name": "MathQuest1",
+  "description": "A math-based RPG adventure where players solve equations and challenges to battle foes and explore.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

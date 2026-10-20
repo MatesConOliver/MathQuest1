@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3000 -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -21,6 +21,7 @@
     "react-latex-next": "^3.0.0"
   },
   "devDependencies": {
+    "@eslint/compat": "^2.1.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^18",
@@ -29,8 +30,5 @@
     "eslint-config-next": "^14.2.5",
     "tailwindcss": "^4",
     "typescript": "^5"
-  },
-  "engines": {
-    "node": "24.x"
   }
 }

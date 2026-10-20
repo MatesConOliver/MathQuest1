@@ -116,6 +116,8 @@ export function QuestionsPanel() {
     const [tagsText, setTagsText] = useState("level1");
     const [order, setOrder] = useState("");
     const [groupId, setGroupId] = useState("");
+    const [solutionUrl, setSolutionUrl] = useState("");
+    const [solutionText, setSolutionText] = useState("");
     const [qMinutes, setQMinutes] = useState(0);
     const [qSeconds, setQSeconds] = useState(30);
 
@@ -183,6 +185,8 @@ export function QuestionsPanel() {
       setTagsText(q.tags ? q.tags.join(",") : "level1");
       setOrder(q.order ? String(q.order) : "");
       setGroupId(q.groupId || "");
+      setSolutionUrl(q.solutionUrl || "");
+      setSolutionText(q.solutionText || "");
       const totalSecs = q.timeLimit || 30; 
       setQMinutes(Math.floor(totalSecs / 60));
       setQSeconds(totalSecs % 60);
@@ -194,7 +198,8 @@ export function QuestionsPanel() {
       setChoices(["", "", "", ""]);
       setCorrectIndex(0); 
       setQMinutes(0); setQSeconds(30);
-      setDifficulty(1); setTagsText("level1"); setOrder(""); setGroupId(""); setMsg("");
+      setDifficulty(1); setTagsText("level1"); setOrder(""); setGroupId("");
+      setSolutionUrl(""); setSolutionText(""); setMsg("");
     }
   
     async function saveQuestion() {
@@ -213,6 +218,8 @@ export function QuestionsPanel() {
         timeLimit: safeTime,
         order: order ? Number(order) : null,
         groupId: groupId.trim() || null,
+        solutionUrl: solutionUrl.trim() || null,
+        solutionText: solutionText.trim() || null,
         updatedAt: serverTimestamp(),
       };
     
@@ -300,6 +307,21 @@ export function QuestionsPanel() {
           <div className="grid grid-cols-2 gap-4">
             <Input type="number" label="Order" value={order} onChange={(e:any) => setOrder(e.target.value)} placeholder="1" />
             <Input label="Group ID (para encadenar)" value={groupId} onChange={(e:any) => setGroupId(e.target.value)} placeholder="ej. ejercicio_derivadas_01" />
+          </div>
+
+          <div className="space-y-2 bg-indigo-50/60 dark:bg-indigo-950/20 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+             <div className="text-xs font-bold text-indigo-900 dark:text-indigo-300 uppercase">💡 Solution & Walkthrough (Optional)</div>
+             <Input label="Video / Image / Link URL" value={solutionUrl} onChange={(e:any) => setSolutionUrl(e.target.value)} placeholder="https://youtube.com/watch?v=... o URL de imagen/GeoGebra" />
+             <div>
+                <label className="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Solution Explanation (Supports LaTeX $...$)</label>
+                <textarea
+                  className="input w-full text-xs font-mono dark:bg-gray-800"
+                  rows={2}
+                  value={solutionText}
+                  onChange={(e) => setSolutionText(e.target.value)}
+                  placeholder="Explicación detallada paso a paso..."
+                />
+             </div>
           </div>
 
           <div className="flex gap-2 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800">

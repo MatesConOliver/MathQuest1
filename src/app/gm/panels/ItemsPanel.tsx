@@ -253,7 +253,7 @@ export function ItemsPanel() {
                <div>
                  <label className="text-[10px] font-bold text-red-800 dark:text-red-300 uppercase">Difficulty Bonus (x)</label>
                  <input type="number" className="input text-xs dark:bg-gray-800" placeholder="+0" value={valX} onChange={(e:any) => setValX(e.target.value)} />
-                 <p className="text-[9px] text-gray-700 dark:text-gray-300 mt-1">Adds to difficulty 'x' before calc.</p>
+                 <p className="text-[9px] text-gray-700 dark:text-gray-300 mt-1">Adds to difficulty &apos;x&apos; before calc.</p>
                </div>
             </div>
   

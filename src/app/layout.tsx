@@ -7,7 +7,11 @@ import { AudioProvider } from "@/context/AudioContext";
 
 export const metadata: Metadata = {
   title: "MathQuest1",
-  description: "Math RPG",
+  description: "A math-based RPG adventure where players solve equations and challenges to battle foes and explore.",
+  openGraph: {
+    title: "MathQuest1",
+    description: "A math-based RPG adventure where players solve equations and challenges to battle foes and explore.",
+  },
 };
 
 export default function RootLayout({
