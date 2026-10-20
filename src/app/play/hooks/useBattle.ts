@@ -398,7 +398,6 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       return;
     }
 
-    setIsPaused(false);
     setSelectedChoice(null);
     setCombatEffect(null);
     setShowSubquestionMenu(false);
@@ -412,6 +411,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       setQuestionQueue(rest);
       setCurrentQuestion(next);
       setTimeLeft(next.timeLimit || 30);
+      setIsPaused(false);
       return;
     }
 
@@ -422,6 +422,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     }
     setCurrentQuestion(drawn);
     setTimeLeft(drawn.timeLimit || 30);
+    setIsPaused(false);
   }, [foeHp, playerHp, currentQIndex, questions.length, questionQueue, drawRandomQuestion, handleWin, handleLoss]);
 
   const nextQuestion = useCallback(() => advanceQuestion(false), [advanceQuestion]);
@@ -486,7 +487,11 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       } else {
         const playerDamage = foe?.attackDamage || 5;
         const newPlayerHp = Math.max(0, playerHp - playerDamage);
-        const failText = choiceIndex === -1 ? `Time's up! The enemy dealt ${playerDamage} damage.` : `Incorrect! The enemy dealt ${playerDamage} damage.`;
+        const failText = choiceIndex === -2
+          ? `Turn skipped! The enemy dealt ${playerDamage} damage.`
+          : choiceIndex === -1
+          ? `Time's up! The enemy dealt ${playerDamage} damage.`
+          : `Incorrect! The enemy dealt ${playerDamage} damage.`;
         setMsg(failText);
         setPlayerHp(newPlayerHp);
         setCombatEffect({
@@ -638,13 +643,6 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   );
 
   useEffect(() => {
-    if (character) {
-      const newHp = Math.min(character.hp, battleStats.maxHp);
-      setPlayerHp(newHp);
-    }
-  }, [character, battleStats]);
-
-  useEffect(() => {
     const encounterId = searchParams.get('id');
     
     if (mode === 'win' || mode === 'lose' || mode === 'battle' || mode === 'intro') {
@@ -662,22 +660,27 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   }, [searchParams, encounters, character, handleStartEncounter, mode]);
 
   useEffect(() => {
-    if (mode === 'battle' && !isPaused) {
-      if (timeLeft <= 0) {
-        handleAnswer(-1);
-        return;
-      }
-      const t = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
-      setTimer(t);
-      return () => clearInterval(t);
-    } else if (timer) {
-      clearInterval(timer);
+    if (mode !== 'battle' || isPaused || !currentQuestion) {
+      return;
     }
-  }, [mode, isPaused, timeLeft, handleAnswer]);
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setTimeout(() => handleAnswer(-1), 0);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [mode, isPaused, currentQuestion, handleAnswer]);
 
   const handleStartBattle = () => setMode('battle');
 
-  const skipQuestion = () => handleAnswer(-1);
+  const skipQuestion = () => handleAnswer(-2);
 
   const handleFightAgain = () => {
     if (currentEncounter) {

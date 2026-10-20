@@ -67,6 +67,31 @@ const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = f
   );
 };
 
+const getChoiceImage = (question: QuestionDoc, idx: number): string | null => {
+  if (question.choicesContent && question.choicesContent[idx]) {
+    const imgBlock = question.choicesContent[idx].content.find((b) => b.type === 'image');
+    if (imgBlock) return imgBlock.value;
+  }
+  if (question.choices && question.choices[idx]) {
+    const raw = question.choices[idx];
+    const match = raw.match(/!\[.*?\]\((.*?)\)/);
+    if (match) return match[1];
+  }
+  return null;
+};
+
+const getChoiceTextOnly = (question: QuestionDoc, idx: number): React.ReactNode => {
+  if (question.choicesContent && question.choicesContent[idx]) {
+    const textBlocks = question.choicesContent[idx].content.filter((b) => b.type !== 'image');
+    if (textBlocks.length > 0) return renderStructuredContent(textBlocks);
+  }
+  if (question.choices && question.choices[idx]) {
+    const raw = question.choices[idx].replace(/!\[.*?\]\(.*?\)/g, '').trim();
+    if (raw) return renderLegacyMixedText(raw);
+  }
+  return null;
+};
+
 const renderChoiceContent = (question: QuestionDoc, idx: number): React.ReactNode => {
   if (question.choicesContent && question.choicesContent[idx]) {
     return renderStructuredContent(question.choicesContent[idx].content);
@@ -153,6 +178,19 @@ function CircularTimer({ timeLeft, totalTime }: { timeLeft: number; totalTime: n
   const timeStr = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   const isLowTime = timeLeft <= 10;
 
+  // Green down to 50%, then same orange-yellow color as health bars, then pulsing red
+  const timerStroke = progress > 0.5
+    ? 'stroke-green-500'
+    : progress > 0.2 && !isLowTime
+    ? 'stroke-yellow-400'
+    : 'stroke-red-500 animate-pulse';
+
+  const timerText = progress > 0.5
+    ? 'text-green-400'
+    : progress > 0.2 && !isLowTime
+    ? 'text-yellow-300'
+    : 'text-red-400 animate-pulse';
+
   return (
     <div className="flex items-center gap-2.5 bg-black/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 shadow-xl">
       <div className="relative w-12 h-12 flex items-center justify-center">
@@ -169,9 +207,7 @@ function CircularTimer({ timeLeft, totalTime }: { timeLeft: number; totalTime: n
             cx="24"
             cy="24"
             r={radius}
-            className={`transition-all duration-1000 ease-linear ${
-              isLowTime ? 'stroke-red-500 animate-pulse' : 'stroke-yellow-400'
-            }`}
+            className={`transition-all duration-1000 ease-linear ${timerStroke}`}
             strokeWidth="3.5"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
@@ -179,7 +215,7 @@ function CircularTimer({ timeLeft, totalTime }: { timeLeft: number; totalTime: n
             fill="transparent"
           />
         </svg>
-        <span className={`absolute font-mono text-[10px] font-black ${isLowTime ? 'text-red-400' : 'text-yellow-300'}`}>
+        <span className={`absolute font-mono text-[10px] font-black ${timerText}`}>
           {timeStr}
         </span>
       </div>
@@ -275,7 +311,7 @@ export function BattleScreen(props: BattleScreenProps) {
     <main style={bgStyle} className="h-screen w-screen bg-cover bg-center font-sans text-white relative flex flex-col justify-between overflow-hidden select-none">
       
       {/* 1. TOP HUD (Pokemon Style Status Plates + Center Ring Timer) */}
-      <header className="relative z-20 p-3 sm:p-4 flex items-start justify-between gap-2 pr-14">
+      <header className="relative z-20 shrink-0 p-3 sm:p-4 flex items-start justify-between gap-2 pr-14">
         {/* Player Status Plate */}
         <StatusPlate
           name={character?.name || "Player"}
@@ -303,12 +339,12 @@ export function BattleScreen(props: BattleScreenProps) {
         />
       </header>
 
-      {/* 2. BATTLE STAGE (GROUND PEDESTALS & SPRITES) */}
-      <div className="absolute inset-0 pointer-events-none z-10">
+      {/* 2. BATTLE STAGE (GROUND PEDESTALS & SPRITES - DYNAMICALLY OCCUPIES THE ARENA) */}
+      <div className="flex-1 relative w-full pointer-events-none z-10 min-h-0 overflow-hidden">
         
         {/* Foe Unit & Shadow (Upper Right Stage) */}
         {foe?.imageUrl && (
-          <div className="absolute top-[16%] sm:top-[18%] right-[8%] sm:right-[14%] flex flex-col items-center">
+          <div className="absolute top-[8%] sm:top-[10%] right-[8%] sm:right-[14%] flex flex-col items-center">
             {/* Foe Sprite with Hit & Lunge Reactions */}
             <div className={`relative transition-transform duration-300 ${
               combatEffect?.target === 'foe' ? 'animate-sprite-hit' : combatEffect?.target === 'player' ? 'animate-foe-lunge' : ''
@@ -316,7 +352,7 @@ export function BattleScreen(props: BattleScreenProps) {
               <img
                 src={foe.imageUrl}
                 alt="Foe"
-                className="w-[min(20rem,34vw)] h-[min(20rem,28vh)] object-contain object-bottom drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]"
+                className="w-[min(19rem,32vw)] h-[min(19rem,28vh)] object-contain object-bottom drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]"
               />
               {/* Floating Damage Text over Foe */}
               {combatEffect?.target === 'foe' && (
@@ -336,7 +372,7 @@ export function BattleScreen(props: BattleScreenProps) {
 
         {/* Weapon Strike Slash Effect over Foe */}
         {combatEffect?.target === 'foe' && (
-          <div className="animate-weapon-slash absolute top-[24%] right-[16%] sm:right-[20%] pointer-events-none z-30 flex items-center justify-center">
+          <div className="animate-weapon-slash absolute top-[16%] sm:top-[18%] right-[16%] sm:right-[20%] pointer-events-none z-30 flex items-center justify-center">
             {mainHandWeapon?.imageUrl ? (
               <img
                 src={mainHandWeapon.imageUrl}
@@ -349,8 +385,8 @@ export function BattleScreen(props: BattleScreenProps) {
           </div>
         )}
 
-        {/* Player Owl Unit & Shadow (Lower Left Stage - elevated above grimoire!) */}
-        <div className="absolute bottom-[36%] sm:bottom-[34%] left-[6%] sm:left-[12%] flex flex-col items-center">
+        {/* Player Owl Unit & Shadow (Lower Left Stage - resting right on ground above footer) */}
+        <div className="absolute bottom-[4%] sm:bottom-[6%] left-[6%] sm:left-[12%] flex flex-col items-center">
           {/* Player Sprite with Hit & Lunge Reactions */}
           <div className={`relative transition-transform duration-300 ${
             combatEffect?.target === 'player' ? 'animate-sprite-hit' : combatEffect?.target === 'foe' ? 'animate-player-lunge' : ''
@@ -358,7 +394,7 @@ export function BattleScreen(props: BattleScreenProps) {
             <img
               src={character?.imageUrl || "https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=bae93c5e-92ed-4958-9274-fb67a3f5f8c9"}
               alt="Character"
-              className="w-[min(20rem,34vw)] h-[min(20rem,28vh)] object-contain object-bottom drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]"
+              className="w-[min(19rem,32vw)] h-[min(19rem,28vh)] object-contain object-bottom drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]"
             />
             {/* Floating Damage Text over Player */}
             {combatEffect?.target === 'player' && (
@@ -377,21 +413,12 @@ export function BattleScreen(props: BattleScreenProps) {
       </div>
 
       {/* 3. BOTTOM GRIMOIRE CONSOLE (PROBLEM PANEL + ACTION / CHOICES CONSOLE) */}
-      <footer className="relative z-20 p-3 sm:p-4 bg-gradient-to-t from-black via-black/95 to-black/80 backdrop-blur-xl border-t-2 border-white/20 shadow-2xl">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-stretch gap-3">
+      <footer className="relative z-20 shrink-0 p-2.5 sm:p-3.5 bg-gradient-to-t from-black via-black/95 to-black/80 backdrop-blur-xl border-t-2 border-white/20 shadow-2xl transition-all duration-200">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-stretch gap-2.5 sm:gap-3">
           
-          {/* LEFT: THE MATH PROBLEM CARD */}
-          <div className={`${(showAnswers || isPaused) ? 'w-full md:w-5/12 lg:w-4/12' : 'flex-1'} bg-gray-900/80 rounded-2xl p-4 sm:p-5 border border-white/15 shadow-inner flex flex-col justify-between max-h-[38vh] min-h-[150px] overflow-hidden transition-all duration-200`}>
-            <div className="overflow-y-auto pr-2 space-y-3 custom-scrollbar flex-1">
-              
-              {/* Question Header & Title */}
-              <div className="flex items-center justify-between border-b border-gray-800 pb-1.5 text-xs text-gray-400 font-bold uppercase tracking-wider">
-                <span className="truncate max-w-[200px]">📜 {currentQ.title || `Exercise #${currentQIndex + 1}`}</span>
-                {currentQ.difficulty && (
-                  <span className="text-yellow-400 font-mono text-[11px]">★ {currentQ.difficulty}</span>
-                )}
-              </div>
-
+          {/* LEFT: THE MATH PROBLEM CARD (Dynamic height: min-h / max-h, scrollable on overflow) */}
+          <div className={`${(showAnswers || isPaused) ? 'w-full md:w-5/12 lg:w-4/12' : 'flex-1'} bg-gray-900/80 rounded-2xl p-3.5 sm:p-4 border border-white/15 shadow-inner flex flex-col justify-center min-h-[96px] sm:min-h-[110px] max-h-[38vh] sm:max-h-[44vh] overflow-hidden transition-all duration-200`}>
+            <div className="overflow-y-auto pr-2 space-y-2.5 custom-scrollbar max-h-full">
               {/* The Actual Question Content */}
               <div className="leading-relaxed text-sm sm:text-base font-serif text-gray-100">
                 {currentQ.promptContent ? (
@@ -404,31 +431,13 @@ export function BattleScreen(props: BattleScreenProps) {
                   <img
                     src={currentQ.promptImageUrl}
                     alt="Question"
-                    className="max-h-48 rounded-xl border border-white/20 mx-auto bg-black/40 p-1 block shadow-md"
+                    className="max-h-40 sm:max-h-48 rounded-xl border border-white/20 mx-auto bg-black/40 p-1 block shadow-md"
                   />
                 ) : (
                   <div>{renderLegacyMixedText(currentQ.promptText)}</div>
                 )}
               </div>
             </div>
-
-            {/* Hint or Note Footer */}
-            {!isPaused && !showAnswers && (
-              <div className="text-[11px] text-gray-400 italic pt-2 border-t border-gray-800/80 flex items-center justify-between">
-                <span>✍️ Solve on scratch paper, then click <strong>ANSWER</strong> when ready.</span>
-              </div>
-            )}
-            {showAnswers && !isPaused && (
-              <div className="text-[11px] text-yellow-400/90 italic pt-2 border-t border-gray-800/80 flex items-center justify-between">
-                <span>📖 Comparing with your scratchpad work...</span>
-                <button
-                  onClick={() => setShowAnswers(false)}
-                  className="text-xs text-gray-300 hover:text-white underline font-semibold"
-                >
-                  Hide options
-                </button>
-              </div>
-            )}
           </div>
 
           {/* RIGHT: COMMAND & CHOICE CONSOLE */}
@@ -436,31 +445,31 @@ export function BattleScreen(props: BattleScreenProps) {
             
             {/* MODE 1: POKEMON COMMAND MENU (FIGHT / BAG / SKIP / RUN) */}
             {!showAnswers && !isPaused && (
-              <div className="grid grid-cols-2 gap-2.5 h-full">
+              <div className="grid grid-cols-2 gap-2 sm:gap-2.5 w-full h-full min-h-[96px] sm:min-h-[110px] max-h-[38vh] sm:max-h-[44vh]">
                 {/* 1. FIGHT / ANSWER (Primary yellow button) */}
                 <button
                   onClick={() => setShowAnswers(true)}
-                  className="bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black py-4 px-3 rounded-2xl shadow-lg border-2 border-yellow-200 transition-all hover:scale-[1.02] active:scale-95 flex flex-col items-center justify-center gap-1"
+                  className="bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black py-2.5 sm:py-3 px-3 rounded-2xl shadow-lg border-2 border-yellow-200 transition-all hover:scale-[1.02] active:scale-95 flex flex-col items-center justify-center gap-0.5 sm:gap-1"
                 >
-                  <span className="text-2xl">⚔️</span>
-                  <span className="text-sm tracking-wider uppercase font-black">Answer</span>
+                  <span className="text-xl sm:text-2xl">⚔️</span>
+                  <span className="text-xs sm:text-sm tracking-wider uppercase font-black">Answer</span>
                   <span className="text-[10px] text-gray-800 font-semibold">Choose Option</span>
                 </button>
 
                 {/* 2. BAG / POTIONS */}
                 <button
                   onClick={() => setShowInventory(true)}
-                  className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-4 px-3 rounded-2xl shadow-md border border-slate-600 transition-all hover:scale-[1.02] active:scale-95 flex flex-col items-center justify-center gap-1"
+                  className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 sm:py-3 px-3 rounded-2xl shadow-md border border-slate-600 transition-all hover:scale-[1.02] active:scale-95 flex flex-col items-center justify-center gap-0.5 sm:gap-1"
                 >
-                  <span className="text-2xl">🧪</span>
-                  <span className="text-sm tracking-wider uppercase font-bold">Potions</span>
+                  <span className="text-xl sm:text-2xl">🧪</span>
+                  <span className="text-xs sm:text-sm tracking-wider uppercase font-bold">Potions</span>
                   <span className="text-[10px] text-gray-400 font-normal">Use Inventory</span>
                 </button>
 
                 {/* 3. SKIP TURN */}
                 <button
                   onClick={skipQuestion}
-                  className="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-bold py-3 px-3 rounded-xl shadow border border-gray-700 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-1.5 text-xs"
+                  className="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-bold py-2 sm:py-2.5 px-3 rounded-xl shadow border border-gray-700 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-1.5 text-xs"
                 >
                   <span>⏭</span> Skip Turn
                 </button>
@@ -468,58 +477,84 @@ export function BattleScreen(props: BattleScreenProps) {
                 {/* 4. FLEE / RUN */}
                 <button
                   onClick={() => setShowEscapeConfirm(true)}
-                  className="bg-red-950/80 hover:bg-red-900 text-red-200 font-bold py-3 px-3 rounded-xl shadow border border-red-800/60 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-1.5 text-xs"
+                  className="bg-red-950/80 hover:bg-red-900 text-red-200 font-bold py-2 sm:py-2.5 px-3 rounded-xl shadow border border-red-800/60 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-1.5 text-xs"
                 >
                   <span>🏃</span> Retreat
                 </button>
               </div>
             )}
 
-            {/* MODE 2: MULTIPLE CHOICE OPTIONS (A, B, C, D) - SPACIOUS & FULLY READABLE */}
+            {/* MODE 2: MULTIPLE CHOICE OPTIONS (A, B, C, D) - CRISP, FRAMED IMAGES & READABLE MATH */}
             {showAnswers && !isPaused && (
-              <div className="bg-gray-900/90 rounded-2xl p-3.5 border border-white/20 shadow-xl flex flex-col justify-between max-h-[38vh]">
-                <div className="flex justify-between items-center mb-2 pb-1.5 border-b border-gray-800">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-yellow-400 uppercase tracking-wider">Select Final Answer:</span>
-                    <span className="text-[11px] text-gray-400 hidden sm:inline">(Click an option to commit)</span>
-                  </div>
+              <div className="bg-gray-900/90 rounded-2xl p-2.5 sm:p-3 border border-white/20 shadow-xl flex flex-col min-h-[130px] max-h-[38vh] sm:max-h-[46vh] overflow-hidden">
+                <div className="shrink-0 flex justify-between items-center mb-1.5 pb-1 border-b border-gray-800">
+                  <span className="text-xs font-black text-yellow-400 uppercase tracking-wider">Select Option:</span>
                   <button
                     onClick={() => setShowAnswers(false)}
                     className="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-bold py-1 px-3 rounded-lg border border-gray-700 transition-colors flex items-center gap-1"
                   >
-                    <span>⏎</span> Back to Scratchpad
+                    <span>⏎</span> Back to Menu
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 overflow-y-auto max-h-[28vh] pr-1 custom-scrollbar">
-                  {(currentQ.choicesContent || currentQ.choices || []).map((_: any, idx: number) => {
-                    const optionLetter = String.fromCharCode(65 + idx); // A, B, C, D
-                    const content = renderChoiceContent(currentQ, idx);
+                <div className="flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {(currentQ.choicesContent || currentQ.choices || []).map((_: any, idx: number) => {
+                      const optionLetter = String.fromCharCode(65 + idx); // A, B, C, D
+                      const choiceImgUrl = getChoiceImage(currentQ, idx);
+                      const choiceText = getChoiceTextOnly(currentQ, idx);
 
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => handleAnswer(idx)}
-                        className="bg-gray-800/95 hover:bg-yellow-400 text-white hover:text-gray-950 font-bold p-3 rounded-xl border border-white/20 hover:border-yellow-200 shadow-md transition-all hover:scale-[1.01] active:scale-95 text-xs sm:text-sm flex items-center gap-3 text-left justify-start group min-h-[58px]"
-                      >
-                        <span className="w-7 h-7 rounded-lg bg-black/80 text-yellow-400 group-hover:bg-black group-hover:text-yellow-300 font-black text-xs flex items-center justify-center shrink-0 border border-white/20">
-                          {optionLetter}
-                        </span>
-                        <div className="flex-1 font-semibold overflow-x-auto py-0.5 break-words leading-snug">
-                          {content}
-                        </div>
-                      </button>
-                    );
-                  })}
+                      if (choiceImgUrl) {
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => handleAnswer(idx)}
+                            className="relative flex flex-col items-center justify-center p-2 rounded-xl bg-gray-800/90 border border-white/20 hover:border-yellow-400 hover:ring-2 hover:ring-yellow-400/40 shadow-md transition-all active:scale-95 group overflow-hidden min-h-[110px] max-h-[135px]"
+                          >
+                            <span className="absolute top-2 left-2 w-6 h-6 rounded-md bg-black/90 text-yellow-300 font-black text-xs flex items-center justify-center border border-white/20 z-10 shadow">
+                              {optionLetter}
+                            </span>
+                            <div className="w-full flex-1 flex items-center justify-center p-1 bg-white rounded-lg overflow-hidden shadow-inner my-auto">
+                              <img
+                                src={choiceImgUrl}
+                                alt={`Option ${optionLetter}`}
+                                className="max-h-20 sm:max-h-24 max-w-full object-contain pointer-events-none"
+                              />
+                            </div>
+                            {choiceText && (
+                              <div className="text-[11px] font-semibold text-gray-200 mt-1 truncate max-w-full">
+                                {choiceText}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      }
+
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => handleAnswer(idx)}
+                          className="bg-gray-800/95 hover:bg-yellow-400 text-white hover:text-gray-950 font-bold p-3 rounded-xl border border-white/20 hover:border-yellow-200 shadow-md transition-all hover:scale-[1.01] active:scale-95 text-xs sm:text-sm flex items-center gap-3 text-left justify-start group min-h-[56px]"
+                        >
+                          <span className="w-7 h-7 rounded-lg bg-black/80 text-yellow-400 group-hover:bg-black group-hover:text-yellow-300 font-black text-xs flex items-center justify-center shrink-0 border border-white/20">
+                            {optionLetter}
+                          </span>
+                          <div className="flex-1 font-semibold overflow-x-auto py-0.5 break-words leading-snug">
+                            {renderChoiceContent(currentQ, idx)}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* MODE 3: POST-ANSWER REVIEW CONSOLE (EXACTLY ONE LIGHTBULB, HIGHLIGHTED CHOICES, VICTORY/DEFEAT) */}
+            {/* MODE 3: POST-ANSWER REVIEW CONSOLE (EXACTLY ONE LIGHTBULB, HIGHLIGHTED CHOICES, PINNED NON-OVERLAPPING FOOTER) */}
             {isPaused && (
-              <div className="bg-gray-900/90 rounded-2xl p-3.5 border border-white/20 shadow-xl flex flex-col justify-between max-h-[38vh] space-y-2.5">
+              <div className="bg-gray-900/90 rounded-2xl p-2.5 sm:p-3 border border-white/20 shadow-xl flex flex-col min-h-[130px] max-h-[38vh] sm:max-h-[46vh] overflow-hidden">
                 {/* Outcome Header with EXACTLY ONE Solution Button */}
-                <div className="flex flex-wrap justify-between items-center gap-2 pb-2 border-b border-gray-800">
+                <div className="shrink-0 flex flex-wrap justify-between items-center gap-2 pb-2 border-b border-gray-800">
                   <div className={`px-3 py-1.5 rounded-xl font-black text-xs sm:text-sm flex items-center gap-1.5 shadow ${
                     msg.startsWith('Correct')
                       ? 'bg-emerald-950/90 border border-emerald-500/60 text-emerald-300'
@@ -540,57 +575,105 @@ export function BattleScreen(props: BattleScreenProps) {
                   )}
                 </div>
 
-                {/* Choices in Review State: Highlight correct vs chosen */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto max-h-[20vh] pr-1 custom-scrollbar">
-                  {(currentQ.choicesContent || currentQ.choices || []).map((_: any, idx: number) => {
-                    const optionLetter = String.fromCharCode(65 + idx);
-                    const isCorrectOption = idx === currentQ.correctIndex;
-                    const isSelectedOption = idx === selectedChoice;
-                    const content = renderChoiceContent(currentQ, idx);
+                {/* Choices in Review State: Scrollable middle area */}
+                <div className="flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar my-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {(currentQ.choicesContent || currentQ.choices || []).map((_: any, idx: number) => {
+                      const optionLetter = String.fromCharCode(65 + idx);
+                      const isCorrectOption = idx === currentQ.correctIndex;
+                      const isSelectedOption = idx === selectedChoice;
+                      const choiceImgUrl = getChoiceImage(currentQ, idx);
+                      const choiceText = getChoiceTextOnly(currentQ, idx);
 
-                    let cardStyle = "bg-black/40 border border-gray-800 text-gray-400 opacity-60";
-                    let badge = null;
+                      if (choiceImgUrl) {
+                        return (
+                          <div
+                            key={idx}
+                            className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-all overflow-hidden min-h-[110px] max-h-[135px] ${
+                              isCorrectOption
+                                ? 'bg-emerald-950/80 border-2 border-emerald-400 ring-2 ring-emerald-400/40 shadow-[0_0_15px_rgba(52,211,153,0.35)]'
+                                : isSelectedOption
+                                ? 'bg-red-950/80 border-2 border-red-500 ring-2 ring-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.35)]'
+                                : 'bg-black/50 border border-gray-800 opacity-60'
+                            }`}
+                          >
+                            <span className="absolute top-2 left-2 w-6 h-6 rounded-md bg-black text-white font-black text-xs flex items-center justify-center shrink-0 z-10 shadow">
+                              {optionLetter}
+                            </span>
+                            {isCorrectOption && (
+                              <span className="absolute top-2 right-2 px-2 py-0.5 rounded bg-emerald-500 text-black text-[10px] font-black uppercase shadow z-10">
+                                ✓ Correct
+                              </span>
+                            )}
+                            {isSelectedOption && !isCorrectOption && (
+                              <span className="absolute top-2 right-2 px-2 py-0.5 rounded bg-red-500 text-white text-[10px] font-black uppercase shadow z-10">
+                                ✗ Your Pick
+                              </span>
+                            )}
+                            <div className="w-full flex-1 flex items-center justify-center p-1 bg-white rounded-lg overflow-hidden shadow-inner my-auto">
+                              <img
+                                src={choiceImgUrl}
+                                alt={`Option ${optionLetter}`}
+                                className="max-h-20 sm:max-h-24 max-w-full object-contain pointer-events-none"
+                              />
+                            </div>
+                            {choiceText && (
+                              <div className="text-[11px] font-semibold text-gray-200 mt-1 truncate max-w-full">
+                                {choiceText}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
 
-                    if (isCorrectOption) {
-                      cardStyle = "bg-emerald-950/90 border-2 border-emerald-400 text-emerald-100 shadow-[0_0_15px_rgba(52,211,153,0.35)]";
-                      badge = <span className="text-[10px] font-black uppercase text-emerald-400 bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-500/40 shrink-0">✓ Correct</span>;
-                    } else if (isSelectedOption) {
-                      cardStyle = "bg-red-950/90 border-2 border-red-500 text-red-100 shadow-[0_0_15px_rgba(239,68,68,0.35)]";
-                      badge = <span className="text-[10px] font-black uppercase text-red-400 bg-red-900/60 px-2 py-0.5 rounded border border-red-500/40 shrink-0">✗ Your Pick</span>;
-                    }
-
-                    return (
-                      <div
-                        key={idx}
-                        className={`p-2.5 rounded-xl flex items-center gap-2.5 text-xs sm:text-sm min-h-[50px] transition-all ${cardStyle}`}
-                      >
-                        <span className="w-6 h-6 rounded-md bg-black text-white font-black text-xs flex items-center justify-center shrink-0">
-                          {optionLetter}
-                        </span>
-                        <div className="flex-1 overflow-x-auto py-0.5 break-words font-medium leading-snug">
-                          {content}
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-2.5 rounded-xl flex items-center gap-2.5 text-xs sm:text-sm min-h-[50px] transition-all ${
+                            isCorrectOption
+                              ? 'bg-emerald-950/90 border-2 border-emerald-400 text-emerald-100 shadow-[0_0_15px_rgba(52,211,153,0.35)]'
+                              : isSelectedOption
+                              ? 'bg-red-950/90 border-2 border-red-500 text-red-100 shadow-[0_0_15px_rgba(239,68,68,0.35)]'
+                              : 'bg-black/40 border border-gray-800 text-gray-400 opacity-60'
+                          }`}
+                        >
+                          <span className="w-6 h-6 rounded-md bg-black text-white font-black text-xs flex items-center justify-center shrink-0">
+                            {optionLetter}
+                          </span>
+                          <div className="flex-1 overflow-x-auto py-0.5 break-words font-medium leading-snug">
+                            {renderChoiceContent(currentQ, idx)}
+                          </div>
+                          {isCorrectOption && (
+                            <span className="text-[10px] font-black uppercase text-emerald-400 bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-500/40 shrink-0">
+                              ✓ Correct
+                            </span>
+                          )}
+                          {isSelectedOption && !isCorrectOption && (
+                            <span className="text-[10px] font-black uppercase text-red-400 bg-red-900/60 px-2 py-0.5 rounded border border-red-500/40 shrink-0">
+                              ✗ Your Pick
+                            </span>
+                          )}
                         </div>
-                        {badge}
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
 
-                {/* Bottom Action Button (Next Question / Subquestion / Victory / Defeat) */}
-                <div className="pt-1 border-t border-gray-800">
+                {/* Bottom Action Button: Pinned to bottom, NEVER overlaps choices */}
+                <div className="shrink-0 pt-2 border-t border-gray-800">
                   {showSubquestionMenu ? (
                     <div className="flex gap-2 w-full">
                       <button
                         onClick={continueSubquestion}
                         className="flex-1 bg-yellow-400 hover:bg-yellow-300 text-black font-black py-2.5 px-3 rounded-xl text-xs transition-all active:scale-95 shadow"
                       >
-                        Continuar con el siguiente apartado ➡️
+                        Continue to Next Part ➡️
                       </button>
                       <button
                         onClick={abandonGroup}
                         className="bg-red-900 hover:bg-red-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs transition-all active:scale-95 shadow"
                       >
-                        Dejar ejercicio (-{abandonGroupTurnCost} turnos)
+                        Abandon Exercise (-{abandonGroupTurnCost} Turns)
                       </button>
                     </div>
                   ) : foeHp <= 0 ? (
