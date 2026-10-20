@@ -456,14 +456,14 @@ export function BattleScreen(props: BattleScreenProps) {
                   <span className="text-[10px] text-gray-800 font-semibold">Choose Option</span>
                 </button>
 
-                {/* 2. BAG / POTIONS */}
+                {/* 2. BAG / OBJECTS */}
                 <button
                   onClick={() => setShowInventory(true)}
                   className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 sm:py-3 px-3 rounded-2xl shadow-md border border-slate-600 transition-all hover:scale-[1.02] active:scale-95 flex flex-col items-center justify-center gap-0.5 sm:gap-1"
                 >
-                  <span className="text-xl sm:text-2xl">🧪</span>
-                  <span className="text-xs sm:text-sm tracking-wider uppercase font-bold">Potions</span>
-                  <span className="text-[10px] text-gray-400 font-normal">Use Inventory</span>
+                  <span className="text-xl sm:text-2xl">🎒</span>
+                  <span className="text-xs sm:text-sm tracking-wider uppercase font-bold">Objects</span>
+                  <span className="text-[10px] text-gray-400 font-normal">Gear & Items</span>
                 </button>
 
                 {/* 3. SKIP TURN */}
@@ -708,11 +708,14 @@ export function BattleScreen(props: BattleScreenProps) {
         </div>
       </footer>
 
-      {/* 4. MODALS (INVENTORY, ESCAPE, SOLUTION) */}
+      {/* 4. MODALS (OBJECTS, ESCAPE, SOLUTION) */}
       {showInventory && (
-        <InventoryPanel
-          items={inventory}
+        <ObjectsModal
+          character={character}
+          inventory={inventory}
           gameItems={gameItems}
+          playerHp={playerHp}
+          playerMaxHp={playerMaxHp}
           onUse={usePotion}
           onClose={() => setShowInventory(false)}
         />
@@ -735,24 +738,76 @@ export function BattleScreen(props: BattleScreenProps) {
   );
 }
 
-// INVENTORY MODAL
-function InventoryPanel({
-  items,
+// Durability Bar for Battle Screen (follows Health Bar color palette & logic)
+function BattleDurabilityBar({ current, max }: { current: number; max: number }) {
+  const safeMax = max > 0 ? max : 1;
+  const pct = Math.max(0, Math.min(100, (current / safeMax) * 100));
+  const isBroken = current <= 0;
+
+  // Exact health bar palette: >50% green, 20-50% orange/yellow, <=20% red/pulsing, 0% dark red
+  let colorClass = "bg-green-500";
+  if (pct <= 50) colorClass = "bg-yellow-500";
+  if (pct <= 20) colorClass = "bg-red-500 animate-pulse";
+  if (isBroken) colorClass = "bg-red-700";
+
+  return (
+    <div className="w-full space-y-0.5">
+      <div className="flex justify-between items-center text-[9px] font-bold">
+        <span className="text-gray-400 uppercase tracking-tighter">Durability</span>
+        <span className={isBroken ? "text-red-400 font-black animate-pulse" : "text-gray-300 font-mono"}>
+          {current}/{max} {isBroken ? "• BROKEN" : ""}
+        </span>
+      </div>
+      <div className="w-full h-1.5 bg-gray-950 rounded-full overflow-hidden border border-white/10">
+        <div 
+          className={`h-full ${colorClass} transition-all duration-300`} 
+          style={{ width: `${pct}%` }} 
+        />
+      </div>
+    </div>
+  );
+}
+
+// OBJECTS MODAL: EQUIPPED GEAR (LEFT) + CONSUMABLES & OTHER ITEMS (RIGHT)
+function ObjectsModal({
+  character,
+  inventory,
   gameItems,
+  playerHp,
+  playerMaxHp,
   onUse,
   onClose,
 }: {
-  items: InventoryItem[];
+  character: Character | null;
+  inventory: InventoryItem[];
   gameItems: Record<string, GameItem>;
+  playerHp: number;
+  playerMaxHp: number;
   onUse: (item: InventoryItem) => void;
   onClose: () => void;
 }) {
-  const potionItems = items.filter((item) => {
-    const gameItem = gameItems[item.itemId];
-    return gameItem && gameItem.type === 'potion';
+  const equipSlots: Array<{ key: 'mainHand' | 'offHand' | 'armor' | 'head'; label: string; icon: string }> = [
+    { key: 'mainHand', label: 'Main Hand', icon: '⚔️' },
+    { key: 'offHand', label: 'Off Hand', icon: '🛡️' },
+    { key: 'armor', label: 'Armor', icon: '🥋' },
+    { key: 'head', label: 'Head', icon: '👑' },
+  ];
+
+  // Helper: detect consumable potions / food
+  const isConsumable = (def?: GameItem) => {
+    if (!def) return false;
+    return def.type === 'potion' || !!def.stats?.heal || def.name.toLowerCase().includes('potion');
+  };
+
+  // Consumables in backpack (not equipped)
+  const consumableInstances = inventory.filter((item) => {
+    const isEquipped = Object.values(character?.equipment || {}).includes(item.instanceId);
+    if (isEquipped) return false;
+    const def = gameItems[item.itemId];
+    return isConsumable(def);
   });
 
-  const groupedInventory = potionItems.reduce(
+  const groupedConsumables = consumableInstances.reduce(
     (acc: Record<string, { item: InventoryItem; quantity: number }>, currentItem) => {
       if (!acc[currentItem.itemId]) {
         acc[currentItem.itemId] = { item: currentItem, quantity: 0 };
@@ -762,48 +817,259 @@ function InventoryPanel({
     },
     {}
   );
+  const displayConsumables = Object.values(groupedConsumables);
 
-  const displayItems = Object.values(groupedInventory);
+  // Other items (passives, charms, collectibles in backpack)
+  const otherItems = inventory.filter((item) => {
+    const isEquipped = Object.values(character?.equipment || {}).includes(item.instanceId);
+    if (isEquipped) return false;
+    const def = gameItems[item.itemId];
+    return def && !isConsumable(def);
+  });
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
-      <div className="bg-gray-900 border-2 border-white/30 rounded-2xl p-6 w-full max-w-md text-white shadow-2xl">
-        <h2 className="text-2xl font-black mb-4 flex items-center gap-2">🧪 Battle Potions</h2>
-        <div className="grid grid-cols-1 gap-3 max-h-80 overflow-y-auto pr-1">
-          {displayItems.length > 0 ? (
-            displayItems.map(({ item, quantity }) => {
-              const gameItem = gameItems[item.itemId];
-              return (
-                <div
-                  key={item.instanceId}
-                  className="bg-gray-800 rounded-xl p-3 flex justify-between items-center border border-gray-700"
-                >
-                  <div>
-                    <h3 className="font-bold text-sm">
-                      {gameItem?.name || 'Unknown Item'}{' '}
-                      <span className="text-yellow-400 font-mono text-xs">(x{quantity})</span>
-                    </h3>
-                    <p className="text-xs text-gray-400">{gameItem?.description}</p>
-                  </div>
-                  <button
-                    onClick={() => onUse(item)}
-                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-4 rounded-lg text-xs transition-all active:scale-95 shadow"
-                  >
-                    Use
-                  </button>
-                </div>
-              );
-            })
-          ) : (
-            <p className="text-gray-400 text-sm py-4 text-center">No usable potions in your backpack.</p>
-          )}
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-5 animate-in fade-in duration-150">
+      <div className="bg-gray-900 border-2 border-white/20 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl text-white overflow-hidden">
+        {/* Header */}
+        <div className="px-5 py-3.5 border-b border-gray-800 flex justify-between items-center bg-gray-800/40">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2">
+              <span>🎒</span> Objects & Equipment
+            </h2>
+            <p className="text-[11px] text-gray-400">
+              Equipped gear is fixed during battle. Use potions and consumables from your bag.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center font-bold transition-colors"
+          >
+            ✕
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="mt-5 w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 px-4 rounded-xl transition-all active:scale-95"
-        >
-          Close
-        </button>
+
+        {/* 2-Column Content */}
+        <div className="p-4 sm:p-5 overflow-y-auto custom-scrollbar flex-1 grid grid-cols-1 md:grid-cols-2 gap-5 min-h-0">
+          
+          {/* LEFT COLUMN: EQUIPPED GEAR (FIXED DURING BATTLE) */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center pb-1.5 border-b border-gray-800">
+              <h3 className="text-sm font-black uppercase tracking-wider text-yellow-400 flex items-center gap-1.5">
+                <span>⚔️</span> Equipped Gear
+              </h3>
+              <span className="text-[10px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 px-2 py-0.5 rounded-full">
+                🔒 Fixed in Battle
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {equipSlots.map((slot) => {
+                const equippedId = character?.equipment?.[slot.key];
+                const instance = equippedId ? inventory.find((i) => i.instanceId === equippedId) : null;
+                const def = instance ? gameItems[instance.itemId] : null;
+                const isBroken = instance && (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
+                const s = def?.stats || {};
+
+                if (!def || !instance) {
+                  return (
+                    <div
+                      key={slot.key}
+                      className="p-3 rounded-xl bg-gray-800/30 border border-dashed border-gray-700/70 flex items-center gap-3 text-gray-500"
+                    >
+                      <span className="text-2xl opacity-40">{slot.icon}</span>
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+                          {slot.label}
+                        </div>
+                        <div className="text-xs italic text-gray-500">Empty Slot</div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={slot.key}
+                    className={`p-3 rounded-xl transition-all ${
+                      isBroken
+                        ? 'bg-red-950/40 border-2 border-red-600/70 shadow-[0_0_12px_rgba(220,38,38,0.25)]'
+                        : 'bg-gray-800/80 border border-white/15'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Image / Thumbnail */}
+                      <div className="w-11 h-11 rounded-lg bg-gray-900 border border-white/20 shrink-0 flex items-center justify-center overflow-hidden shadow-inner">
+                        {def.imageUrl ? (
+                          <img src={def.imageUrl} alt={def.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-xl">{slot.icon}</span>
+                        )}
+                      </div>
+
+                      {/* Info & Stats */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-black bg-gray-700/80 text-gray-300 px-1.5 py-0.5 rounded uppercase">
+                            {slot.label}
+                          </span>
+                          <span className={`text-xs font-bold truncate ${isBroken ? 'text-red-400 font-black' : 'text-white'}`}>
+                            {def.name}
+                          </span>
+                        </div>
+
+                        {/* Durability bar with health bar palette */}
+                        {instance.maxDurability ? (
+                          <div className="mt-1.5 max-w-[200px]">
+                            <BattleDurabilityBar current={instance.durability || 0} max={instance.maxDurability} />
+                          </div>
+                        ) : null}
+
+                        {/* Stats Badges */}
+                        <div className="flex flex-wrap gap-1 mt-2 text-[10px]">
+                          {s.a ? <span className="px-1.5 py-0.5 rounded bg-red-950/60 border border-red-500/40 text-red-300 font-bold">A +{s.a}</span> : null}
+                          {s.b ? <span className="px-1.5 py-0.5 rounded bg-orange-950/60 border border-orange-500/40 text-orange-300 font-bold">B +{s.b}</span> : null}
+                          {s.c ? <span className="px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-500/40 text-blue-300 font-bold">C +{s.c}</span> : null}
+                          {s.d ? <span className="px-1.5 py-0.5 rounded bg-green-950/60 border border-green-500/40 text-green-300 font-bold">D +{s.d}</span> : null}
+                          {s.xBonus ? <span className="px-1.5 py-0.5 rounded bg-indigo-950/60 border border-indigo-500/40 text-indigo-300 font-bold">X +{s.xBonus}</span> : null}
+                          {s.damage?.mult ? (
+                            <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/40 text-purple-300 font-bold">
+                              💥 Dmg +{Math.round((s.damage.mult > 1 ? s.damage.mult - 1 : s.damage.mult) * 100)}%
+                            </span>
+                          ) : null}
+                          {s.maxHp?.flat ? <span className="px-1.5 py-0.5 rounded bg-pink-950/60 border border-pink-500/40 text-pink-300 font-bold">❤️ +{s.maxHp.flat} HP</span> : null}
+                          {s.time?.flat ? <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/40 text-yellow-300 font-bold">⏳ +{s.time.flat}s</span> : null}
+                          {s.time?.mult ? (
+                            <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/40 text-yellow-300 font-bold">
+                              ⏳ +{Math.round((s.time.mult > 1 ? s.time.mult - 1 : s.time.mult) * 100)}%
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {isBroken && (
+                          <div className="text-[10px] text-red-400 font-bold uppercase mt-1 animate-pulse">
+                            ⚠️ Item broken • stats deactivated
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-gray-800/40 border border-gray-700/60 text-[10px] text-gray-400 text-center">
+              Gear setup is locked during encounters. Swap or repair gear anytime in the Character page.
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: CONSUMABLES & OTHER OBJECTS */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center pb-1.5 border-b border-gray-800">
+              <h3 className="text-sm font-black uppercase tracking-wider text-green-400 flex items-center gap-1.5">
+                <span>🧪</span> Consumables & Bag Items
+              </h3>
+              <span className="text-[10px] text-gray-400 font-bold font-mono">
+                HP: {playerHp}/{playerMaxHp}
+              </span>
+            </div>
+
+            {/* Consumables List */}
+            <div className="space-y-2.5">
+              {displayConsumables.length > 0 ? (
+                displayConsumables.map(({ item, quantity }) => {
+                  const gameItem = gameItems[item.itemId];
+                  const healFlat = gameItem?.stats?.heal?.flat;
+                  const healMult = gameItem?.stats?.heal?.mult;
+                  const isHpFull = playerHp >= playerMaxHp;
+
+                  return (
+                    <div
+                      key={item.instanceId}
+                      className="bg-gray-800/80 rounded-xl p-3 flex justify-between items-center border border-white/10 hover:border-white/20 transition-all gap-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-lg bg-gray-900 border border-white/10 shrink-0 flex items-center justify-center overflow-hidden">
+                          {gameItem?.imageUrl ? (
+                            <img src={gameItem.imageUrl} alt={gameItem.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-xl">🧪</span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-xs sm:text-sm text-white truncate">
+                            {gameItem?.name || 'Item'}{' '}
+                            <span className="text-yellow-400 font-mono text-xs">(x{quantity})</span>
+                          </h4>
+                          <p className="text-[11px] text-green-300 font-semibold mt-0.5">
+                            {healFlat ? `Restores +${healFlat} HP` : healMult ? `Restores +${Math.round(healMult * 100)}% HP` : 'Restores HP'}
+                          </p>
+                          {gameItem?.description && (
+                            <p className="text-[10px] text-gray-400 truncate max-w-xs">{gameItem.description}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => onUse(item)}
+                        disabled={isHpFull}
+                        className={`font-bold py-1.5 px-4 rounded-xl text-xs transition-all active:scale-95 shrink-0 ${
+                          isHpFull
+                            ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-60'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg'
+                        }`}
+                      >
+                        {isHpFull ? 'Full HP' : 'Drink'}
+                      </button>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-6 text-center text-gray-400 text-xs italic bg-gray-800/30 rounded-xl border border-gray-700/60">
+                  No usable potions in your backpack.
+                </div>
+              )}
+            </div>
+
+            {/* Other Bag Items (Passives, Relics, Unused Gear) */}
+            {otherItems.length > 0 && (
+              <div className="pt-3 border-t border-gray-800 space-y-2">
+                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>✨</span> Other Bag Items
+                </div>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1">
+                  {otherItems.map((item) => {
+                    const gameItem = gameItems[item.itemId];
+                    if (!gameItem) return null;
+                    return (
+                      <div
+                        key={item.instanceId}
+                        className="p-2 rounded-lg bg-gray-800/50 border border-gray-700/50 flex items-center justify-between text-xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm">📦</span>
+                          <span className="font-semibold text-gray-300 truncate">{gameItem.name}</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 uppercase font-mono shrink-0">
+                          {gameItem.type}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-gray-800 bg-gray-800/40 flex justify-end">
+          <button
+            onClick={onClose}
+            className="w-full sm:w-auto bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-xl text-xs transition-all active:scale-95 shadow"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );

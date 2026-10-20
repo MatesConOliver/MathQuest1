@@ -736,7 +736,11 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     }
 
     const potion = gameItems[item.itemId];
-    const healAmount = potion.stats?.heal?.flat || 20;
+    const healFlat = potion.stats?.heal?.flat || 0;
+    const healMult = potion.stats?.heal?.mult || 0;
+    const healAmount = (healFlat > 0 || healMult > 0)
+      ? Math.round(healFlat + (battleStats.maxHp * (healMult > 1 ? healMult - 1 : healMult)))
+      : 20;
     const newHp = Math.min(battleStats.maxHp, playerHp + healAmount);
 
     // Temporary, combat-only state: nothing is written to Firestore or to the
@@ -744,8 +748,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     setPlayerHp(newHp);
     setConsumedPotionInstanceIds((prev) => [...prev, item.instanceId]);
     setShowInventory(false);
-    setMsg(`Healed for ${healAmount} HP!`);
-    setTimeout(() => setMsg(''), 2000);
+    setMsg(`Healed for ${healAmount} HP! (${newHp}/${battleStats.maxHp})`);
+    setTimeout(() => setMsg(''), 2500);
   };
 
   return {

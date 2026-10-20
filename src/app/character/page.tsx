@@ -12,6 +12,87 @@ import { HealthBar } from "@/app/play/components/shared/Bars";
 
 // --- COMPONENTS ---
 
+// Durability Bar with exact Health Bar color palette & logic
+function DurabilityBar({ current, max }: { current: number; max: number }) {
+  const safeMax = max > 0 ? max : 1;
+  const pct = Math.max(0, Math.min(100, (current / safeMax) * 100));
+  const isBroken = current <= 0;
+
+  // Exact health bar palette & logic: >50% green, 20-50% orange/yellow, <=20% red/pulsing, 0% dark red
+  let colorClass = "bg-green-500";
+  if (pct <= 50) colorClass = "bg-yellow-500";
+  if (pct <= 20) colorClass = "bg-red-500 animate-pulse";
+  if (isBroken) colorClass = "bg-red-700";
+
+  return (
+    <div className="w-full space-y-0.5">
+      <div className="flex justify-between items-center text-[9px] font-bold">
+        <span className="text-gray-500 dark:text-gray-400 uppercase tracking-tighter">Durability</span>
+        <span className={isBroken ? "text-red-500 font-black animate-pulse" : "text-gray-700 dark:text-gray-300 font-mono"}>
+          {current}/{max} {isBroken ? "• BROKEN" : ""}
+        </span>
+      </div>
+      <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden border border-gray-300/40 dark:border-gray-600/40">
+        <div 
+          className={`h-full ${colorClass} transition-all duration-300`} 
+          style={{ width: `${pct}%` }} 
+        />
+      </div>
+    </div>
+  );
+}
+
+// Hover Tooltip that shows all item stats cleanly (with correct percentage bonus calculations)
+function ItemStatsTooltip({ def, isFirstRow }: { def: GameItem; isFirstRow?: boolean }) {
+  const s = def.stats || {};
+  return (
+    <div className={`hidden group-hover:block absolute z-50 left-0 w-64 p-3 rounded-xl shadow-2xl pointer-events-none animate-in fade-in zoom-in duration-200 border border-white/20 bg-gray-900/95 dark:bg-black/95 text-white text-xs backdrop-blur-md ${
+      isFirstRow ? "top-full mt-2" : "bottom-full mb-2"
+    }`}>
+      <div className="font-bold border-b border-gray-700 pb-1 mb-1.5 text-gray-300 uppercase tracking-widest text-[10px]">
+        {def.name} Stats
+      </div>
+      <div className="space-y-1">
+        {s.a && <div>🟥 Stat A: <span className="text-red-300 font-bold">+{s.a}</span></div>}
+        {s.b && <div>🟧 Stat B: <span className="text-orange-300 font-bold">+{s.b}</span></div>}
+        {s.c && <div>🟦 Stat C: <span className="text-blue-300 font-bold">+{s.c}</span></div>}
+        {s.d && <div>🟩 Stat D: <span className="text-green-300 font-bold">+{s.d}</span></div>}
+        {s.xBonus && <div>✖️ Difficulty (x): <span className="text-indigo-300 font-bold">+{s.xBonus}</span></div>}
+
+        {s.damage?.mult && (
+          <div>💥 Damage: <span className="text-purple-300 font-bold">
+            {s.damage.mult > 1 ? `+${Math.round((s.damage.mult - 1) * 100)}%` : `${s.damage.mult > 0 ? '+' : ''}${Math.round(s.damage.mult * 100)}%`}
+          </span></div>
+        )}
+
+        {s.maxHp?.flat && <div>❤️ Max HP: <span className="text-pink-300 font-bold">+{s.maxHp.flat}</span></div>}
+        {s.maxHp?.mult && (
+          <div>❤️ Max HP: <span className="text-pink-300 font-bold">
+            +{Math.round((s.maxHp.mult > 1 ? s.maxHp.mult - 1 : s.maxHp.mult) * 100)}%
+          </span></div>
+        )}
+
+        {s.heal?.flat && <div>🧪 Restores: <span className="text-green-300 font-bold">{s.heal.flat} HP</span></div>}
+        {s.heal?.mult && (
+          <div>🧪 Restores: <span className="text-green-300 font-bold">
+            +{Math.round((s.heal.mult > 1 ? s.heal.mult - 1 : s.heal.mult) * 100)}% HP
+          </span></div>
+        )}
+
+        {s.time?.flat && <div>⏳ Time: <span className="text-yellow-300 font-bold">+{s.time.flat}s</span></div>}
+        {/* Fixed: 1.05 represents a +5% increase */}
+        {s.time?.mult && (
+          <div>⏳ Time: <span className="text-yellow-300 font-bold">
+            +{Math.round((s.time.mult > 1 ? s.time.mult - 1 : s.time.mult) * 100)}%
+          </span></div>
+        )}
+
+        {!def.stats && <div className="italic text-gray-400">No special stats.</div>}
+      </div>
+    </div>
+  );
+}
+
 const InventoryItemCard = ({ 
   item, 
   def, 
@@ -33,100 +114,53 @@ const InventoryItemCard = ({
   const isGear = def.slot || ["armor", "head", "mainHand", "offHand", "weapon", "shield"].includes(def.type as string);
   const isFirstRow = index < 2;
 
-  // Sell Logic: Broken = 10%, Used = 50%
-  const multiplier = isBroken ? 0.1 : 0.5;
-  const sellValue = Math.max(1, Math.ceil(def.price * multiplier));
-
-  const s = def.stats || {};
+  // Sell Price: Usual = 50%, Broken = half of usual (25%)
+  const usualSellPrice = Math.max(1, Math.ceil(def.price * 0.5));
+  const sellValue = isBroken ? Math.max(1, Math.floor(usualSellPrice / 2)) : usualSellPrice;
 
   return (
-    <div className="group relative p-3 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 flex flex-col gap-2 transition-all">
+    <div className={`group relative p-3 rounded-xl flex flex-col gap-2 transition-all ${
+      isBroken 
+        ? "bg-red-950/30 border-2 border-red-600/70 dark:bg-red-950/40 dark:border-red-600/80 shadow-[0_0_12px_rgba(220,38,38,0.25)]" 
+        : "border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+    }`}>
       
       {/* HOVER TOOLTIP */}
-      <div className={`hidden group-hover:block absolute z-50 left-0 w-full p-3 rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in duration-200 border border-transparent dark:border-gray-700 bg-gray-900 dark:bg-black text-white text-xs ${
-          isFirstRow ? "top-full mt-2" : "bottom-full mb-2"
-      }`}>
-        <div className="font-bold border-b border-gray-600 pb-1 mb-1 text-gray-300 uppercase tracking-widest text-[10px]">Item Stats</div>
-        <div className="space-y-1">
-          
-          {/* 1. FLAT VARIABLES (A, B, C, D) */}
-          {s.a && <div>🟥 Stat A: <span className="text-red-300 font-bold">+{s.a}</span></div>}
-          {s.b && <div>🟧 Stat B: <span className="text-orange-300 font-bold">+{s.b}</span></div>}
-          {s.c && <div>🟦 Stat C: <span className="text-blue-300 font-bold">+{s.c}</span></div>}
-          {s.d && <div>🟩 Stat D: <span className="text-green-300 font-bold">+{s.d}</span></div>}
-          
-          {/* 2. FLAT X BONUS */}
-          {s.xBonus && <div>✖️ X Bonus: <span className="text-gray-300 font-bold">+{s.xBonus}</span></div>}
-
-          {/* 3. K (GLOBAL DAMAGE MULTIPLIER) */}
-          {/* Assuming 0.1 = 10%, 1.5 = 150% */}
-          {s.damage?.mult && (
-            <div>💥 Damage: <span className="text-purple-300 font-bold">
-              {s.damage.mult > 0 ? '+' : ''}{Math.round(s.damage.mult * 100)}%
-            </span></div>
-          )}
-
-          {/* 4. STAT MODIFIERS (Check Flat vs Mult) */}
-          
-          {/* HP */}
-          {s.maxHp?.flat && <div>❤️ Max HP: <span className="text-pink-300 font-bold">+{s.maxHp.flat}</span></div>}
-          {s.maxHp?.mult && <div>❤️ Max HP: <span className="text-pink-300 font-bold">+{Math.round(s.maxHp.mult * 100)}%</span></div>}
-
-          {/* Heal */}
-          {s.heal?.flat && <div>🧪 Restores: <span className="text-green-300 font-bold">{s.heal.flat} HP</span></div>}
-          {s.heal?.mult && <div>🧪 Restores: <span className="text-green-300 font-bold">{Math.round(s.heal.mult * 100)}% HP</span></div>}
-
-          {/* Time */}
-          {s.time?.flat && <div>⏳ Time: <span className="text-yellow-300 font-bold">+{s.time.flat}s</span></div>}
-          {s.time?.mult && <div>⏳ Time: <span className="text-yellow-300 font-bold">+{Math.round(s.time.mult * 100)}%</span></div>}
-
-          {!def.stats && <div className="italic text-gray-300">No stats.</div>}
-        </div>
-        
-        {/* Arrow */}
-        <div className={`absolute left-1/2 -translate-x-1/2 border-8 border-transparent ${
-            isFirstRow ? "bottom-full border-b-gray-900 dark:border-b-black" : "top-full border-t-gray-900 dark:border-t-black"
-        }`}></div>
-      </div>
+      <ItemStatsTooltip def={def} isFirstRow={isFirstRow} />
 
       {/* CARD CONTENT */}
-      <div className="flex justify-between items-start">
-          <div>
-              <div className="font-bold text-sm text-gray-900 dark:text-gray-100">
+      <div className="flex justify-between items-start gap-2">
+          <div className="flex-1 min-w-0">
+              <div className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">
                   {def.name} 
                   {isEquipped && <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1 rounded ml-1 border border-green-200 dark:border-green-800">EQUIPPED</span>}
-                  {isBroken && <span className="text-[10px] bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-1 rounded ml-1 font-bold border border-red-200 dark:border-red-800">BROKEN</span>}
+                  {isBroken && <span className="text-[10px] bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 px-1 rounded ml-1 font-black border border-red-200 dark:border-red-800 animate-pulse">BROKEN</span>}
               </div>
               <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
                 {def.slot || (def.type as string)}
               </div>
                 
-                {item.maxDurability && (
-                  <div className="mt-2">
-                    <div className="flex justify-between items-center w-24 mb-0.5">
-                      <span className="text-[9px] font-bold text-gray-600 dark:text-gray-300">DURABILITY</span>
-                      <span className={`text-[9px] font-bold ${isBroken ? "text-red-500" : "text-gray-600 dark:text-gray-300"}`}>
-                        {item.durability}/{item.maxDurability}
-                      </span>
-                    </div>
-                    <div className="w-24 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                      <div 
-                        className={isBroken ? "bg-red-500 h-full" : "bg-blue-500 h-full"} 
-                        style={{ width: `${((item.durability || 0) / item.maxDurability) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                )}
+              {item.maxDurability ? (
+                <div className="mt-2 w-full max-w-[130px]">
+                  <DurabilityBar current={item.durability || 0} max={item.maxDurability} />
+                </div>
+              ) : null}
           </div>
-          {def.imageUrl && <img src={def.imageUrl} className="w-10 h-10 rounded bg-gray-200 dark:bg-gray-700 object-cover" alt={def.name}/>}
+          {def.imageUrl && (
+            <img 
+              src={def.imageUrl} 
+              className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 object-cover shrink-0 border border-gray-300 dark:border-gray-600" 
+              alt={def.name}
+            />
+          )}
       </div>
 
       {/* BUTTONS */}
-      <div className="flex gap-2 mt-1">
+      <div className="flex gap-2 mt-auto pt-1">
           <button 
             onClick={isGear ? () => onEquip(item) : () => onUse(item)}
             disabled={isEquipped || (isGear && isBroken)}
-            className={`flex-1 py-1 text-xs rounded font-bold transition-colors ${
+            className={`flex-1 py-1.5 text-xs rounded-lg font-bold transition-colors ${
               isEquipped || (isGear && isBroken)
                 ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
                 : "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
@@ -138,10 +172,10 @@ const InventoryItemCard = ({
           <button 
             onClick={() => onSell(item)}
             disabled={isEquipped}
-            className={`px-3 py-1 text-xs rounded font-bold border transition-colors ${
+            className={`px-3 py-1.5 text-xs rounded-lg font-bold border transition-colors ${
               isEquipped 
                 ? "bg-gray-100 text-gray-300 border-gray-200 dark:bg-gray-700 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed"
-                : "bg-red-50 text-red-600 border-red-100 hover:bg-red-100 dark:bg-red-900/10 dark:text-red-300 dark:border-red-900/30 dark:hover:bg-red-900/30"
+                : "bg-red-50 text-red-600 border-red-100 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-900/40 dark:hover:bg-red-900/40"
             }`}
           >
             {isEquipped ? "In Use" : `Sell ${sellValue}G`}
@@ -168,7 +202,7 @@ function StatUpgradeBox({
       }`}>
       
       {/* Pending Indicator */}
-      {isChanged && <div className="absolute top-0 right-0 w-8 h-8 bg-yellow-400/30 dark:bg-yellow-400/20 rounded-bl-full z-0\"></div>}
+      {isChanged && <div className="absolute top-0 right-0 w-8 h-8 bg-yellow-400/30 dark:bg-yellow-400/20 rounded-bl-full z-0"></div>}
 
       <div className="flex justify-between items-start z-10">
         <div>
@@ -184,20 +218,19 @@ function StatUpgradeBox({
                <span className="text-green-500 ml-1">+{pending}</span>
              )}
            </span>
-           {isChanged && <div className="text-[9px] text-green-600 dark:text-green-400 font-bold\">Pending</div>}
+           {isChanged && <div className="text-[9px] text-green-600 dark:text-green-400 font-bold">Pending</div>}
         </div>
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-2 z-10">
         {locked ? (
-           <div className="w-full text-center text-[10px] bg-gray-200 dark:bg-gray-800 rounded py-1 font-bold text-gray-500 dark:text-gray-400\">UNLOCK AT LVL {unlockLevel}</div>
+           <div className="w-full text-center text-[10px] bg-gray-200 dark:bg-gray-800 rounded py-1 font-bold text-gray-500 dark:text-gray-400">UNLOCK AT LVL {unlockLevel}</div>
         ) : (
           <>
             <button 
               onClick={onDecrement} disabled={pending === 0}
               className="w-8 h-6 flex items-center justify-center bg-gray-200 dark:bg-gray-600 rounded text-gray-600 dark:text-gray-200 font-bold hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-30 transition-colors"
             >-</button>
-            
             <button 
               onClick={onIncrement} disabled={!canAfford}
               className={`flex-1 h-6 flex items-center justify-center text-[10px] font-bold rounded transition-colors ${
@@ -215,45 +248,72 @@ function StatUpgradeBox({
   );
 }
 
-
-function EquipRow({ slotName, equippedId, gameItems, inventory, onUnequip }: any) {
+// Equipped Gear Row: Shows item image, slot, name, durability bar with health bar colors, and stats on hover only
+function EquipRow({ slotName, slotKey, equippedId, gameItems, inventory, onUnequip }: any) {
   const instance = equippedId && inventory 
       ? inventory.find((i: any) => i.instanceId === equippedId) 
       : null;
 
   const def = instance ? gameItems[instance.itemId] : null;
-  const stats = def?.stats || {};
-  
   const isBroken = instance && (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
-  const fmt = (val: number) => (val > 0 ? `+${val}` : `${val}`);
+
+  const slotIcons: Record<string, string> = {
+    mainHand: "⚔️",
+    offHand: "🛡️",
+    armor: "🥋",
+    head: "👑",
+  };
 
   return (
-    <div className={`flex justify-between items-center p-3 border rounded-xl transition-colors ${isBroken ? 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-900/30' : 'bg-gray-50 dark:bg-gray-700/30 dark:border-gray-700'}`}>
-      <div className="flex items-center gap-3">
-        <div className="text-[10px] font-bold bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded uppercase w-20 text-center text-gray-600 dark:text-gray-200">
-          {slotName}
+    <div className={`group relative flex items-center justify-between p-3 border rounded-xl transition-all ${
+      isBroken 
+        ? "bg-red-950/30 border-2 border-red-600/70 dark:bg-red-950/40 dark:border-red-600/80 shadow-[0_0_15px_rgba(220,38,38,0.25)]" 
+        : "bg-white dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40"
+    }`}>
+      {/* HOVER TOOLTIP (Stats shown ONLY when hovering over equipped gear) */}
+      {def && <ItemStatsTooltip def={def} />}
+
+      {/* LEFT: IMAGE + SLOT + NAME + DURABILITY BAR */}
+      <div className="flex items-center gap-3 flex-1 min-w-0 pr-3">
+        {/* Item image or slot icon placeholder */}
+        <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-700/60 border border-gray-200 dark:border-gray-600 shrink-0 flex items-center justify-center overflow-hidden shadow-inner">
+          {def?.imageUrl ? (
+            <img src={def.imageUrl} alt={def.name} className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-xl opacity-50">{slotIcons[slotKey] || "📦"}</span>
+          )}
         </div>
-        
-        <div>
-            <div className={`text-sm flex items-center gap-2 ${def ? "font-bold dark:text-gray-100" : "text-gray-400 dark:text-gray-500 italic"}`}>
-               {def ? def.name : "Empty"}
-               
-               {def && !isBroken && (
-                 <div className="flex gap-1 text-[10px] font-extrabold uppercase tracking-wide">
-                    {/* REMOVED DEFENSE HERE */}
-                    {(stats as any).damage?.flat && <span className="text-blue-600 dark:text-blue-400">{fmt((stats as any).damage.flat)} ⚔️</span>}
-                    {(stats as any).maxHp?.flat && <span className="text-green-600 dark:text-green-400">{fmt((stats as any).maxHp.flat)} ❤️</span>}
-                    {(stats as any).time?.flat && <span className="text-yellow-600 dark:text-yellow-400">{fmt((stats as any).time.flat)}s ⏳</span>}
-                 </div>
-               )}
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] font-black bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded uppercase tracking-wider text-gray-700 dark:text-gray-300">
+              {slotName}
+            </span>
+            <span className={`text-xs sm:text-sm font-bold truncate ${def ? (isBroken ? "text-red-400 font-black" : "text-gray-900 dark:text-gray-100") : "text-gray-400 italic"}`}>
+              {def ? def.name : "Empty"}
+            </span>
+          </div>
+
+          {/* NO other stats displayed directly, ONLY durability bar */}
+          {instance && instance.maxDurability ? (
+            <div className="mt-1.5 max-w-[180px]">
+              <DurabilityBar current={instance.durability || 0} max={instance.maxDurability} />
             </div>
-            {isBroken && <div className="text-[10px] text-red-600 dark:text-red-400 font-bold uppercase">⚠️ Broken (Stats Ignored)</div>}
+          ) : def ? (
+            <div className="text-[10px] text-gray-400 dark:text-gray-500 italic mt-0.5">
+              Hover to view stats
+            </div>
+          ) : null}
         </div>
       </div>
-      
+
+      {/* UNEQUIP BUTTON */}
       {def && (
-        <button onClick={onUnequip} className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 font-bold px-2">
-            Unequip
+        <button 
+          onClick={onUnequip} 
+          className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 font-bold px-2.5 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors shrink-0"
+        >
+          Unequip
         </button>
       )}
     </div>
@@ -621,15 +681,15 @@ export default function CharacterPage() {
 
     const isEquipped = Object.values(char.equipment || {}).includes(item.instanceId);
     if (isEquipped) {
-        alert("Unequip this item first before selling.");
+        setMsg("⚠️ Unequip this item first before selling.");
+        setTimeout(() => setMsg(""), 2500);
         return;
     }
 
+    // Broken objects are sellable for half of usual selling price (usual is 50%, broken is 25%)
     const isBroken = (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
-    const multiplier = isBroken ? 0.1 : 0.5;
-    const sellPrice = Math.max(1, Math.ceil(def.price * multiplier));
-
-    if (!confirm(`Sell ${def.name} for ${sellPrice} Gold?`)) return;
+    const usualSellPrice = Math.max(1, Math.ceil(def.price * 0.5));
+    const sellPrice = isBroken ? Math.max(1, Math.floor(usualSellPrice / 2)) : usualSellPrice;
 
     const newInventory = char.inventory.filter(i => i.instanceId !== item.instanceId);
     const newGold = (char.gold || 0) + sellPrice;
@@ -642,7 +702,8 @@ export default function CharacterPage() {
     });
 
     playSfx("/item-sold.mp3");
-    setMsg(`💰 Sold ${def.name} for ${sellPrice} G`);
+    setMsg(`💰 Sold ${def.name}${isBroken ? ' (Broken)' : ''} for ${sellPrice} G!`);
+    setTimeout(() => setMsg(""), 2500);
   };
 
   const handleUse = async (item: InventoryItem) => {
@@ -662,22 +723,28 @@ export default function CharacterPage() {
             maxHp: increment(5),
             inventory: newInventory
         });
-        alert("✨ LEVEL UP!");
+        playSfx("/upgrade-sfx.mp3");
+        setMsg("✨ LEVEL UP!");
+        setTimeout(() => setMsg(""), 2500);
         return;
     }
 
-    // Potion
-    if (def.type === 'potion') {
+    // Potion / Healing Consumable
+    if (def.type === 'potion' || def.stats?.heal || def.name.toLowerCase().includes('potion')) {
         const currentHp = (char as any).hp ?? char.maxHp;
         if (currentHp >= derivedStats.maxHp) {
-            alert("Health is full.");
+            setMsg("❤️ Health is already full!");
+            setTimeout(() => setMsg(""), 2500);
             return;
         }
 
-        const healAmt = def.stats?.heal?.flat || 20;
-        const newHp = Math.min(derivedStats.maxHp, currentHp + healAmt);
+        const healFlat = def.stats?.heal?.flat || 0;
+        const healMult = def.stats?.heal?.mult || 0;
+        const healAmt = (healFlat > 0 || healMult > 0)
+          ? Math.round(healFlat + (derivedStats.maxHp * (healMult > 1 ? healMult - 1 : healMult)))
+          : 20;
 
-        if (!confirm(`Drink ${def.name}?`)) return;
+        const newHp = Math.min(derivedStats.maxHp, currentHp + healAmt);
 
         const newInventory = char.inventory.filter(i => i.instanceId !== item.instanceId);
         setChar({ ...char, inventory: newInventory, hp: newHp } as any);
@@ -685,17 +752,20 @@ export default function CharacterPage() {
             hp: newHp,
             inventory: newInventory
         });
-        setMsg(`🧪 Restored health to ${newHp}/${derivedStats.maxHp}`);
+        playSfx("/potion-drink.mp3");
+        setMsg(`🧪 Drank ${def.name}! Restored health to ${newHp}/${derivedStats.maxHp} HP`);
+        setTimeout(() => setMsg(""), 3000);
         return;
     }
 
-    // Fallback: Equip
+    // Fallback: Equip if it is gear
     if (["armor", "mainHand", "offHand", "head", "weapon", "shield"].includes(def.type) || def.slot) {
         handleEquip(item);
         return;
     }
 
-    alert(`Cannot use ${def.name}.`);
+    setMsg(`Cannot use ${def.name}.`);
+    setTimeout(() => setMsg(""), 2000);
   };
 
   const upgradeStat = async (key: 'a' | 'b' | 'c' | 'd') => {

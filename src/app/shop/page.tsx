@@ -304,12 +304,12 @@ export default function ShopPage() {
                         </div>
                     )}
 
-                    {/* TIME (Fixed: uses time.flat and time.mult) */}
+                    {/* TIME */}
                     {(s.time?.flat || s.time?.mult) && (
                         <div className="px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-200 text-xs font-bold rounded flex items-center gap-1 border border-yellow-100 dark:border-yellow-900/30">
                             <span>⏳</span> 
                             {s.time.flat ? `+${s.time.flat}s ` : ""}
-                            {s.time.mult ? `(+${Math.round(s.time.mult * 100)}%)` : ""}
+                            {s.time.mult ? `(+${Math.round((s.time.mult > 1 ? s.time.mult - 1 : s.time.mult) * 100)}%)` : ""}
                         </div>
                     )}
 
