@@ -137,7 +137,20 @@ export function LocationsPanel() {
                         <Input type="number" label="Order (1, 2, 3...)" value={editingLocation.order ?? 1} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('order', Number(e.target.value))} />
                         <Input label="Image URL" value={editingLocation.imageUrl ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('imageUrl', e.target.value)} />
 
-                        <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                        <div className="flex items-center gap-3">
+                            <div className="flex-1">
+                                <Input label="Path Color (hex)" value={editingLocation.pathColor ?? '#fbbf24'} onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('pathColor', e.target.value)} placeholder="#fbbf24" />
+                            </div>
+                            <div className="pt-5">
+                                <input
+                                    type="color"
+                                    value={editingLocation.pathColor || '#fbbf24'}
+                                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('pathColor', e.target.value)}
+                                    className="w-10 h-10 rounded border border-gray-400 cursor-pointer bg-transparent"
+                                    title="Choose path color"
+                                />
+                            </div>
+                        </div>
                         <h4 className="font-bold">Unlock Requirements (Optional)</h4>
 
                         <Input

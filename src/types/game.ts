@@ -162,6 +162,7 @@ export type GameLocation = {
   description: string;
   order: number; // To sort them (1. Forest, 2. Caves...)
   imageUrl?: string;
+  pathColor?: string; // Hex color for the connecting path in aerial map view (e.g. #fbbf24)
   unlockRequirements?: {
     storyFlags?: string[];
     skills?: Partial<CharacterSkills>;

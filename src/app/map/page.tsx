@@ -793,38 +793,17 @@ export default function MapPage() {
                 {/* Dark Vignette Overlay for Pin Clarity */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 pointer-events-none" />
 
-                {/* SVG Bezier Path Overlay */}
+                {/* SVG Bezier Path Overlay (Single color, no black under-stroke) */}
                 {bezierPath && (
                   <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none z-10 overflow-visible">
-                    <defs>
-                      <filter id="pathShadow" x="-20%" y="-20%" width="140%" height="140%">
-                        <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000000" floodOpacity="0.9"/>
-                      </filter>
-                      <linearGradient id="pathGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#f59e0b" />
-                        <stop offset="50%" stopColor="#fbbf24" />
-                        <stop offset="100%" stopColor="#f59e0b" />
-                      </linearGradient>
-                    </defs>
-                    {/* Dark under-stroke */}
                     <path
                       d={bezierPath}
-                      stroke="#000000"
-                      strokeWidth="4"
-                      strokeOpacity="0.75"
-                      vectorEffect="non-scaling-stroke"
-                      fill="none"
-                    />
-                    {/* Glowing dashed animated path */}
-                    <path
-                      d={bezierPath}
-                      stroke="url(#pathGlow)"
-                      strokeWidth="3"
+                      stroke={selectedLocation.pathColor || '#fbbf24'}
+                      strokeWidth="3.5"
                       vectorEffect="non-scaling-stroke"
                       strokeDasharray="5 5"
                       fill="none"
                       className="animate-pulse"
-                      filter="url(#pathShadow)"
                     />
                   </svg>
                 )}

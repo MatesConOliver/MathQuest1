@@ -210,6 +210,18 @@ export default function SubAreasPanel() {
   const selectedLocation = locations.find(l => l.id === selectedLocationId);
   const allPossibleSkills: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
 
+  const handlePathColorChange = async (color: string) => {
+    if (!selectedLocationId) return;
+    try {
+      await updateDoc(doc(db, 'locations', selectedLocationId), {
+        pathColor: color,
+      });
+      setLocations(prev => prev.map(loc => loc.id === selectedLocationId ? { ...loc, pathColor: color } : loc));
+    } catch (err) {
+      console.error("Failed to update path color:", err);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
       
@@ -248,6 +260,58 @@ export default function SubAreasPanel() {
           )}
         </div>
 
+        {/* Path Color Selector & Presets */}
+        {selectedLocation && (
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-950/80 p-2.5 rounded-xl border border-gray-800 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-300">Path Color:</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={selectedLocation.pathColor || '#fbbf24'}
+                  onChange={(e) => handlePathColorChange(e.target.value)}
+                  className="w-7 h-7 rounded border border-gray-600 cursor-pointer bg-transparent"
+                  title="Choose custom path color"
+                />
+                <input
+                  type="text"
+                  value={selectedLocation.pathColor || '#fbbf24'}
+                  onChange={(e) => handlePathColorChange(e.target.value)}
+                  className="w-24 px-2 py-1 rounded bg-gray-800 text-white font-mono text-xs border border-gray-700"
+                  placeholder="#fbbf24"
+                />
+              </div>
+            </div>
+
+            {/* Quick Palette Swatches */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-gray-400 text-[11px] mr-1">Presets:</span>
+              {[
+                { name: 'Amber Gold', color: '#fbbf24' },
+                { name: 'Bright Yellow', color: '#facc15' },
+                { name: 'Crimson Red', color: '#ef4444' },
+                { name: 'Arcane Purple', color: '#a855f7' },
+                { name: 'Emerald Green', color: '#10b981' },
+                { name: 'Frost Cyan', color: '#06b6d4' },
+                { name: 'Bone White', color: '#ffffff' },
+              ].map(preset => (
+                <button
+                  key={preset.color}
+                  type="button"
+                  onClick={() => handlePathColorChange(preset.color)}
+                  title={preset.name}
+                  style={{ backgroundColor: preset.color }}
+                  className={`w-5 h-5 rounded-full border border-black/40 shadow-sm transition-transform hover:scale-125 ${
+                    (selectedLocation.pathColor || '#fbbf24').toLowerCase() === preset.color.toLowerCase()
+                      ? 'ring-2 ring-white scale-110'
+                      : 'opacity-80 hover:opacity-100'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Canvas */}
         <div 
           ref={canvasRef}
@@ -272,38 +336,17 @@ export default function SubAreasPanel() {
           {/* Grid lines overlay */}
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:10%_10%] pointer-events-none" />
 
-          {/* SVG Bezier Path */}
+          {/* SVG Bezier Path (Single color, no black under-stroke) */}
           {bezierPath && (
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none z-10 overflow-visible">
-              <defs>
-                <filter id="gmPathShadow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000000" floodOpacity="0.9"/>
-                </filter>
-                <linearGradient id="gmPathGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#f59e0b" />
-                  <stop offset="50%" stopColor="#fbbf24" />
-                  <stop offset="100%" stopColor="#f59e0b" />
-                </linearGradient>
-              </defs>
-              {/* Dark under-stroke */}
               <path
                 d={bezierPath}
-                stroke="#000000"
-                strokeWidth="4"
-                strokeOpacity="0.8"
-                vectorEffect="non-scaling-stroke"
-                fill="none"
-              />
-              {/* Pulsing golden dotted curve */}
-              <path
-                d={bezierPath}
-                stroke="url(#gmPathGlow)"
-                strokeWidth="3"
+                stroke={selectedLocation?.pathColor || '#fbbf24'}
+                strokeWidth="3.5"
                 vectorEffect="non-scaling-stroke"
                 strokeDasharray="4 4"
                 fill="none"
                 className="animate-pulse"
-                filter="url(#gmPathShadow)"
               />
             </svg>
           )}
