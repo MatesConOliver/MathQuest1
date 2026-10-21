@@ -555,14 +555,14 @@ export default function MapPage() {
   // In SVG d="", use raw numbers, never '%' (viewBox is 0 0 100 100).
   const bezierPath = buildMapPath(sortedSubAreas);
 
-  const getNodeIcon = (nodeType?: SubAreaNodeType, order?: number) => {
+  const getNodeIcon = (nodeType?: SubAreaNodeType, _order?: number) => {
     switch (nodeType) {
       case 'boss': return '💀';
       case 'puzzle': return '🧩';
       case 'lore': return '📜';
       case 'encounter':
       default:
-        return order ? `#${order}` : '⚔️';
+        return '⚔️';
     }
   };
 

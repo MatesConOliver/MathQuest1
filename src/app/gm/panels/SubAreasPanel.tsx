@@ -23,8 +23,9 @@ export default function SubAreasPanel() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedLocations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GameLocation));
       setLocations(fetchedLocations);
-      if (!selectedLocationId && fetchedLocations.length > 0) {
-        setSelectedLocationId(fetchedLocations[0].id);
+      // Functional update: this effect runs once, so a closed-over selectedLocationId is always stale (null)
+      if (fetchedLocations.length > 0) {
+        setSelectedLocationId(prev => prev ?? fetchedLocations[0].id);
       }
     });
     return () => unsubscribe();
@@ -458,7 +459,7 @@ export default function SubAreasPanel() {
             const isBoss = sa.nodeType === 'boss';
             const isPuzzle = sa.nodeType === 'puzzle';
             const isLore = sa.nodeType === 'lore';
-            const icon = isBoss ? '💀' : isPuzzle ? '🧩' : isLore ? '📜' : (sa.order || '⚔️');
+            const icon = isBoss ? '💀' : isPuzzle ? '🧩' : isLore ? '📜' : '⚔️';
             const posX = sa.x ?? 50;
             const posY = sa.y ?? 50;
 
