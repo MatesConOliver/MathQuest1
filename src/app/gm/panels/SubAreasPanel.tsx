@@ -5,6 +5,7 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc, query, where, orderBy, 
 import { GameLocation, SubArea, CharacterSkills, SubAreaNodeType } from '@/types/game';
 import { Input } from '@/app/gm/components/Input';
 import { TabButton } from '@/app/gm/components/TabButton';
+import { buildMapPath } from '@/lib/mapPath';
 
 export default function SubAreasPanel() {
   const [locations, setLocations] = useState<GameLocation[]>([]);
@@ -190,22 +191,77 @@ export default function SubAreasPanel() {
     window.addEventListener('pointerup', onPointerUp);
   };
 
-  // Compute SVG Bezier path between sorted sub-areas
-  const sortedSubAreas = [...subAreas].sort((a, b) => a.order - b.order);
-  let bezierPath = '';
-  if (sortedSubAreas.length >= 2) {
-    bezierPath = `M ${sortedSubAreas[0].x ?? 50} ${sortedSubAreas[0].y ?? 50}`;
-    for (let i = 0; i < sortedSubAreas.length - 1; i++) {
-      const p1 = sortedSubAreas[i];
-      const p2 = sortedSubAreas[i + 1];
-      const dx = (p2.x ?? 50) - (p1.x ?? 50);
-      const cp1x = (p1.x ?? 50) + dx * 0.45;
-      const cp1y = p1.y ?? 50;
-      const cp2x = (p1.x ?? 50) + dx * 0.55;
-      const cp2y = p2.y ?? 50;
-      bezierPath += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x ?? 50} ${p2.y ?? 50}`;
+  // --- WAYPOINTS (path bend points on the segment leading into a sub-area) ---
+  const setWaypointsLocal = (saId: string, waypoints: { x: number; y: number }[]) => {
+    setSubAreas(prev => prev.map(item => item.id === saId ? { ...item, waypoints } : item));
+    setEditingSubArea(prev => prev && prev.id === saId ? { ...prev, waypoints } : prev);
+  };
+
+  const saveWaypoints = async (saId: string, waypoints: { x: number; y: number }[]) => {
+    try {
+      await updateDoc(doc(db, 'subAreas', saId), { waypoints });
+    } catch (err) {
+      console.error("Failed to save waypoints:", err);
     }
-  }
+  };
+
+  const handleAddWaypoint = async (sa: SubArea) => {
+    const idx = sortedSubAreas.findIndex(s => s.id === sa.id);
+    if (idx <= 0) return;
+    const prevPin = sortedSubAreas[idx - 1];
+    const wps = sa.waypoints ?? [];
+    const from = wps.length > 0 ? wps[wps.length - 1] : { x: prevPin.x ?? 50, y: prevPin.y ?? 50 };
+    const to = { x: sa.x ?? 50, y: sa.y ?? 50 };
+    const next = [...wps, { x: Math.round((from.x + to.x) / 2), y: Math.round((from.y + to.y) / 2) }];
+    setWaypointsLocal(sa.id, next);
+    await saveWaypoints(sa.id, next);
+  };
+
+  const handleClearWaypoints = async (sa: SubArea) => {
+    if (!sa.waypoints?.length) return;
+    setWaypointsLocal(sa.id, []);
+    await saveWaypoints(sa.id, []);
+  };
+
+  const handleRemoveWaypoint = async (sa: SubArea, index: number) => {
+    const next = (sa.waypoints ?? []).filter((_, i) => i !== index);
+    setWaypointsLocal(sa.id, next);
+    await saveWaypoints(sa.id, next);
+  };
+
+  const handleWaypointPointerDown = (e: React.PointerEvent, sa: SubArea, index: number) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let latest = sa.waypoints ?? [];
+    const toPoint = (ev: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: Math.round(Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100))),
+        y: Math.round(Math.max(0, Math.min(100, ((ev.clientY - rect.top) / rect.height) * 100))),
+      };
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      latest = latest.map((w, i) => (i === index ? toPoint(ev) : w));
+      setWaypointsLocal(sa.id, latest);
+    };
+    const onUp = async () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      await saveWaypoints(sa.id, latest);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  // Compute SVG path between sorted sub-areas
+  const sortedSubAreas = [...subAreas].sort((a, b) => a.order - b.order);
+  const bezierPath = buildMapPath(sortedSubAreas);
+  const selectedSortedIndex = sortedSubAreas.findIndex(s => s.id === editingSubArea?.id);
+  const selectedPin = !isCreating && selectedSortedIndex > 0 ? sortedSubAreas[selectedSortedIndex] : null;
 
   const selectedLocation = locations.find(l => l.id === selectedLocationId);
   const allPossibleSkills: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
@@ -312,6 +368,37 @@ export default function SubAreasPanel() {
           </div>
         )}
 
+        {/* Waypoint controls for the selected sub-area */}
+        {selectedLocation && (
+          <div className="flex flex-wrap items-center gap-2 bg-gray-950/80 p-2.5 rounded-xl border border-gray-800 text-xs text-gray-300">
+            <span className="font-bold">Path Waypoints:</span>
+            {selectedPin ? (
+              <>
+                <span className="text-gray-400">
+                  Segment into #{selectedPin.order} {selectedPin.name} ({selectedPin.waypoints?.length ?? 0})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleAddWaypoint(selectedPin)}
+                  className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold"
+                >
+                  + Add Waypoint
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleClearWaypoints(selectedPin)}
+                  disabled={!selectedPin.waypoints?.length}
+                  className="px-2.5 py-1 rounded bg-red-700 hover:bg-red-600 text-white font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Clear Waypoints
+                </button>
+              </>
+            ) : (
+              <span className="text-gray-500">Select a sub-area (other than the first) to edit the path leading to it.</span>
+            )}
+          </div>
+        )}
+
         {/* Canvas */}
         <div 
           ref={canvasRef}
@@ -350,6 +437,20 @@ export default function SubAreasPanel() {
               />
             </svg>
           )}
+
+          {/* Waypoint dots (drag to move, double-click to remove) */}
+          {sortedSubAreas.flatMap(sa => (sa.waypoints ?? []).map((w, i) => (
+            <div
+              key={`${sa.id}-wp-${i}`}
+              onPointerDown={(e) => handleWaypointPointerDown(e, sa, i)}
+              onDoubleClick={() => handleRemoveWaypoint(sa, i)}
+              className={`absolute -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-md cursor-grab active:cursor-grabbing z-[15] touch-none ${
+                editingSubArea?.id === sa.id ? 'bg-yellow-300' : 'bg-gray-300'
+              }`}
+              style={{ left: `${w.x}%`, top: `${w.y}%` }}
+              title={`Waypoint ${i + 1} to #${sa.order} ${sa.name} (${w.x}%, ${w.y}%) - drag to move, double-click to remove`}
+            />
+          )))}
 
           {/* Draggable Pins */}
           {subAreas.map((sa) => {

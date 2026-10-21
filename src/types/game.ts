@@ -181,6 +181,7 @@ export type SubArea = {
   x?: number; // 0 to 100 (percentage horizontal position on aerial background)
   y?: number; // 0 to 100 (percentage vertical position on aerial background)
   nodeType?: SubAreaNodeType; // defaults to 'encounter'
+  waypoints?: { x: number; y: number }[]; // Path bend points (0-100%) on the segment leading from the previous sub-area to this one
   unlockRequirements?: {
     storyFlags?: string[]; // e.g., ["DEFEATED_GOBLIN_KING"]
     skills?: Partial<CharacterSkills>; // e.g., { algebra: 10 }

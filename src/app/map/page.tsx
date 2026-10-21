@@ -11,6 +11,7 @@ import { MAP_LOCATIONS, MapLocationMeta } from "@/config/mapLayout";
 import classNames from "classnames";
 import { UnlockStatus, getUnlockStatus } from "@/lib/unlock";
 import { StoryPlayer } from "@/components/StoryPlayer";
+import { buildMapPath } from "@/lib/mapPath";
 
 // --- HELPER FUNCTIONS ---
 
@@ -551,22 +552,8 @@ export default function MapPage() {
 
   // Build Cubic Bezier Curve for sorted sub-areas
   const sortedSubAreas = [...panelSubAreas].sort((a, b) => a.order - b.order);
-  let bezierPath = '';
-  if (sortedSubAreas.length >= 2) {
-    // CRITICAL: In SVG d="", use raw numbers, NEVER '%'.
-    // Because viewBox="0 0 100 100", coordinate 18 maps to 18%.
-    bezierPath = `M ${sortedSubAreas[0].x ?? 50} ${sortedSubAreas[0].y ?? 50}`;
-    for (let i = 0; i < sortedSubAreas.length - 1; i++) {
-      const p1 = sortedSubAreas[i];
-      const p2 = sortedSubAreas[i + 1];
-      const dx = (p2.x ?? 50) - (p1.x ?? 50);
-      const cp1x = (p1.x ?? 50) + dx * 0.45;
-      const cp1y = p1.y ?? 50;
-      const cp2x = (p1.x ?? 50) + dx * 0.55;
-      const cp2y = p2.y ?? 50;
-      bezierPath += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x ?? 50} ${p2.y ?? 50}`;
-    }
-  }
+  // In SVG d="", use raw numbers, never '%' (viewBox is 0 0 100 100).
+  const bezierPath = buildMapPath(sortedSubAreas);
 
   const getNodeIcon = (nodeType?: SubAreaNodeType, order?: number) => {
     switch (nodeType) {
