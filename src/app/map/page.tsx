@@ -36,6 +36,82 @@ const isStoryLockedStatus = (status: UnlockStatus) => status.locked && status.re
 
 const SKILL_ORDER: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
 
+// =========================================================================
+// 4-CLOUD FOG-OF-WAR BILLOWING COMPONENT (2x2 Grid with Center Origin)
+// =========================================================================
+function FourCloudsFog({ isAnimatingOut }: { isAnimatingOut: boolean }) {
+  // 4 clouds positioned in a 2x2 grid centered directly on top of the pin.
+  // Resting: center of each cloud is at (±22px, ±22px).
+  // Disappearance Animation (3.5s): fades out to opacity 0 while slowly shooting in opposite diagonal directions!
+  const clouds = [
+    {
+      id: 'tl',
+      initPos: 'translate(-50%, -50%) translate(-22px, -22px)',
+      shootPos: 'translate(-50%, -50%) translate(-160px, -160px) scale(1.6)',
+      grad: 'bg-gradient-to-br from-slate-100 via-slate-200 to-slate-400',
+    },
+    {
+      id: 'tr',
+      initPos: 'translate(-50%, -50%) translate(22px, -22px)',
+      shootPos: 'translate(-50%, -50%) translate(160px, -160px) scale(1.6)',
+      grad: 'bg-gradient-to-bl from-slate-100 via-slate-200 to-slate-400',
+    },
+    {
+      id: 'bl',
+      initPos: 'translate(-50%, -50%) translate(-22px, 22px)',
+      shootPos: 'translate(-50%, -50%) translate(-160px, 160px) scale(1.6)',
+      grad: 'bg-gradient-to-tr from-slate-100 via-slate-200 to-slate-400',
+    },
+    {
+      id: 'br',
+      initPos: 'translate(-50%, -50%) translate(22px, 22px)',
+      shootPos: 'translate(-50%, -50%) translate(160px, 160px) scale(1.6)',
+      grad: 'bg-gradient-to-tl from-slate-100 via-slate-200 to-slate-400',
+    },
+  ];
+
+  return (
+    <div className="relative w-0 h-0 overflow-visible pointer-events-none select-none">
+      {clouds.map((c) => (
+        <div
+          key={c.id}
+          className={classNames(
+            "absolute w-28 h-28 sm:w-36 sm:h-36 rounded-full transition-all duration-[3500ms] ease-out shadow-2xl backdrop-blur-md border border-white/50",
+            c.grad,
+            {
+              "opacity-95": !isAnimatingOut,
+              "opacity-0": isAnimatingOut,
+            }
+          )}
+          style={{
+            transform: isAnimatingOut ? c.shootPos : c.initPos,
+          }}
+        >
+          {/* Inner radial gradient puff texture */}
+          <div className="w-full h-full rounded-full bg-[radial-gradient(circle_at_40%_40%,rgba(255,255,255,0.95),rgba(203,213,225,0.75)_65%,transparent_100%)] flex items-center justify-center">
+            <span className="text-2xl sm:text-3xl select-none opacity-40 filter drop-shadow">☁️</span>
+          </div>
+        </div>
+      ))}
+
+      {/* Center puff to guarantee dense coverage over the center pin */}
+      <div
+        className={classNames(
+          "absolute w-20 h-20 sm:w-24 sm:h-24 rounded-full transition-all duration-[3500ms] ease-out shadow-xl backdrop-blur-sm -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-white via-slate-100 to-slate-300 border border-white/60",
+          {
+            "opacity-100 scale-100": !isAnimatingOut,
+            "opacity-0 scale-150": isAnimatingOut,
+          }
+        )}
+      >
+        <div className="w-full h-full rounded-full bg-[radial-gradient(circle_at_40%_40%,rgba(255,255,255,1),rgba(226,232,240,0.85)_70%,transparent_100%)] flex items-center justify-center">
+          <span className="text-xl sm:text-2xl select-none opacity-60">☁️</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MapPage() {
   const { playTrack } = useAudio()!;
 
@@ -453,6 +529,7 @@ export default function MapPage() {
                 );
                 const shouldShowFog = !isFirstLocation && (isStoryLocked || isPendingUnlock);
                 const isClickable = !shouldShowFog && !isSkillLocked;
+                const isAnimatingOut = animatingOutLocationIds.has(loc.id);
 
                 const skillRequirements = isSkillLocked && !shouldShowFog
                   ? SKILL_ORDER.flatMap(skill => {
@@ -468,47 +545,73 @@ export default function MapPage() {
                   : loc.name;
 
                 return (
-                  <button
+                  <div
                     key={loc.id}
-                    onClick={() => handleLocationClick(loc, unlockStatus)}
-                    title={skillRequirements.length > 0 ? undefined : title}
-                    aria-label={title}
-                    disabled={!isClickable}
-                    className={classNames(
-                      `group absolute w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ease-out focus:outline-none hover:z-30`,
-                      { 'opacity-90 cursor-not-allowed': !isClickable },
-                      { 'opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-amber-400/80 cursor-pointer shadow-lg': isClickable },
-                    )}
-                    style={{ left: `${mapMeta.x * 100}%`, top: `${mapMeta.y * 100}%`, transform: "translate(-50%, -50%)" }}
+                    className="absolute"
+                    style={{ left: `${mapMeta.x * 100}%`, top: `${mapMeta.y * 100}%` }}
                   >
-                    <div className="w-full h-full rounded-full ring-2 ring-white/60 backdrop-blur-sm bg-black/40 flex items-center justify-center transition-transform duration-300 ease-out group-hover:scale-110">
-                      {isSkillLocked ? (
-                        <span className="text-2xl">🔒</span>
-                      ) : (
-                        <span className="text-2xl select-none">{mapMeta?.emoji || "📍"}</span>
+                    {/* Location Pin Button */}
+                    <button
+                      onClick={() => handleLocationClick(loc, unlockStatus)}
+                      title={skillRequirements.length > 0 ? undefined : title}
+                      aria-label={title}
+                      disabled={!isClickable}
+                      className={classNames(
+                        `group relative -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ease-out focus:outline-none z-10`,
+                        { 'opacity-90 cursor-not-allowed': !isClickable },
+                        { 'opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-amber-400/80 cursor-pointer shadow-lg z-20': isClickable },
                       )}
-                    </div>
-
-                    {/* Region Tooltip */}
-                    <div className="absolute top-full mt-2 hidden group-hover:flex flex-col items-center z-40 pointer-events-none">
-                      <div className="px-2.5 py-1 rounded-md bg-gray-950/90 text-white text-xs font-black shadow-xl border border-white/20 whitespace-nowrap">
-                        {loc.name}
+                    >
+                      <div className="w-full h-full rounded-full ring-2 ring-white/60 backdrop-blur-sm bg-black/40 flex items-center justify-center transition-transform duration-300 ease-out group-hover:scale-110">
+                        {isSkillLocked && !shouldShowFog ? (
+                          <span className="text-2xl">🔒</span>
+                        ) : (
+                          <span className="text-2xl select-none">{mapMeta?.emoji || "📍"}</span>
+                        )}
                       </div>
-                    </div>
 
-                    {/* Animate cloud disappearance */}
-                    {(shouldShowFog || animatingOutLocationIds.has(loc.id)) && (
-                      <div className={classNames(
-                        "absolute inset-0 z-10 bg-gray-900/80 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none transition-all duration-[3500ms] ease-in-out",
-                        { 
-                          'opacity-0 scale-150': animatingOutLocationIds.has(loc.id),
-                          'opacity-100 scale-100': !animatingOutLocationIds.has(loc.id)
-                        }
-                      )}>
-                        <span className="text-xl">☁️</span>
+                      {/* Region Tooltip (Visible when hovered and not hidden by fog) */}
+                      {!shouldShowFog && (
+                        <div className="absolute top-full mt-2 hidden group-hover:flex flex-col items-center z-40 pointer-events-none">
+                          <div className="px-2.5 py-1 rounded-md bg-gray-950/90 text-white text-xs font-black shadow-xl border border-white/20 whitespace-nowrap">
+                            {loc.name}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Skill Requirement Tooltip */}
+                      {skillRequirements.length > 0 && !shouldShowFog && (
+                        <div
+                          role="tooltip"
+                          className={classNames(
+                            "pointer-events-none absolute left-1/2 z-40 hidden w-max -translate-x-1/2 flex-col gap-1.5 whitespace-nowrap rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-left text-xs shadow-lg group-hover:flex",
+                            mapMeta.y < 0.3 ? "top-full mt-2" : "bottom-full mb-2"
+                          )}
+                        >
+                          <span className="font-bold text-gray-200">Locked - required skills</span>
+                          {skillRequirements.map(({ skill, required, current }) => {
+                            const met = current >= required;
+                            return (
+                              <span key={skill} className="flex items-center justify-between gap-4">
+                                <span className={classNames("font-bold", SKILL_COLORS[skill] || 'text-gray-300')}>{formatSkillName(skill)}</span>
+                                <span className={classNames("font-bold", met ? 'text-green-400' : 'text-red-400')}>
+                                  {current} / {required} <span aria-hidden="true">{met ? '✓' : '✗'}</span>
+                                  <span className="sr-only">{met ? ' achieved' : ' not achieved'}</span>
+                                </span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </button>
+
+                    {/* 4-CLOUD FOG-OF-WAR LAYER (2x2 Grid Centered on the Pin) */}
+                    {(shouldShowFog || isAnimatingOut) && (
+                      <div className="absolute inset-0 pointer-events-none z-20">
+                        <FourCloudsFog isAnimatingOut={isAnimatingOut} />
                       </div>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -658,10 +761,158 @@ export default function MapPage() {
                     <p className="font-bold text-sm">No sub-areas registered for this region yet.</p>
                   </div>
                 )}
+
+                {/* =========================================================================
+                    OPTION B: IN-MAP FROSTED EXPEDITION DOSSIER DRAWER
+                    (Slides up seamlessly inside the bottom of the 16:9 aerial container)
+                    ========================================================================= */}
+                {selectedSubArea && (
+                  <div className="absolute bottom-0 inset-x-0 z-40 max-h-[58%] sm:max-h-[50%] overflow-y-auto custom-scrollbar bg-gray-950/92 backdrop-blur-md border-t-2 border-yellow-500/70 shadow-[0_-12px_32px_rgba(0,0,0,0.9)] p-4 sm:p-5 text-white animate-in slide-in-from-bottom duration-300 flex flex-col gap-3">
+                    {/* Header Row: Title, Type Badge, Threat Stars, Close Button */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xl sm:text-2xl">{getNodeIcon(selectedSubArea.nodeType, selectedSubArea.order)}</span>
+                          <h2 className="text-lg sm:text-xl font-black text-white truncate">
+                            {selectedSubArea.name}
+                          </h2>
+                          <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 px-2 py-0.5 rounded-full">
+                            {selectedSubArea.nodeType || 'encounter'}
+                          </span>
+                        </div>
+                        <div className="text-xs text-yellow-400 font-mono mt-1 flex items-center gap-1.5">
+                          <span className="text-gray-400">Threat Rating:</span>
+                          <span className="tracking-widest font-bold">{getThreatStars(selectedSubArea)}</span>
+                        </div>
+                      </div>
+
+                      {/* Close Button */}
+                      <button
+                        onClick={() => setSelectedSubArea(null)}
+                        className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white flex items-center justify-center font-bold text-sm transition-all border border-white/10 shrink-0"
+                        title="Close Dossier"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <p className="text-xs sm:text-sm text-gray-300 leading-relaxed line-clamp-2 sm:line-clamp-none">
+                      {selectedSubArea.description}
+                    </p>
+
+                    <hr className="border-gray-800" />
+
+                    {/* Check Unlock Status */}
+                    {(() => {
+                      const unlockStatus = getUnlockStatus(selectedSubArea, character, unlockedSubAreas);
+                      const isLocked = unlockStatus.locked;
+
+                      if (isLocked) {
+                        return (
+                          <div className="p-3 sm:p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-200 space-y-2">
+                            <div className="flex items-center gap-2 font-black text-xs sm:text-sm">
+                              <span>🔒</span> Node Access Locked
+                            </div>
+                            {unlockStatus.reason === 'story' ? (
+                              <p className="text-xs text-gray-300">
+                                This sub-area is sealed by ancient wards. Continue your campaign journey and conquer earlier encounters to reveal this path.
+                              </p>
+                            ) : (
+                              <div className="text-xs space-y-1">
+                                <div className="text-gray-400">Required Skill Levels:</div>
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                  {unlockStatus.missing.map(({ skill, required }) => (
+                                    <span key={skill} className="px-2 py-0.5 rounded bg-black/50 border border-red-500/40 text-red-300 font-bold">
+                                      {formatSkillName(skill)}: {character.skills?.[skill] ?? 0} / {required}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-2.5">
+                          <h3 className="text-xs font-black uppercase tracking-wider text-gray-400">
+                            Available Encounters & Foes
+                          </h3>
+
+                          {panelLoading ? (
+                            <div className="py-4 text-center text-gray-400 italic text-xs">Scouting sub-area...</div>
+                          ) : panelEncounters.length === 0 ? (
+                            <div className="py-4 text-center text-gray-500 italic text-xs">No foes spotted in this sector.</div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {panelEncounters.map((enc) => {
+                                if (!enc.id) return null;
+                                const winCount = character.encounterWins?.[enc.id] || 0;
+                                const skillRewards = enc.winRewardSkills
+                                  ? Object.entries(enc.winRewardSkills).filter(([, val]) => (val as number) > 0)
+                                  : [];
+
+                                return (
+                                  <div
+                                    key={enc.id}
+                                    className="p-2.5 sm:p-3 rounded-xl bg-gray-900/90 border border-white/10 flex items-center justify-between gap-2.5 hover:border-yellow-400/50 transition-all shadow-md"
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <div className="w-10 h-10 rounded-lg bg-gray-800 border border-white/10 flex items-center justify-center text-xl shrink-0 shadow-inner">
+                                        {enc.emoji || '⚔️'}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          <h4 className="font-bold text-white text-xs sm:text-sm truncate">{enc.title}</h4>
+                                          {winCount > 0 && (
+                                            <span className="text-[9px] font-bold text-green-400 bg-green-950/80 px-1.5 py-0.2 rounded border border-green-800 shrink-0">
+                                              🏆 {winCount}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* Rewards Badges */}
+                                        <div className="flex flex-wrap gap-1 mt-1 text-[9px] sm:text-[10px]">
+                                          {enc.winRewardXp ? (
+                                            <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-purple-300 font-bold">
+                                              +{enc.winRewardXp} XP
+                                            </span>
+                                          ) : null}
+                                          {enc.winRewardGold ? (
+                                            <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/30 text-yellow-300 font-bold">
+                                              +{enc.winRewardGold} G
+                                            </span>
+                                          ) : null}
+                                          {skillRewards.map(([skill, val]) => (
+                                            <span key={skill} className="px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-500/30 text-blue-300 font-bold">
+                                              +{val as number} {formatSkillName(skill)}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* FIGHT CTA BUTTON */}
+                                    <Link
+                                      href={`/play?id=${enc.id}`}
+                                      className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black text-xs uppercase tracking-wider rounded-lg shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-1"
+                                    >
+                                      <span>⚔️</span> FIGHT
+                                    </Link>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             ) : (
               /* --- MODE B: FALLBACK HORIZONTAL ILLUSTRATED CARDS --- */
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <h2 className="text-lg font-bold text-gray-300 mb-2">Expedition Sub-Areas</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {panelSubAreas.map((sa) => {
@@ -715,153 +966,36 @@ export default function MapPage() {
                     );
                   })}
                 </div>
-              </div>
-            )}
 
-            {/* =========================================================================
-                EXPEDITION DOSSIER (BOTTOM DRAWER / OVERLAY PANEL)
-                ========================================================================= */}
-            {selectedSubArea && (
-              <div className="mt-6 bg-gray-900 border-2 border-yellow-500/40 rounded-2xl p-5 shadow-2xl relative animate-in slide-in-from-bottom duration-200">
-                {/* Close Button */}
-                <button
-                  onClick={() => setSelectedSubArea(null)}
-                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center font-bold transition-colors"
-                >
-                  ✕
-                </button>
-
-                {(() => {
-                  const unlockStatus = getUnlockStatus(selectedSubArea, character, unlockedSubAreas);
-                  const isLocked = unlockStatus.locked;
-
-                  return (
-                    <div className="space-y-4">
-                      {/* Header with Title, Type, and Difficulty Stars */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pr-10">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xl">{getNodeIcon(selectedSubArea.nodeType, selectedSubArea.order)}</span>
-                            <h2 className="text-2xl font-black text-white">
-                              {selectedSubArea.name}
-                            </h2>
-                            <span className="text-xs font-black uppercase tracking-wider bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 px-2.5 py-0.5 rounded-full">
-                              {selectedSubArea.nodeType || 'encounter'}
-                            </span>
-                          </div>
-                          <div className="text-xs text-yellow-400 font-mono mt-1 flex items-center gap-1.5">
-                            <span className="text-gray-400">Threat Rating:</span>
-                            <span className="tracking-widest font-bold">{getThreatStars(selectedSubArea)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="text-sm text-gray-300 leading-relaxed max-w-3xl">
-                        {selectedSubArea.description}
-                      </p>
-
-                      <hr className="border-gray-800" />
-
-                      {/* LOCKED STATE DETAILS */}
-                      {isLocked ? (
-                        <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-200 space-y-2">
-                          <div className="flex items-center gap-2 font-black text-sm">
-                            <span>🔒</span> Node Access Locked
-                          </div>
-                          {unlockStatus.reason === 'story' ? (
-                            <p className="text-xs text-gray-300">
-                              This sub-area is sealed by ancient wards. Continue your campaign journey and conquer earlier encounters to reveal this path.
-                            </p>
-                          ) : (
-                            <div className="text-xs space-y-1">
-                              <div className="text-gray-400">Required Skill Levels:</div>
-                              <div className="flex flex-wrap gap-2 pt-1">
-                                {unlockStatus.missing.map(({ skill, required }) => (
-                                  <span key={skill} className="px-2 py-1 rounded bg-black/50 border border-red-500/40 text-red-300 font-bold">
-                                    {formatSkillName(skill)}: {character.skills?.[skill] ?? 0} / {required}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        /* UNLOCKED STATE: ENCOUNTERS & FIGHT ACTIONS */
-                        <div className="space-y-3">
-                          <h3 className="text-sm font-black uppercase tracking-wider text-gray-400">
-                            Available Encounters & Foes
-                          </h3>
-
-                          {panelLoading ? (
-                            <div className="py-8 text-center text-gray-400 italic">Scouting sub-area...</div>
-                          ) : panelEncounters.length === 0 ? (
-                            <div className="py-6 text-center text-gray-500 italic">No foes spotted in this sector.</div>
-                          ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {panelEncounters.map((enc) => {
-                                if (!enc.id) return null;
-                                const winCount = character.encounterWins?.[enc.id] || 0;
-                                const skillRewards = enc.winRewardSkills
-                                  ? Object.entries(enc.winRewardSkills).filter(([, val]) => (val as number) > 0)
-                                  : [];
-
-                                return (
-                                  <div
-                                    key={enc.id}
-                                    className="p-3.5 rounded-xl bg-gray-800/80 border border-white/10 flex items-center justify-between gap-3 hover:border-yellow-400/60 transition-all"
-                                  >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="w-12 h-12 rounded-xl bg-gray-900 border border-white/10 flex items-center justify-center text-2xl shrink-0 shadow-inner">
-                                        {enc.emoji || '⚔️'}
-                                      </div>
-                                      <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          <h4 className="font-bold text-white text-sm truncate">{enc.title}</h4>
-                                          {winCount > 0 && (
-                                            <span className="text-[10px] font-bold text-green-400 bg-green-950/80 px-1.5 py-0.5 rounded border border-green-800">
-                                              🏆 {winCount}
-                                            </span>
-                                          )}
-                                        </div>
-
-                                        {/* Rewards Badges */}
-                                        <div className="flex flex-wrap gap-1.5 mt-1 text-[10px]">
-                                          {enc.winRewardXp ? (
-                                            <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-purple-300 font-bold">
-                                              +{enc.winRewardXp} XP
-                                            </span>
-                                          ) : null}
-                                          {enc.winRewardGold ? (
-                                            <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/30 text-yellow-300 font-bold">
-                                              +{enc.winRewardGold} G
-                                            </span>
-                                          ) : null}
-                                          {skillRewards.map(([skill, val]) => (
-                                            <span key={skill} className="px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-500/30 text-blue-300 font-bold">
-                                              +{val as number} {formatSkillName(skill)}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* FIGHT CTA BUTTON */}
-                                    <Link
-                                      href={`/play?id=${enc.id}`}
-                                      className="px-5 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all active:scale-95 shrink-0 flex items-center gap-1.5"
-                                    >
-                                      <span>⚔️</span> FIGHT
-                                    </Link>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                {/* Fallback Mode Dossier */}
+                {selectedSubArea && (
+                  <div className="mt-4 bg-gray-900 border-2 border-yellow-500/50 rounded-2xl p-5 shadow-2xl relative animate-in slide-in-from-bottom duration-200">
+                    <button
+                      onClick={() => setSelectedSubArea(null)}
+                      className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center font-bold text-sm"
+                    >
+                      ✕
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{getNodeIcon(selectedSubArea.nodeType, selectedSubArea.order)}</span>
+                      <h3 className="text-xl font-black text-white">{selectedSubArea.name}</h3>
                     </div>
-                  );
-                })()}
+                    <p className="text-xs text-gray-400 mt-1">{selectedSubArea.description}</p>
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {panelEncounters.map((enc) => (
+                        <div key={enc.id} className="p-3 rounded-xl bg-gray-800 border border-white/10 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{enc.emoji || '⚔️'}</span>
+                            <span className="text-sm font-bold text-white">{enc.title}</span>
+                          </div>
+                          <Link href={`/play?id=${enc.id}`} className="px-4 py-2 bg-yellow-400 text-gray-950 font-bold text-xs rounded-lg">
+                            FIGHT
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
