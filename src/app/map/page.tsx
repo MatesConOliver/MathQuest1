@@ -5,7 +5,7 @@ import { auth, callApi, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { arrayRemove, arrayUnion, collection, getDocs, orderBy, query, doc, getDoc, where, updateDoc } from "firebase/firestore";
 import Link from "next/link";
-import { GameLocation, EncounterDoc, Character, SubArea, UnlockedSubArea, CharacterSkills, StoryEvent } from "@/types/game";
+import { GameLocation, EncounterDoc, Character, SubArea, UnlockedSubArea, CharacterSkills, StoryEvent, SubAreaNodeType } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
 import { MAP_LOCATIONS, MapLocationMeta } from "@/config/mapLayout";
 import classNames from "classnames";
@@ -19,24 +19,22 @@ function getMapMetaForLocation(locationId: string): MapLocationMeta | null {
   return meta || null;
 }
 
-
 const SKILL_COLORS: { [key in keyof CharacterSkills]?: string } = {
-    algebra: 'text-red-400',
-    functions: 'text-green-400',
-    geometry: 'text-blue-400',
-    probabilityAndStatistics: 'text-yellow-400',
-    calculus: 'text-violet-400',
+  algebra: 'text-red-400',
+  functions: 'text-green-400',
+  geometry: 'text-blue-400',
+  probabilityAndStatistics: 'text-yellow-400',
+  calculus: 'text-violet-400',
 };
 
 const formatSkillName = (skill: string) => {
-    const spaced = skill.replace(/([A-Z])/g, ' $1');
-    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
+  const spaced = skill.replace(/([A-Z])/g, ' $1');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+};
 
 const isStoryLockedStatus = (status: UnlockStatus) => status.locked && status.reason === 'story';
 
 const SKILL_ORDER: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
-
 
 export default function MapPage() {
   const { playTrack } = useAudio()!;
@@ -58,6 +56,7 @@ export default function MapPage() {
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [activeStory, setActiveStory] = useState<StoryEvent | null>(null);
   
+  // State 1 (Macro) vs State 2 (Micro Area Expedition)
   const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(null);
   const [selectedSubArea, setSelectedSubArea] = useState<SubArea | null>(null);
 
@@ -188,6 +187,7 @@ export default function MapPage() {
     fetchCoreData();
   }, [user]);
 
+  // Fetch sub-areas when an Area is selected
   useEffect(() => {
     if (!selectedLocation) {
       setPanelSubAreas([]);
@@ -216,6 +216,7 @@ export default function MapPage() {
     fetchSubAreas();
   }, [selectedLocation]);
 
+  // Fetch encounters when a SubArea is selected
   useEffect(() => {
     if (!selectedSubArea) {
       setPanelEncounters([]);
@@ -244,13 +245,13 @@ export default function MapPage() {
     fetchEncounters();
   }, [selectedSubArea]);
 
-
   useEffect(() => {
-      if (selectedLocation && !selectedLocationMeta) {
-          console.warn(`[Dev Warning] No map metadata found for location ID "${selectedLocation.id}".`);
-      }
+    if (selectedLocation && !selectedLocationMeta) {
+      console.warn(`[Dev Warning] No map metadata found for location ID "${selectedLocation.id}".`);
+    }
   }, [selectedLocation, selectedLocationMeta]);
 
+  // Handle story progression flags
   useEffect(() => {
     if (!user || !character || locations.length === 0 || activeStory) return;
 
@@ -327,10 +328,10 @@ export default function MapPage() {
     setSelectedSubArea(null);
   };
 
-  const handlePanelClose = () => {
+  const handleReturnToWorldMap = () => {
     setSelectedLocation(null);
     setSelectedSubArea(null);
-  }
+  };
 
   if (loading || !character) {
     return (
@@ -348,281 +349,524 @@ export default function MapPage() {
   }
 
   const topActionClass = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-gray-800 shadow-sm transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700";
-  
-  const showSubAreaList = panelSubAreas.length > 0 && !selectedSubArea;
+
+  // Build Cubic Bezier Curve for sorted sub-areas
+  const sortedSubAreas = [...panelSubAreas].sort((a, b) => a.order - b.order);
+  let bezierPath = '';
+  if (sortedSubAreas.length >= 2) {
+    // CRITICAL: In SVG d="", use raw numbers, NEVER '%'.
+    // Because viewBox="0 0 100 100", coordinate 18 maps to 18%.
+    bezierPath = `M ${sortedSubAreas[0].x ?? 50} ${sortedSubAreas[0].y ?? 50}`;
+    for (let i = 0; i < sortedSubAreas.length - 1; i++) {
+      const p1 = sortedSubAreas[i];
+      const p2 = sortedSubAreas[i + 1];
+      const dx = (p2.x ?? 50) - (p1.x ?? 50);
+      const cp1x = (p1.x ?? 50) + dx * 0.45;
+      const cp1y = p1.y ?? 50;
+      const cp2x = (p1.x ?? 50) + dx * 0.55;
+      const cp2y = p2.y ?? 50;
+      bezierPath += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x ?? 50} ${p2.y ?? 50}`;
+    }
+  }
+
+  const getNodeIcon = (nodeType?: SubAreaNodeType, order?: number) => {
+    switch (nodeType) {
+      case 'boss': return '💀';
+      case 'puzzle': return '🧩';
+      case 'lore': return '📜';
+      case 'encounter':
+      default:
+        return order ? `#${order}` : '⚔️';
+    }
+  };
+
+  const getThreatStars = (sa: SubArea) => {
+    const starCount = Math.min(5, Math.max(1, sa.order || 1));
+    return '★'.repeat(starCount) + '☆'.repeat(5 - starCount);
+  };
 
   return (
-    <main className="min-h-screen bg-gray-900 md:flex">
-      <div className="flex-grow p-4 md:p-8">
-          <div className="max-w-7xl mx-auto h-full flex flex-col">
-          <header className="flex flex-col gap-4 border-b border-gray-700 pb-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-black text-white">World Map</h1>
-              <p className="text-gray-200 font-medium">Select a region to explore</p>
-            </div>
-            <div className="flex flex-col items-start gap-2 lg:items-end">
-              <div className="flex flex-wrap items-center gap-2">
-                <form onSubmit={handleCodeSubmit} className="flex min-w-0 gap-2">
-                  <input
-                    aria-label="Encounter code"
-                    autoComplete="off"
-                    value={codeInput}
-                    onChange={event => setCodeInput(event.target.value)}
-                    placeholder="Enter code"
-                    className="h-10 w-32 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400 sm:w-40"
-                  />
-                  <button type="submit" disabled={isRedeeming} className={`${topActionClass} disabled:cursor-wait disabled:opacity-60`}>
-                    {isRedeeming ? "Checking..." : "Redeem"}
+    <main className="min-h-screen bg-gray-950 text-white flex flex-col">
+      <div className="flex-grow p-4 md:p-8 max-w-7xl mx-auto w-full flex flex-col">
+        
+        {/* =========================================================================
+            STATE 1: WORLD MAP VIEW (MACRO MAP)
+            ========================================================================= */}
+        {!selectedLocation ? (
+          <div className="space-y-6">
+            <header className="flex flex-col gap-4 border-b border-gray-800 pb-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h1 className="text-3xl md:text-4xl font-black text-white flex items-center gap-2">
+                  <span>🗺️</span> World Map
+                </h1>
+                <p className="text-gray-300 font-medium">Select an unlocked region to begin an expedition</p>
+              </div>
+              <div className="flex flex-col items-start gap-2 lg:items-end">
+                <div className="flex flex-wrap items-center gap-2">
+                  <form onSubmit={handleCodeSubmit} className="flex min-w-0 gap-2">
+                    <input
+                      aria-label="Encounter code"
+                      autoComplete="off"
+                      value={codeInput}
+                      onChange={event => setCodeInput(event.target.value)}
+                      placeholder="Enter code"
+                      className="h-10 w-32 rounded-lg border border-gray-700 bg-gray-800 px-3 text-sm text-white placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:w-40"
+                    />
+                    <button type="submit" disabled={isRedeeming} className={`${topActionClass} disabled:cursor-wait disabled:opacity-60`}>
+                      {isRedeeming ? "Checking..." : "Redeem"}
+                    </button>
+                  </form>
+                  <Link href="/character" className={topActionClass}>🦉 Character</Link>
+                  <Link href="/shop" className={topActionClass}>🔮 Store</Link>
+                  <Link href="/" className={topActionClass}>🏠 Home</Link>
+                </div>
+                {codeMessage && <p role="status" aria-live="polite" className="text-sm font-medium text-yellow-300">{codeMessage}</p>}
+              </div>
+            </header>
+
+            {/* World Parchment Map */}
+            <div
+              className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden mt-6 bg-cover bg-center shadow-2xl border-2 border-white/10 transition-all duration-500 ease-in-out"
+              style={{
+                backgroundImage: "url('https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Backgrounds%2Fmap%20background%201.png?alt=media&token=38144b3f-4abf-475f-81f6-96030d482d38')",
+              }}
+            >
+              {locations.map((loc) => {
+                const mapMeta = getMapMetaForLocation(loc.id);
+                if (!mapMeta) return null;
+
+                const unlockStatus = getUnlockStatus(loc, character);
+                const isStoryLocked = unlockStatus.locked && unlockStatus.reason === 'story';
+                const isSkillLocked = unlockStatus.locked && unlockStatus.reason === 'skills';
+
+                // The first location is always visible
+                const isFirstLocation = loc.order === 1;
+                const pendingFlag = character.pendingProgressionFlags?.[0];
+                const isPendingUnlock = Boolean(
+                  pendingFlag &&
+                  loc.unlockRequirements?.storyFlags?.includes(pendingFlag) &&
+                  !isStoryLocked &&
+                  isStoryLockedStatus(getUnlockStatus(loc, {
+                    ...character,
+                    storyFlags: (character.storyFlags || []).filter(flag => flag !== pendingFlag),
+                  }))
+                );
+                const shouldShowFog = !isFirstLocation && (isStoryLocked || isPendingUnlock);
+                const isClickable = !shouldShowFog && !isSkillLocked;
+
+                const skillRequirements = isSkillLocked && !shouldShowFog
+                  ? SKILL_ORDER.flatMap(skill => {
+                      const required = loc.unlockRequirements?.skills?.[skill] ?? 0;
+                      return required > 0 ? [{ skill, required, current: character.skills?.[skill] ?? 0 }] : [];
+                    })
+                  : [];
+
+                const title = isSkillLocked
+                  ? `Locked. Requires: ${skillRequirements.map(r => `${formatSkillName(r.skill)} ${r.current}/${r.required}`).join(', ')}`
+                  : isStoryLocked
+                  ? "Keep playing to unlock"
+                  : loc.name;
+
+                return (
+                  <button
+                    key={loc.id}
+                    onClick={() => handleLocationClick(loc, unlockStatus)}
+                    title={skillRequirements.length > 0 ? undefined : title}
+                    aria-label={title}
+                    disabled={!isClickable}
+                    className={classNames(
+                      `group absolute w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ease-out focus:outline-none hover:z-30`,
+                      { 'opacity-90 cursor-not-allowed': !isClickable },
+                      { 'opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-amber-400/80 cursor-pointer shadow-lg': isClickable },
+                    )}
+                    style={{ left: `${mapMeta.x * 100}%`, top: `${mapMeta.y * 100}%`, transform: "translate(-50%, -50%)" }}
+                  >
+                    <div className="w-full h-full rounded-full ring-2 ring-white/60 backdrop-blur-sm bg-black/40 flex items-center justify-center transition-transform duration-300 ease-out group-hover:scale-110">
+                      {isSkillLocked ? (
+                        <span className="text-2xl">🔒</span>
+                      ) : (
+                        <span className="text-2xl select-none">{mapMeta?.emoji || "📍"}</span>
+                      )}
+                    </div>
+
+                    {/* Region Tooltip */}
+                    <div className="absolute top-full mt-2 hidden group-hover:flex flex-col items-center z-40 pointer-events-none">
+                      <div className="px-2.5 py-1 rounded-md bg-gray-950/90 text-white text-xs font-black shadow-xl border border-white/20 whitespace-nowrap">
+                        {loc.name}
+                      </div>
+                    </div>
+
+                    {/* Animate cloud disappearance */}
+                    {(shouldShowFog || animatingOutLocationIds.has(loc.id)) && (
+                      <div className={classNames(
+                        "absolute inset-0 z-10 bg-gray-900/80 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none transition-all duration-[3500ms] ease-in-out",
+                        { 
+                          'opacity-0 scale-150': animatingOutLocationIds.has(loc.id),
+                          'opacity-100 scale-100': !animatingOutLocationIds.has(loc.id)
+                        }
+                      )}>
+                        <span className="text-xl">☁️</span>
+                      </div>
+                    )}
                   </button>
-                </form>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* =========================================================================
+             STATE 2: AREA EXPEDITION VIEW (MICRO EXPEDITION VIEW)
+             ========================================================================= */
+          <div className="space-y-5 animate-in fade-in duration-300">
+            {/* Top Bar with Return Button & Region Title */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleReturnToWorldMap}
+                  className="px-3.5 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-yellow-400 hover:text-yellow-300 font-black text-sm border border-yellow-500/30 transition-all shadow-md flex items-center gap-1.5 active:scale-95"
+                >
+                  <span className="text-lg">‹</span> World Map
+                </button>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl sm:text-3xl font-black text-white">{selectedLocation.name}</h1>
+                    <span className="text-xs font-bold uppercase tracking-wider bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 px-2.5 py-0.5 rounded-full">
+                      Region #{selectedLocation.order}
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-gray-300 mt-0.5 line-clamp-1 sm:line-clamp-none">
+                    {selectedLocation.description}
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Nav Links */}
+              <div className="flex items-center gap-2 shrink-0">
                 <Link href="/character" className={topActionClass}>🦉 Character</Link>
                 <Link href="/shop" className={topActionClass}>🔮 Store</Link>
                 <Link href="/" className={topActionClass}>🏠 Home</Link>
               </div>
-              {codeMessage && <p role="status" aria-live="polite" className="text-sm font-medium text-white">{codeMessage}</p>}
             </div>
-          </header>
 
-          <div
-            className="relative w-full aspect-[16/9] rounded-xl overflow-hidden mt-6 bg-cover bg-center transition-all duration-500 ease-in-out"
-            style={{
-              backgroundImage: "url('https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Backgrounds%2Fmap%20background%201.png?alt=media&token=38144b3f-4abf-475f-81f6-96030d482d38')",
-              transform: selectedLocation ? "scale(1.15)" : "scale(1)",
-              transformOrigin: selectedLocationMeta ? `${selectedLocationMeta.x * 100}% ${selectedLocationMeta.y * 100}%` : "50% 50%",
-            }}
-          >
-            {locations.map((loc) => {
-              const mapMeta = getMapMetaForLocation(loc.id);
-              if (!mapMeta) return null;
+            {/* PROGRESSIVE HYBRID RENDER */}
+            {selectedLocation.imageUrl ? (
+              /* --- MODE A: AERIAL BACKGROUND MAP WITH SVG BEZIER CURVE & PINS --- */
+              <div className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl bg-gray-950 select-none">
+                {/* Aerial Artwork Background */}
+                <img
+                  src={selectedLocation.imageUrl}
+                  alt={selectedLocation.name}
+                  className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                />
 
-              const unlockStatus = getUnlockStatus(loc, character);
-              const isStoryLocked = unlockStatus.locked && unlockStatus.reason === 'story';
-              const isSkillLocked = unlockStatus.locked && unlockStatus.reason === 'skills';
+                {/* Dark Vignette Overlay for Pin Clarity */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 pointer-events-none" />
 
-              // The very first location should always be visible.
-              const isFirstLocation = loc.order === 1;
-              const pendingFlag = character.pendingProgressionFlags?.[0];
-              const isPendingUnlock = Boolean(
-                pendingFlag &&
-                loc.unlockRequirements?.storyFlags?.includes(pendingFlag) &&
-                !isStoryLocked &&
-                isStoryLockedStatus(getUnlockStatus(loc, {
-                  ...character,
-                  storyFlags: (character.storyFlags || []).filter(flag => flag !== pendingFlag),
-                }))
-              );
-              const shouldShowFog = !isFirstLocation && (isStoryLocked || isPendingUnlock);
-              const isClickable = !shouldShowFog && !isSkillLocked;
+                {/* SVG Bezier Path Overlay */}
+                {bezierPath && (
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none z-10 overflow-visible">
+                    <defs>
+                      <filter id="pathShadow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000000" floodOpacity="0.9"/>
+                      </filter>
+                      <linearGradient id="pathGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#f59e0b" />
+                        <stop offset="50%" stopColor="#fbbf24" />
+                        <stop offset="100%" stopColor="#f59e0b" />
+                      </linearGradient>
+                    </defs>
+                    {/* Dark under-stroke */}
+                    <path
+                      d={bezierPath}
+                      stroke="#000000"
+                      strokeWidth="4"
+                      strokeOpacity="0.75"
+                      vectorEffect="non-scaling-stroke"
+                      fill="none"
+                    />
+                    {/* Glowing dashed animated path */}
+                    <path
+                      d={bezierPath}
+                      stroke="url(#pathGlow)"
+                      strokeWidth="3"
+                      vectorEffect="non-scaling-stroke"
+                      strokeDasharray="5 5"
+                      fill="none"
+                      className="animate-pulse"
+                      filter="url(#pathShadow)"
+                    />
+                  </svg>
+                )}
 
-              const skillRequirements = isSkillLocked && !shouldShowFog
-                ? SKILL_ORDER.flatMap(skill => {
-                    const required = loc.unlockRequirements?.skills?.[skill] ?? 0;
-                    return required > 0 ? [{ skill, required, current: character.skills?.[skill] ?? 0 }] : [];
-                  })
-                : [];
+                {/* Sub-Area Pins on Aerial Map */}
+                {panelSubAreas.map((sa) => {
+                  const unlockStatus = getUnlockStatus(sa, character, unlockedSubAreas);
+                  const isLocked = unlockStatus.locked;
+                  const isSelected = selectedSubArea?.id === sa.id;
+                  const icon = isLocked ? '🔒' : getNodeIcon(sa.nodeType, sa.order);
+                  const posX = sa.x ?? 50;
+                  const posY = sa.y ?? 50;
 
-              const title = isSkillLocked
-                ? `Locked. Requires: ${skillRequirements.map(r => `${formatSkillName(r.skill)} ${r.current}/${r.required}`).join(', ')}`
-                : isStoryLocked
-                ? "Keep playing to unlock"
-                : loc.name;
-
-              return (
-                <button
-                  key={loc.id}
-                  onClick={() => handleLocationClick(loc, unlockStatus)}
-                  title={skillRequirements.length > 0 ? undefined : title}
-                  aria-label={title}
-                  disabled={!isClickable}
-                  className={classNames(
-                    `group absolute w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ease-out focus:outline-none hover:z-30`,
-                    { 'opacity-90 cursor-not-allowed': !isClickable },
-                    { 'opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-blue-300/60 cursor-pointer': isClickable },
-                  )}
-                  style={{ left: `${mapMeta.x * 100}%`, top: `${mapMeta.y * 100}%`, transform: "translate(-50%, -50%)" }}
-                >
-                  <div className="w-full h-full rounded-full ring-2 ring-white/50 backdrop-blur-sm bg-black/30 flex items-center justify-center transition-transform duration-300 ease-out group-hover:scale-110">
-                     {isSkillLocked ? (
-                        <span className="text-2xl">🔒</span>
-                     ) : (
-                      <span className="text-2xl select-none">{mapMeta?.emoji || "📍"}</span>
-                     )}
-                  </div>
-                  {/* Animate cloud disappearance */}
-                  {(shouldShowFog || animatingOutLocationIds.has(loc.id)) && (
-                      <div className={classNames(
-                          "absolute inset-0 z-10 bg-gray-900/70 rounded-full backdrop-blur-sm flex items-center justify-center pointer-events-none",
-                          "transition-all duration-[3500ms] ease-in-out", // Animation classes
-                          { 
-                              'opacity-0 scale-150': animatingOutLocationIds.has(loc.id),
-                              'opacity-100 scale-100': !animatingOutLocationIds.has(loc.id)
-                          }
-                      )}>
-                          <span className={classNames("text-9xl transition-transform duration-[2500ms] ease-in-out", {
-                              'transform rotate-45 scale-0': animatingOutLocationIds.has(loc.id),
-                          })}>
-                              ☁️
-                          </span>
-                      </div>
-                  )}
-                  {skillRequirements.length > 0 && (
-                    <div
-                      role="tooltip"
-                      className={classNames(
-                        "pointer-events-none absolute left-1/2 z-20 hidden w-max -translate-x-1/2 flex-col gap-1.5 whitespace-nowrap rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-left text-xs shadow-lg group-hover:flex",
-                        mapMeta.y < 0.3 ? "top-full mt-2" : "bottom-full mb-2"
-                      )}
+                  return (
+                    <button
+                      key={sa.id}
+                      onClick={() => setSelectedSubArea(sa)}
+                      style={{
+                        left: `${posX}%`,
+                        top: `${posY}%`,
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                      className={`group absolute z-20 flex flex-col items-center justify-center transition-all duration-200 outline-none ${
+                        isSelected ? 'scale-125 z-30' : 'hover:scale-110'
+                      }`}
                     >
-                      <span className="font-bold text-gray-200">Locked - required skills</span>
-                      {skillRequirements.map(({ skill, required, current }) => {
-                        const met = current >= required;
-                        return (
-                          <span key={skill} className="flex items-center justify-between gap-4">
-                            <span className={classNames("font-bold", SKILL_COLORS[skill] || 'text-gray-300')}>{formatSkillName(skill)}</span>
-                            <span className={classNames("font-bold", met ? 'text-green-400' : 'text-red-400')}>
-                              {current} / {required} <span aria-hidden="true">{met ? '✓' : '✗'}</span>
-                              <span className="sr-only">{met ? ' achieved' : ' not achieved'}</span>
-                            </span>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {selectedLocation && (
-        <aside className="fixed inset-0 z-50 bg-gray-900 animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:slide-in-from-left-full duration-300 md:static md:w-[400px] lg:w-[420px] md:flex-shrink-0 md:border-l md:border-gray-700">
-          <div className="w-full h-full flex flex-col bg-gray-800 text-white">
-            <button onClick={handlePanelClose} className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center bg-gray-700 hover:bg-red-500 rounded-full transition-colors md:hidden">✕</button>
-
-            {selectedLocation.imageUrl && <img src={selectedLocation.imageUrl} alt={selectedLocation.name} className="w-full h-48 object-cover" />}
-
-            <div className="p-6 space-y-4 overflow-y-auto flex-grow">
-              <h2 className="text-3xl font-black text-white">{selectedSubArea ? selectedSubArea.name : selectedLocation.name}</h2>
-              <p className="text-gray-300 font-light text-base leading-relaxed">{selectedSubArea ? selectedSubArea.description : selectedLocation.description}</p>
-              
-              <hr className="border-gray-600" />
-
-              {showSubAreaList ? (
-                  <div>
-                      <h3 className="text-lg font-bold text-gray-200 mb-3">Explore Area</h3>
-                      <div className="space-y-3">
-                          {panelSubAreas.map(sa => {
-                              const unlockStatus = getUnlockStatus(sa, character, unlockedSubAreas);
-
-                              if (unlockStatus.locked && unlockStatus.reason === 'story') {
-                                  return (
-                                        <div key={sa.id} className="w-full text-center flex flex-col items-center justify-center p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl">
-                                          <span className="text-3xl mb-1">☁️</span>
-                                          <h4 className="font-bold text-gray-200 text-sm">Locked</h4>
-                                          <p className="text-xs text-gray-300">Keep playing to unlock.</p>
-                                      </div>
-                                  )
-                              }
-
-                              return (
-                                <button 
-                                    key={sa.id} 
-                                    onClick={() => !unlockStatus.locked && setSelectedSubArea(sa)} 
-                                    disabled={unlockStatus.locked}
-                                    className="w-full text-left flex items-center justify-between p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl transition-all group disabled:opacity-70 disabled:cursor-not-allowed enabled:hover:border-blue-400 enabled:hover:shadow-md"
-                                >
-                                    <div>
-                                        <h4 className="font-bold text-gray-100">{sa.name}</h4>
-                                        {unlockStatus.locked && unlockStatus.reason === 'skills' && (
-                                            <div className="text-xs font-semibold mt-2 space-y-1">
-                                                <div className="text-gray-400">Requires:</div>
-                                                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                                                    {unlockStatus.missing.map(({ skill, required }) => (
-                                                        <div key={skill} className="flex items-center gap-1.5">
-                                                            <span className={classNames("font-bold", SKILL_COLORS[skill] || 'text-gray-300')}>
-                                                                {formatSkillName(skill)}: {required}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                     {unlockStatus.locked ? (
-                                        <span className="text-2xl pl-4">🔒</span>
-                                     ) : (
-                                        <span className="font-bold text-lg text-blue-400 group-hover:translate-x-1 transition-transform">›</span>
-                                     )}
-                                </button>
-                              )
-                          })}
+                      {/* Pin Circle */}
+                      <div
+                        className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-sm sm:text-base font-black shadow-2xl transition-all border-2 ${
+                          isLocked
+                            ? 'bg-gray-900/90 text-gray-400 border-gray-600 ring-2 ring-black/60 opacity-80'
+                            : isSelected
+                            ? 'bg-yellow-400 text-gray-950 border-white ring-4 ring-yellow-400/80 shadow-[0_0_20px_rgba(250,204,21,0.8)]'
+                            : sa.nodeType === 'boss'
+                            ? 'bg-red-700 text-white border-red-300 ring-2 ring-red-500/70 shadow-[0_0_15px_rgba(220,38,38,0.6)]'
+                            : sa.nodeType === 'puzzle'
+                            ? 'bg-purple-700 text-white border-purple-300 ring-2 ring-purple-500/70 shadow-[0_0_15px_rgba(168,85,247,0.6)]'
+                            : sa.nodeType === 'lore'
+                            ? 'bg-emerald-700 text-white border-emerald-300 ring-2 ring-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.6)]'
+                            : 'bg-amber-600 text-white border-amber-200 ring-2 ring-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.5)]'
+                        }`}
+                      >
+                        {icon}
                       </div>
+
+                      {/* Sub-Area Name Pill */}
+                      <div className={`mt-1.5 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold whitespace-nowrap shadow-lg border transition-all ${
+                        isSelected
+                          ? 'bg-yellow-400 text-gray-950 border-white'
+                          : 'bg-black/80 text-white border-white/20 group-hover:border-yellow-400'
+                      }`}>
+                        {sa.name}
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {/* Empty State if no sub-areas */}
+                {panelSubAreas.length === 0 && !panelLoading && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                    <span className="text-3xl mb-1">🌲</span>
+                    <p className="font-bold text-sm">No sub-areas registered for this region yet.</p>
                   </div>
-              ) : (
-                  <div>
-                      {selectedSubArea && (
-                          <button onClick={() => setSelectedSubArea(null)} className="text-sm text-gray-300 hover:text-white font-bold mb-4">‹ Back to {selectedLocation.name}</button>
-                      )}
-                      <h3 className="text-lg font-bold text-gray-200 mb-3">Available Battles</h3>
-                      <div className="space-y-3">
-                          {panelLoading ? (
-                               <div className="text-center py-10 text-gray-400 italic">Scouting...</div>
-                          ) : panelEncounters.length === 0 ? (
-                              <div className="text-center py-10 text-gray-400 italic">No enemies spotted here.</div>
+                )}
+              </div>
+            ) : (
+              /* --- MODE B: FALLBACK HORIZONTAL ILLUSTRATED CARDS --- */
+              <div className="space-y-3">
+                <h2 className="text-lg font-bold text-gray-300 mb-2">Expedition Sub-Areas</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {panelSubAreas.map((sa) => {
+                    const unlockStatus = getUnlockStatus(sa, character, unlockedSubAreas);
+                    const isLocked = unlockStatus.locked;
+                    const isSelected = selectedSubArea?.id === sa.id;
+
+                    return (
+                      <button
+                        key={sa.id}
+                        onClick={() => setSelectedSubArea(sa)}
+                        className={`text-left p-4 rounded-2xl border-2 transition-all flex items-start gap-4 ${
+                          isSelected
+                            ? 'bg-gray-800 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.25)]'
+                            : 'bg-gray-900 border-gray-700 hover:border-gray-500 hover:bg-gray-850'
+                        }`}
+                      >
+                        {/* Thumbnail / Icon */}
+                        <div className="w-16 h-16 rounded-xl bg-gray-800 border border-white/10 shrink-0 flex items-center justify-center overflow-hidden">
+                          {sa.imageUrl ? (
+                            <img src={sa.imageUrl} alt={sa.name} className="w-full h-full object-cover" />
                           ) : (
-                              panelEncounters.map((enc) => {
-                                  if (!enc.id) return null;
-                                  const winCount = character.encounterWins?.[enc.id] || 0;
-                                  const canSeeRewards = winCount > 0;
-                                  const skillRewards = enc.winRewardSkills ? Object.entries(enc.winRewardSkills).filter(([, val]) => val > 0) : [];
-
-                                  return (
-                                    <div key={enc.id} title={enc.description} className="flex items-center justify-between p-4 bg-gray-700/50 border-2 border-gray-600 rounded-2xl hover:border-blue-400 hover:shadow-md transition-all group">
-                                        <div className="flex items-center gap-3 min-w-0 mr-3">
-                                            <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-lg shrink-0">{enc.emoji || '⚔️'}</div>
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <h3 className="font-bold text-gray-100 truncate">{enc.title}</h3>
-                                                    {canSeeRewards && (
-                                                        <span className="text-xs font-bold text-green-500 bg-green-900/50 px-2 py-0.5 rounded-full">
-                                                            🏆 {winCount}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="text-xs text-gray-400 font-medium flex items-center flex-wrap gap-x-3 gap-y-1 mt-1">
-                                                    {canSeeRewards ? (
-                                                        <>
-                                                            <span>XP: <span className="text-purple-400 font-bold">+{enc.winRewardXp || 0}</span></span>
-                                                            <span>Gold: <span className="text-yellow-400 font-bold">+{enc.winRewardGold || 0}</span></span>
-                                                            {skillRewards.map(([skill, value]) => (
-                                                                <span key={skill}>
-                                                                    {formatSkillName(skill)}: <span className="font-bold text-blue-400">+{value}</span>
-                                                                </span>
-                                                            ))}
-                                                        </>
-                                                    ) : (
-                                                        <span className="italic text-gray-500">(Rewards hidden until first victory)</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <Link href={`/play?id=${enc.id}`} className="shrink-0 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-sm active:scale-95 transition-all">FIGHT</Link>
-                                    </div>
-                                  )
-                              })
+                            <span className="text-3xl">{getNodeIcon(sa.nodeType, sa.order)}</span>
                           )}
-                      </div>
-                  </div>
-              )}
-            </div>
+                        </div>
 
-            <div className="p-4 bg-gray-900/50 border-t border-gray-700 text-center shrink-0">
-              <button onClick={handlePanelClose} className="text-sm text-gray-300 hover:text-white font-bold transition-colors hidden md:block">Close Panel</button>
-            </div>
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-mono font-bold text-yellow-400">#{sa.order}</span>
+                            <h3 className="font-black text-white text-base truncate">{sa.name}</h3>
+                            <span className="text-[10px] font-bold uppercase tracking-wider bg-gray-800 text-gray-300 px-2 py-0.5 rounded-full border border-gray-600">
+                              {sa.nodeType || 'encounter'}
+                            </span>
+                          </div>
+                          
+                          <div className="text-xs text-yellow-500 font-mono mt-0.5">
+                            Threat: {getThreatStars(sa)}
+                          </div>
+
+                          <p className="text-xs text-gray-400 mt-1 line-clamp-2">{sa.description}</p>
+
+                          {isLocked && (
+                            <div className="mt-2 text-xs text-red-400 font-semibold flex items-center gap-1">
+                              <span>🔒</span>
+                              {unlockStatus.reason === 'story' ? 'Requires Story Progression' : 'Skill Requirements Unmet'}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* =========================================================================
+                EXPEDITION DOSSIER (BOTTOM DRAWER / OVERLAY PANEL)
+                ========================================================================= */}
+            {selectedSubArea && (
+              <div className="mt-6 bg-gray-900 border-2 border-yellow-500/40 rounded-2xl p-5 shadow-2xl relative animate-in slide-in-from-bottom duration-200">
+                {/* Close Button */}
+                <button
+                  onClick={() => setSelectedSubArea(null)}
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center font-bold transition-colors"
+                >
+                  ✕
+                </button>
+
+                {(() => {
+                  const unlockStatus = getUnlockStatus(selectedSubArea, character, unlockedSubAreas);
+                  const isLocked = unlockStatus.locked;
+
+                  return (
+                    <div className="space-y-4">
+                      {/* Header with Title, Type, and Difficulty Stars */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pr-10">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xl">{getNodeIcon(selectedSubArea.nodeType, selectedSubArea.order)}</span>
+                            <h2 className="text-2xl font-black text-white">
+                              {selectedSubArea.name}
+                            </h2>
+                            <span className="text-xs font-black uppercase tracking-wider bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 px-2.5 py-0.5 rounded-full">
+                              {selectedSubArea.nodeType || 'encounter'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-yellow-400 font-mono mt-1 flex items-center gap-1.5">
+                            <span className="text-gray-400">Threat Rating:</span>
+                            <span className="tracking-widest font-bold">{getThreatStars(selectedSubArea)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="text-sm text-gray-300 leading-relaxed max-w-3xl">
+                        {selectedSubArea.description}
+                      </p>
+
+                      <hr className="border-gray-800" />
+
+                      {/* LOCKED STATE DETAILS */}
+                      {isLocked ? (
+                        <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-200 space-y-2">
+                          <div className="flex items-center gap-2 font-black text-sm">
+                            <span>🔒</span> Node Access Locked
+                          </div>
+                          {unlockStatus.reason === 'story' ? (
+                            <p className="text-xs text-gray-300">
+                              This sub-area is sealed by ancient wards. Continue your campaign journey and conquer earlier encounters to reveal this path.
+                            </p>
+                          ) : (
+                            <div className="text-xs space-y-1">
+                              <div className="text-gray-400">Required Skill Levels:</div>
+                              <div className="flex flex-wrap gap-2 pt-1">
+                                {unlockStatus.missing.map(({ skill, required }) => (
+                                  <span key={skill} className="px-2 py-1 rounded bg-black/50 border border-red-500/40 text-red-300 font-bold">
+                                    {formatSkillName(skill)}: {character.skills?.[skill] ?? 0} / {required}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        /* UNLOCKED STATE: ENCOUNTERS & FIGHT ACTIONS */
+                        <div className="space-y-3">
+                          <h3 className="text-sm font-black uppercase tracking-wider text-gray-400">
+                            Available Encounters & Foes
+                          </h3>
+
+                          {panelLoading ? (
+                            <div className="py-8 text-center text-gray-400 italic">Scouting sub-area...</div>
+                          ) : panelEncounters.length === 0 ? (
+                            <div className="py-6 text-center text-gray-500 italic">No foes spotted in this sector.</div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {panelEncounters.map((enc) => {
+                                if (!enc.id) return null;
+                                const winCount = character.encounterWins?.[enc.id] || 0;
+                                const skillRewards = enc.winRewardSkills
+                                  ? Object.entries(enc.winRewardSkills).filter(([, val]) => (val as number) > 0)
+                                  : [];
+
+                                return (
+                                  <div
+                                    key={enc.id}
+                                    className="p-3.5 rounded-xl bg-gray-800/80 border border-white/10 flex items-center justify-between gap-3 hover:border-yellow-400/60 transition-all"
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className="w-12 h-12 rounded-xl bg-gray-900 border border-white/10 flex items-center justify-center text-2xl shrink-0 shadow-inner">
+                                        {enc.emoji || '⚔️'}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <h4 className="font-bold text-white text-sm truncate">{enc.title}</h4>
+                                          {winCount > 0 && (
+                                            <span className="text-[10px] font-bold text-green-400 bg-green-950/80 px-1.5 py-0.5 rounded border border-green-800">
+                                              🏆 {winCount}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* Rewards Badges */}
+                                        <div className="flex flex-wrap gap-1.5 mt-1 text-[10px]">
+                                          {enc.winRewardXp ? (
+                                            <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-purple-300 font-bold">
+                                              +{enc.winRewardXp} XP
+                                            </span>
+                                          ) : null}
+                                          {enc.winRewardGold ? (
+                                            <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/30 text-yellow-300 font-bold">
+                                              +{enc.winRewardGold} G
+                                            </span>
+                                          ) : null}
+                                          {skillRewards.map(([skill, val]) => (
+                                            <span key={skill} className="px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-500/30 text-blue-300 font-bold">
+                                              +{val as number} {formatSkillName(skill)}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* FIGHT CTA BUTTON */}
+                                    <Link
+                                      href={`/play?id=${enc.id}`}
+                                      className="px-5 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all active:scale-95 shrink-0 flex items-center gap-1.5"
+                                    >
+                                      <span>⚔️</span> FIGHT
+                                    </Link>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
-        </aside>
-      )}
+        )}
+      </div>
     </main>
   );
 }

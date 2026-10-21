@@ -168,13 +168,18 @@ export type GameLocation = {
   };
 };
 
+export type SubAreaNodeType = 'encounter' | 'boss' | 'puzzle' | 'lore';
+
 export type SubArea = {
   id: string;
   locationId: string; // Foreign key to the 'locations' collection
   name: string;
   description: string;
-  order: number; // To order sub-areas within a location
+  order: number; // To order sub-areas within a location (1, 2, 3...)
   imageUrl?: string;
+  x?: number; // 0 to 100 (percentage horizontal position on aerial background)
+  y?: number; // 0 to 100 (percentage vertical position on aerial background)
+  nodeType?: SubAreaNodeType; // defaults to 'encounter'
   unlockRequirements?: {
     storyFlags?: string[]; // e.g., ["DEFEATED_GOBLIN_KING"]
     skills?: Partial<CharacterSkills>; // e.g., { algebra: 10 }

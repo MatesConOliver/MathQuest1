@@ -730,14 +730,8 @@ export default function CharacterPage() {
     }
 
     // Potion / Healing Consumable
-    if (def.type === 'potion' || def.stats?.heal || def.name.toLowerCase().includes('potion')) {
+    if (def.type === 'potion' || !!def.stats?.heal || def.name.toLowerCase().includes('potion')) {
         const currentHp = (char as any).hp ?? char.maxHp;
-        if (currentHp >= derivedStats.maxHp) {
-            setMsg("❤️ Health is already full!");
-            setTimeout(() => setMsg(""), 2500);
-            return;
-        }
-
         const healFlat = def.stats?.heal?.flat || 0;
         const healMult = def.stats?.heal?.mult || 0;
         const healAmt = (healFlat > 0 || healMult > 0)
@@ -746,7 +740,7 @@ export default function CharacterPage() {
 
         const newHp = Math.min(derivedStats.maxHp, currentHp + healAmt);
 
-        const newInventory = char.inventory.filter(i => i.instanceId !== item.instanceId);
+        const newInventory = char.inventory.filter(i => (i.instanceId ? i.instanceId !== item.instanceId : i.itemId !== item.itemId));
         setChar({ ...char, inventory: newInventory, hp: newHp } as any);
         await updateDoc(doc(db, "characters", user.uid), {
             hp: newHp,
