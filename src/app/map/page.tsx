@@ -37,43 +37,43 @@ const isStoryLockedStatus = (status: UnlockStatus) => status.locked && status.re
 const SKILL_ORDER: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
 
 // =========================================================================
-// 5-CLOUD FOG-OF-WAR EMOJI COMPONENT (4 Corner Clouds in Tight 2x2 Grid + 1 Center Cloud)
+// 5-CLOUD FOG-OF-WAR EMOJI COMPONENT (Expanded 2x2 Grid + Large Center Cloud)
 // =========================================================================
 function FourCloudsFog({ isAnimatingOut }: { isAnimatingOut: boolean }) {
-  // 5 big ☁️ clouds: 4 in a tight 2x2 grid around the pin + 1 in the center.
-  // Tight spacing (±16px, ±14px) ensures massive overlap with NO open space/gaps between clouds!
-  // When animating out (3.5s), they move slower and travel a smaller, gentle distance (±40px, ±35px).
+  // Expanded 2x2 grid (±30px, ±26px) with proportionally larger clouds (scale 1.75 corner, scale 1.85 center)
+  // Ensures a much larger fog footprint while keeping heavy overlap and zero gaps!
+  // When animating out (3.5s), they drift out slowly and gracefully (±60px, ±52px).
   const cornerClouds = [
     {
       id: 'tl',
-      initTransform: 'translate(-50%, -50%) translate(-16px, -14px) scale(1.5)',
-      shootTransform: 'translate(-50%, -50%) translate(-40px, -35px) scale(1.65)',
+      initTransform: 'translate(-50%, -50%) translate(-30px, -26px) scale(1.75)',
+      shootTransform: 'translate(-50%, -50%) translate(-60px, -52px) scale(1.95)',
     },
     {
       id: 'tr',
-      initTransform: 'translate(-50%, -50%) translate(16px, -14px) scale(1.5)',
-      shootTransform: 'translate(-50%, -50%) translate(40px, -35px) scale(1.65)',
+      initTransform: 'translate(-50%, -50%) translate(30px, -26px) scale(1.75)',
+      shootTransform: 'translate(-50%, -50%) translate(60px, -52px) scale(1.95)',
     },
     {
       id: 'bl',
-      initTransform: 'translate(-50%, -50%) translate(-16px, 14px) scale(1.5)',
-      shootTransform: 'translate(-50%, -50%) translate(-40px, 35px) scale(1.65)',
+      initTransform: 'translate(-50%, -50%) translate(-30px, 26px) scale(1.75)',
+      shootTransform: 'translate(-50%, -50%) translate(-60px, 52px) scale(1.95)',
     },
     {
       id: 'br',
-      initTransform: 'translate(-50%, -50%) translate(16px, 14px) scale(1.5)',
-      shootTransform: 'translate(-50%, -50%) translate(40px, 35px) scale(1.65)',
+      initTransform: 'translate(-50%, -50%) translate(30px, 26px) scale(1.75)',
+      shootTransform: 'translate(-50%, -50%) translate(60px, 52px) scale(1.95)',
     },
   ];
 
   return (
     <div className="relative w-0 h-0 overflow-visible pointer-events-none select-none z-10">
-      {/* 4 Corner Big ☁️ Clouds in Tight 2x2 Grid (Deep seamless overlap with zero open space) */}
+      {/* 4 Corner Big ☁️ Clouds in Expanded 2x2 Grid */}
       {cornerClouds.map((c) => (
         <span
           key={c.id}
           className={classNames(
-            "absolute text-6xl sm:text-7xl md:text-8xl filter drop-shadow-[0_6px_16px_rgba(0,0,0,0.55)] transition-all duration-[3500ms] ease-out",
+            "absolute text-6xl sm:text-7xl md:text-8xl filter drop-shadow-[0_8px_20px_rgba(0,0,0,0.6)] transition-all duration-[3500ms] ease-out",
             {
               "opacity-100": !isAnimatingOut,
               "opacity-0": isAnimatingOut,
@@ -87,10 +87,10 @@ function FourCloudsFog({ isAnimatingOut }: { isAnimatingOut: boolean }) {
         </span>
       ))}
 
-      {/* Center 5th Big ☁️ Cloud (Anchors the core so there is zero open space) */}
+      {/* Center 5th Big ☁️ Cloud (Anchors the core so there is zero open space across the wider grid) */}
       <span
         className={classNames(
-          "absolute text-6xl sm:text-7xl md:text-8xl filter drop-shadow-[0_6px_18px_rgba(0,0,0,0.65)] transition-all duration-[3500ms] ease-out",
+          "absolute text-6xl sm:text-7xl md:text-8xl filter drop-shadow-[0_8px_22px_rgba(0,0,0,0.7)] transition-all duration-[3500ms] ease-out",
           {
             "opacity-100": !isAnimatingOut,
             "opacity-0": isAnimatingOut,
@@ -98,8 +98,8 @@ function FourCloudsFog({ isAnimatingOut }: { isAnimatingOut: boolean }) {
         )}
         style={{
           transform: isAnimatingOut
-            ? 'translate(-50%, -50%) scale(1.65)'
-            : 'translate(-50%, -50%) scale(1.5)',
+            ? 'translate(-50%, -50%) scale(2.05)'
+            : 'translate(-50%, -50%) scale(1.85)',
         }}
       >
         ☁️
