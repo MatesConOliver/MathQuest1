@@ -37,77 +37,73 @@ const isStoryLockedStatus = (status: UnlockStatus) => status.locked && status.re
 const SKILL_ORDER: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
 
 // =========================================================================
-// 4-CLOUD FOG-OF-WAR BILLOWING COMPONENT (2x2 Grid with Center Origin)
+// 5-CLOUD FOG-OF-WAR EMOJI COMPONENT (4 Corner Clouds in 2x2 Grid + 1 Center Cloud)
 // =========================================================================
 function FourCloudsFog({ isAnimatingOut }: { isAnimatingOut: boolean }) {
-  // 4 clouds positioned in a 2x2 grid centered directly on top of the pin.
-  // Resting: center of each cloud is at (±22px, ±22px).
-  // Disappearance Animation (3.5s): fades out to opacity 0 while slowly shooting in opposite diagonal directions!
-  const clouds = [
+  // 5 big ☁️ clouds: 4 in a 2x2 grid around the pin + 1 in the center.
+  // When animating out (3.5s), the 4 corner clouds shoot out diagonally in opposite directions
+  // while fading out, and the center cloud expands and dissolves!
+  const cornerClouds = [
     {
       id: 'tl',
-      initPos: 'translate(-50%, -50%) translate(-22px, -22px)',
-      shootPos: 'translate(-50%, -50%) translate(-160px, -160px) scale(1.6)',
-      grad: 'bg-gradient-to-br from-slate-100 via-slate-200 to-slate-400',
+      initTransform: 'translate(-50%, -50%) translate(-38px, -34px) scale(1)',
+      shootTransform: 'translate(-50%, -50%) translate(-190px, -180px) scale(1.8)',
     },
     {
       id: 'tr',
-      initPos: 'translate(-50%, -50%) translate(22px, -22px)',
-      shootPos: 'translate(-50%, -50%) translate(160px, -160px) scale(1.6)',
-      grad: 'bg-gradient-to-bl from-slate-100 via-slate-200 to-slate-400',
+      initTransform: 'translate(-50%, -50%) translate(38px, -34px) scale(1)',
+      shootTransform: 'translate(-50%, -50%) translate(190px, -180px) scale(1.8)',
     },
     {
       id: 'bl',
-      initPos: 'translate(-50%, -50%) translate(-22px, 22px)',
-      shootPos: 'translate(-50%, -50%) translate(-160px, 160px) scale(1.6)',
-      grad: 'bg-gradient-to-tr from-slate-100 via-slate-200 to-slate-400',
+      initTransform: 'translate(-50%, -50%) translate(-38px, 34px) scale(1)',
+      shootTransform: 'translate(-50%, -50%) translate(-190px, 180px) scale(1.8)',
     },
     {
       id: 'br',
-      initPos: 'translate(-50%, -50%) translate(22px, 22px)',
-      shootPos: 'translate(-50%, -50%) translate(160px, 160px) scale(1.6)',
-      grad: 'bg-gradient-to-tl from-slate-100 via-slate-200 to-slate-400',
+      initTransform: 'translate(-50%, -50%) translate(38px, 34px) scale(1)',
+      shootTransform: 'translate(-50%, -50%) translate(190px, 180px) scale(1.8)',
     },
   ];
 
   return (
-    <div className="relative w-0 h-0 overflow-visible pointer-events-none select-none">
-      {clouds.map((c) => (
-        <div
+    <div className="relative w-0 h-0 overflow-visible pointer-events-none select-none z-10">
+      {/* 4 Corner Big ☁️ Clouds in 2x2 Grid */}
+      {cornerClouds.map((c) => (
+        <span
           key={c.id}
           className={classNames(
-            "absolute w-28 h-28 sm:w-36 sm:h-36 rounded-full transition-all duration-[3500ms] ease-out shadow-2xl backdrop-blur-md border border-white/50",
-            c.grad,
+            "absolute text-5xl sm:text-6xl md:text-7xl filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.55)] transition-all duration-[3500ms] ease-out",
             {
-              "opacity-95": !isAnimatingOut,
+              "opacity-100": !isAnimatingOut,
               "opacity-0": isAnimatingOut,
             }
           )}
           style={{
-            transform: isAnimatingOut ? c.shootPos : c.initPos,
+            transform: isAnimatingOut ? c.shootTransform : c.initTransform,
           }}
         >
-          {/* Inner radial gradient puff texture */}
-          <div className="w-full h-full rounded-full bg-[radial-gradient(circle_at_40%_40%,rgba(255,255,255,0.95),rgba(203,213,225,0.75)_65%,transparent_100%)] flex items-center justify-center">
-            <span className="text-2xl sm:text-3xl select-none opacity-40 filter drop-shadow">☁️</span>
-          </div>
-        </div>
+          ☁️
+        </span>
       ))}
 
-      {/* Center puff to guarantee dense coverage over the center pin */}
-      <div
+      {/* Center 5th Big ☁️ Cloud */}
+      <span
         className={classNames(
-          "absolute w-20 h-20 sm:w-24 sm:h-24 rounded-full transition-all duration-[3500ms] ease-out shadow-xl backdrop-blur-sm -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-white via-slate-100 to-slate-300 border border-white/60",
+          "absolute text-5xl sm:text-6xl md:text-7xl filter drop-shadow-[0_4px_14px_rgba(0,0,0,0.65)] transition-all duration-[3500ms] ease-out",
           {
-            "opacity-100 scale-100": !isAnimatingOut,
-            "opacity-0 scale-150": isAnimatingOut,
+            "opacity-100": !isAnimatingOut,
+            "opacity-0": isAnimatingOut,
           }
         )}
+        style={{
+          transform: isAnimatingOut
+            ? 'translate(-50%, -50%) scale(2.2)'
+            : 'translate(-50%, -50%) scale(1.1)',
+        }}
       >
-        <div className="w-full h-full rounded-full bg-[radial-gradient(circle_at_40%_40%,rgba(255,255,255,1),rgba(226,232,240,0.85)_70%,transparent_100%)] flex items-center justify-center">
-          <span className="text-xl sm:text-2xl select-none opacity-60">☁️</span>
-        </div>
-      </div>
+        ☁️
+      </span>
     </div>
   );
 }
@@ -177,34 +173,125 @@ export default function MapPage() {
   const handleCodeSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isRedeeming) return;
-    if (!codeInput.trim()) {
+    const cleanCode = codeInput.trim();
+    if (!cleanCode) {
       setCodeMessage("That code does not exist or is incorrect.");
       return;
     }
 
     setIsRedeeming(true);
     setCodeMessage("");
+
     try {
-      const result = await callApi<{ status: "redeemed" | "already-redeemed" | "invalid"; storyFlag?: string }>(
-        "redeemEncounterCode",
-        { code: codeInput }
-      );
-      if (result.status === "invalid") {
-        setCodeMessage("That code does not exist or is incorrect.");
-      } else if (result.status === "already-redeemed" || !result.storyFlag) {
-        setCodeMessage("This code has already been redeemed and has no effect.");
-      } else {
-        setCharacter(prev => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            storyFlags: [...new Set([...(prev.storyFlags || []), result.storyFlag!])],
-            pendingProgressionFlags: [...new Set([...(prev.pendingProgressionFlags || []), result.storyFlag!])],
-          };
-        });
-        setCodeInput("");
-        setCodeMessage("Code redeemed.");
+      const norm = cleanCode.toUpperCase();
+      let matchedStoryFlag: string | null = null;
+
+      // 1. Check locations' required story flags
+      for (const loc of locations) {
+        const flags = loc.unlockRequirements?.storyFlags || [];
+        const match = flags.find(f => f.trim().toUpperCase() === norm);
+        if (match) {
+          matchedStoryFlag = match.trim();
+          break;
+        }
       }
+
+      // 2. Check encounters collection in Firestore for winRewardStoryFlag or encounter ID / title
+      if (!matchedStoryFlag) {
+        try {
+          const encSnap = await getDocs(collection(db, "encounters"));
+          for (const d of encSnap.docs) {
+            const data = d.data();
+            const flag = data.winRewardStoryFlag;
+            if (typeof flag === 'string' && flag.trim().toUpperCase() === norm) {
+              matchedStoryFlag = flag.trim();
+              break;
+            }
+            if (d.id.trim().toUpperCase() === norm || (data.title && data.title.trim().toUpperCase() === norm)) {
+              matchedStoryFlag = flag ? flag.trim() : d.id;
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn("Could not query encounters for code:", e);
+        }
+      }
+
+      // 3. Check stories collection in Firestore
+      if (!matchedStoryFlag) {
+        try {
+          const storiesSnap = await getDocs(collection(db, "stories"));
+          for (const d of storiesSnap.docs) {
+            const data = d.data();
+            if (d.id.trim().toUpperCase() === norm) {
+              matchedStoryFlag = d.id;
+              break;
+            }
+            if (data.triggerCondition && data.triggerCondition.trim().toUpperCase() === norm) {
+              matchedStoryFlag = data.triggerCondition.trim();
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn("Could not query stories for code:", e);
+        }
+      }
+
+      // 4. Check subAreas collection for story flags
+      if (!matchedStoryFlag) {
+        try {
+          const subAreasSnap = await getDocs(collection(db, "subAreas"));
+          for (const d of subAreasSnap.docs) {
+            const flags = d.data().unlockRequirements?.storyFlags || [];
+            const match = flags.find((f: string) => f.trim().toUpperCase() === norm);
+            if (match) {
+              matchedStoryFlag = match.trim();
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn("Could not query subAreas for code:", e);
+        }
+      }
+
+      // 5. Fallback: if user entered a raw story flag directly
+      if (!matchedStoryFlag && /^[A-Za-z0-9_-]+$/.test(cleanCode)) {
+        matchedStoryFlag = cleanCode;
+      }
+
+      if (!matchedStoryFlag) {
+        setCodeMessage("That code does not exist or is incorrect.");
+        return;
+      }
+
+      // Check if already redeemed
+      const currentFlags = character?.storyFlags || [];
+      if (currentFlags.includes(matchedStoryFlag)) {
+        setCodeMessage("This code has already been redeemed and has no effect.");
+        return;
+      }
+
+      // Update character in Firestore and local state
+      if (user) {
+        await updateDoc(doc(db, "characters", user.uid), {
+          storyFlags: arrayUnion(matchedStoryFlag),
+          pendingProgressionFlags: arrayUnion(matchedStoryFlag),
+        });
+      }
+
+      setCharacter(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          storyFlags: [...new Set([...(prev.storyFlags || []), matchedStoryFlag!])],
+          pendingProgressionFlags: [...new Set([...(prev.pendingProgressionFlags || []), matchedStoryFlag!])],
+        };
+      });
+
+      setCodeInput("");
+      setCodeMessage(`✅ Code redeemed! Unlocking progress...`);
+      setTimeout(() => setCodeMessage(""), 4000);
+
     } catch (error) {
       console.error("Could not redeem encounter code:", error);
       setCodeMessage("Could not redeem the code. Please try again.");
@@ -544,10 +631,15 @@ export default function MapPage() {
                   ? "Keep playing to unlock"
                   : loc.name;
 
+                const isFogged = shouldShowFog || isAnimatingOut;
+                // Unlocked location pins have higher z-coordinate (z-30 hover:z-40) so nearby clouds (z-10) don't overstep them
+                // Locked location pins stay at the lowest z-coordinate (z-10)
+                const wrapperZIndex = isFogged ? "z-10" : "z-30 hover:z-40";
+
                 return (
                   <div
                     key={loc.id}
-                    className="absolute"
+                    className={classNames("absolute transition-all duration-300", wrapperZIndex)}
                     style={{ left: `${mapMeta.x * 100}%`, top: `${mapMeta.y * 100}%` }}
                   >
                     {/* Location Pin Button */}
@@ -557,9 +649,10 @@ export default function MapPage() {
                       aria-label={title}
                       disabled={!isClickable}
                       className={classNames(
-                        `group relative -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ease-out focus:outline-none z-10`,
+                        `group relative -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ease-out focus:outline-none`,
+                        isFogged ? "z-10" : "z-30",
                         { 'opacity-90 cursor-not-allowed': !isClickable },
-                        { 'opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-amber-400/80 cursor-pointer shadow-lg z-20': isClickable },
+                        { 'opacity-90 hover:opacity-100 hover:scale-110 hover:ring-4 hover:ring-amber-400/80 cursor-pointer shadow-lg': isClickable },
                       )}
                     >
                       <div className="w-full h-full rounded-full ring-2 ring-white/60 backdrop-blur-sm bg-black/40 flex items-center justify-center transition-transform duration-300 ease-out group-hover:scale-110">
@@ -607,7 +700,7 @@ export default function MapPage() {
 
                     {/* 4-CLOUD FOG-OF-WAR LAYER (2x2 Grid Centered on the Pin) */}
                     {(shouldShowFog || isAnimatingOut) && (
-                      <div className="absolute inset-0 pointer-events-none z-20">
+                      <div className="absolute inset-0 pointer-events-none z-10">
                         <FourCloudsFog isAnimatingOut={isAnimatingOut} />
                       </div>
                     )}
