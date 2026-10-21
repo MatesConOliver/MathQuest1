@@ -6,21 +6,26 @@ export type UnlockStatus =
     | { locked: true; reason: 'skills'; missing: { skill: keyof CharacterSkills, required: number }[] };
 
 export function getUnlockStatus(item: GameLocation | SubArea, character: Character, unlockedSubAreas?: { [key: string]: UnlockedSubArea }): UnlockStatus {
-  // Handle specific sub-area direct unlocks (e.g. via an item)
-  if ('locationId' in item && unlockedSubAreas?.[item.id]) {
-    return { locked: false };
-  }
-
   const reqs = item.unlockRequirements;
-  if (!reqs) return { locked: false }; // No requirements
 
-  // 1. Check Story Flags first
-  if (reqs.storyFlags && reqs.storyFlags.length > 0) {
-    const hasAllFlags = reqs.storyFlags.every(flag => character.storyFlags?.includes(flag));
+  // 1. Check Story Flags first (Story flags are authoritative - if GM adds or changes a flag, it must be locked)
+  if (reqs?.storyFlags && reqs.storyFlags.length > 0) {
+    const playerFlags = (character.storyFlags || []).map(f => typeof f === 'string' ? f.trim() : f);
+    const hasAllFlags = reqs.storyFlags.every(flag => {
+      const clean = typeof flag === 'string' ? flag.trim() : flag;
+      return clean && playerFlags.includes(clean);
+    });
     if (!hasAllFlags) {
       return { locked: true, reason: 'story' };
     }
   }
+
+  // Handle specific sub-area direct unlocks (e.g. via an item, only if story flags are satisfied)
+  if ('locationId' in item && unlockedSubAreas?.[item.id]) {
+    return { locked: false };
+  }
+
+  if (!reqs) return { locked: false }; // No requirements
 
   // 2. If story flags are met, check skills
   if (reqs.skills) {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { auth, callApi, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { arrayRemove, arrayUnion, collection, getDocs, orderBy, query, doc, getDoc, where, updateDoc } from "firebase/firestore";
+import { arrayRemove, arrayUnion, collection, getDocs, orderBy, query, doc, getDoc, where, updateDoc, onSnapshot } from "firebase/firestore";
 import Link from "next/link";
 import { GameLocation, EncounterDoc, Character, SubArea, UnlockedSubArea, CharacterSkills, StoryEvent, SubAreaNodeType } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
@@ -37,43 +37,43 @@ const isStoryLockedStatus = (status: UnlockStatus) => status.locked && status.re
 const SKILL_ORDER: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
 
 // =========================================================================
-// 5-CLOUD FOG-OF-WAR EMOJI COMPONENT (4 Corner Clouds in 2x2 Grid + 1 Center Cloud)
+// 5-CLOUD FOG-OF-WAR EMOJI COMPONENT (4 Corner Clouds in Tight 2x2 Grid + 1 Center Cloud)
 // =========================================================================
 function FourCloudsFog({ isAnimatingOut }: { isAnimatingOut: boolean }) {
-  // 5 big ☁️ clouds: 4 in a 2x2 grid around the pin + 1 in the center.
-  // When animating out (3.5s), the 4 corner clouds shoot out diagonally in opposite directions
-  // while fading out, and the center cloud expands and dissolves!
+  // 5 big ☁️ clouds: 4 in a tight 2x2 grid around the pin + 1 in the center.
+  // Tight spacing (±16px, ±14px) ensures massive overlap with NO open space/gaps between clouds!
+  // When animating out (3.5s), they move slower and travel a smaller, gentle distance (±40px, ±35px).
   const cornerClouds = [
     {
       id: 'tl',
-      initTransform: 'translate(-50%, -50%) translate(-38px, -34px) scale(1)',
-      shootTransform: 'translate(-50%, -50%) translate(-190px, -180px) scale(1.8)',
+      initTransform: 'translate(-50%, -50%) translate(-16px, -14px) scale(1.5)',
+      shootTransform: 'translate(-50%, -50%) translate(-40px, -35px) scale(1.65)',
     },
     {
       id: 'tr',
-      initTransform: 'translate(-50%, -50%) translate(38px, -34px) scale(1)',
-      shootTransform: 'translate(-50%, -50%) translate(190px, -180px) scale(1.8)',
+      initTransform: 'translate(-50%, -50%) translate(16px, -14px) scale(1.5)',
+      shootTransform: 'translate(-50%, -50%) translate(40px, -35px) scale(1.65)',
     },
     {
       id: 'bl',
-      initTransform: 'translate(-50%, -50%) translate(-38px, 34px) scale(1)',
-      shootTransform: 'translate(-50%, -50%) translate(-190px, 180px) scale(1.8)',
+      initTransform: 'translate(-50%, -50%) translate(-16px, 14px) scale(1.5)',
+      shootTransform: 'translate(-50%, -50%) translate(-40px, 35px) scale(1.65)',
     },
     {
       id: 'br',
-      initTransform: 'translate(-50%, -50%) translate(38px, 34px) scale(1)',
-      shootTransform: 'translate(-50%, -50%) translate(190px, 180px) scale(1.8)',
+      initTransform: 'translate(-50%, -50%) translate(16px, 14px) scale(1.5)',
+      shootTransform: 'translate(-50%, -50%) translate(40px, 35px) scale(1.65)',
     },
   ];
 
   return (
     <div className="relative w-0 h-0 overflow-visible pointer-events-none select-none z-10">
-      {/* 4 Corner Big ☁️ Clouds in 2x2 Grid */}
+      {/* 4 Corner Big ☁️ Clouds in Tight 2x2 Grid (Deep seamless overlap with zero open space) */}
       {cornerClouds.map((c) => (
         <span
           key={c.id}
           className={classNames(
-            "absolute text-5xl sm:text-6xl md:text-7xl filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.55)] transition-all duration-[3500ms] ease-out",
+            "absolute text-6xl sm:text-7xl md:text-8xl filter drop-shadow-[0_6px_16px_rgba(0,0,0,0.55)] transition-all duration-[3500ms] ease-out",
             {
               "opacity-100": !isAnimatingOut,
               "opacity-0": isAnimatingOut,
@@ -87,10 +87,10 @@ function FourCloudsFog({ isAnimatingOut }: { isAnimatingOut: boolean }) {
         </span>
       ))}
 
-      {/* Center 5th Big ☁️ Cloud */}
+      {/* Center 5th Big ☁️ Cloud (Anchors the core so there is zero open space) */}
       <span
         className={classNames(
-          "absolute text-5xl sm:text-6xl md:text-7xl filter drop-shadow-[0_4px_14px_rgba(0,0,0,0.65)] transition-all duration-[3500ms] ease-out",
+          "absolute text-6xl sm:text-7xl md:text-8xl filter drop-shadow-[0_6px_18px_rgba(0,0,0,0.65)] transition-all duration-[3500ms] ease-out",
           {
             "opacity-100": !isAnimatingOut,
             "opacity-0": isAnimatingOut,
@@ -98,8 +98,8 @@ function FourCloudsFog({ isAnimatingOut }: { isAnimatingOut: boolean }) {
         )}
         style={{
           transform: isAnimatingOut
-            ? 'translate(-50%, -50%) scale(2.2)'
-            : 'translate(-50%, -50%) scale(1.1)',
+            ? 'translate(-50%, -50%) scale(1.65)'
+            : 'translate(-50%, -50%) scale(1.5)',
         }}
       >
         ☁️
@@ -173,7 +173,7 @@ export default function MapPage() {
   const handleCodeSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isRedeeming) return;
-    const cleanCode = codeInput.trim();
+    const cleanCode = codeInput.trim().replace(/^["']|["']$/g, '').trim();
     if (!cleanCode) {
       setCodeMessage("That code does not exist or is incorrect.");
       return;
@@ -186,13 +186,19 @@ export default function MapPage() {
       const norm = cleanCode.toUpperCase();
       let matchedStoryFlag: string | null = null;
 
-      // 1. Check locations' required story flags
+      // 1. Check locations' required story flags or location name/ID
       for (const loc of locations) {
         const flags = loc.unlockRequirements?.storyFlags || [];
         const match = flags.find(f => f.trim().toUpperCase() === norm);
         if (match) {
           matchedStoryFlag = match.trim();
           break;
+        }
+        if (loc.id.trim().toUpperCase() === norm || (loc.name && loc.name.trim().toUpperCase() === norm)) {
+          if (flags.length > 0) {
+            matchedStoryFlag = flags[0].trim();
+            break;
+          }
         }
       }
 
@@ -237,16 +243,23 @@ export default function MapPage() {
         }
       }
 
-      // 4. Check subAreas collection for story flags
+      // 4. Check subAreas collection for story flags or subArea name/ID
       if (!matchedStoryFlag) {
         try {
           const subAreasSnap = await getDocs(collection(db, "subAreas"));
           for (const d of subAreasSnap.docs) {
-            const flags = d.data().unlockRequirements?.storyFlags || [];
+            const data = d.data();
+            const flags = data.unlockRequirements?.storyFlags || [];
             const match = flags.find((f: string) => f.trim().toUpperCase() === norm);
             if (match) {
               matchedStoryFlag = match.trim();
               break;
+            }
+            if (d.id.trim().toUpperCase() === norm || (data.name && data.name.trim().toUpperCase() === norm)) {
+              if (flags.length > 0) {
+                matchedStoryFlag = flags[0].trim();
+                break;
+              }
             }
           }
         } catch (e) {
@@ -254,8 +267,8 @@ export default function MapPage() {
         }
       }
 
-      // 5. Fallback: if user entered a raw story flag directly
-      if (!matchedStoryFlag && /^[A-Za-z0-9_-]+$/.test(cleanCode)) {
+      // 5. Fallback: if GM entered/tested a raw story flag directly
+      if (!matchedStoryFlag && cleanCode.length > 0) {
         matchedStoryFlag = cleanCode;
       }
 
@@ -322,33 +335,56 @@ export default function MapPage() {
     return () => unsubscribe();
   }, []);
 
+  // Real-time synchronization for Character, Locations, and Unlocked Sub-Areas
   useEffect(() => {
     if (!user) return;
 
-    const fetchCoreData = async () => {
-      setLoading(true);
-      try {
-        const [charSnap, locSnap, unlockedSnap] = await Promise.all([
-          getDoc(doc(db, "characters", user.uid)),
-          getDocs(query(collection(db, "locations"), orderBy("order"))),
-          getDocs(collection(db, `characters/${user.uid}/unlockedSubAreas`))
-        ]);
+    setLoading(true);
 
-        if (charSnap.exists()) setCharacter(charSnap.data() as Character);
-        setLocations(locSnap.docs.map(d => ({ ...d.data(), id: d.id } as GameLocation)));
-        
-        const unlockedData: { [key: string]: UnlockedSubArea } = {};
-        unlockedSnap.forEach(doc => { unlockedData[doc.id] = doc.data() as UnlockedSubArea });
-        setUnlockedSubAreas(unlockedData);
-
-      } catch (err) {
-        console.error("Error loading core map data:", err);
-      } finally {
-        setLoading(false);
+    const unsubChar = onSnapshot(doc(db, "characters", user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setCharacter(docSnap.data() as Character);
       }
+      setLoading(false);
+    }, (err) => {
+      console.error("Error subscribing to character:", err);
+      setLoading(false);
+    });
+
+    const unsubLocs = onSnapshot(query(collection(db, "locations"), orderBy("order")), (snap) => {
+      setLocations(snap.docs.map(d => ({ ...d.data(), id: d.id } as GameLocation)));
+    }, (err) => {
+      console.error("Error subscribing to locations:", err);
+    });
+
+    const unsubUnlocked = onSnapshot(collection(db, `characters/${user.uid}/unlockedSubAreas`), (snap) => {
+      const unlockedData: { [key: string]: UnlockedSubArea } = {};
+      snap.forEach(d => { unlockedData[d.id] = d.data() as UnlockedSubArea });
+      setUnlockedSubAreas(unlockedData);
+    }, (err) => {
+      console.error("Error subscribing to unlocked sub-areas:", err);
+    });
+
+    return () => {
+      unsubChar();
+      unsubLocs();
+      unsubUnlocked();
     };
-    fetchCoreData();
   }, [user]);
+
+  // If GM updates requirements of the currently viewed location making it locked, auto-return to World Map
+  useEffect(() => {
+    if (selectedLocation && character) {
+      const liveLoc = locations.find(l => l.id === selectedLocation.id);
+      if (liveLoc) {
+        const status = getUnlockStatus(liveLoc, character, unlockedSubAreas);
+        if (status.locked) {
+          setSelectedLocation(null);
+          setSelectedSubArea(null);
+        }
+      }
+    }
+  }, [locations, character, selectedLocation, unlockedSubAreas]);
 
   // Fetch sub-areas when an Area is selected
   useEffect(() => {
@@ -602,8 +638,6 @@ export default function MapPage() {
                 const isStoryLocked = unlockStatus.locked && unlockStatus.reason === 'story';
                 const isSkillLocked = unlockStatus.locked && unlockStatus.reason === 'skills';
 
-                // The first location is always visible
-                const isFirstLocation = loc.order === 1;
                 const pendingFlag = character.pendingProgressionFlags?.[0];
                 const isPendingUnlock = Boolean(
                   pendingFlag &&
@@ -614,7 +648,8 @@ export default function MapPage() {
                     storyFlags: (character.storyFlags || []).filter(flag => flag !== pendingFlag),
                   }))
                 );
-                const shouldShowFog = !isFirstLocation && (isStoryLocked || isPendingUnlock);
+                // Any location whose required story flags are not met by the player is covered with fog and locked
+                const shouldShowFog = isStoryLocked || isPendingUnlock;
                 const isClickable = !shouldShowFog && !isSkillLocked;
                 const isAnimatingOut = animatingOutLocationIds.has(loc.id);
 
