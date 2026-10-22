@@ -17,6 +17,21 @@ export default function SubAreasPanel() {
   const [isCreating, setIsCreating] = useState(true);
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const colorSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [colorDraft, setColorDraft] = useState<string | null>(null);
+
+  // Remember what the GM was editing so the panel can restore it if it ever remounts
+  const pendingSubAreaId = useRef<string | null>(
+    typeof window !== 'undefined' ? sessionStorage.getItem('gm.subareas.subAreaId') : null
+  );
+
+  useEffect(() => {
+    if (selectedLocationId) sessionStorage.setItem('gm.subareas.locationId', selectedLocationId);
+  }, [selectedLocationId]);
+
+  useEffect(() => {
+    if (editingSubArea?.id) sessionStorage.setItem('gm.subareas.subAreaId', editingSubArea.id);
+  }, [editingSubArea?.id]);
 
   useEffect(() => {
     const q = query(collection(db, 'locations'), orderBy('order'));
@@ -25,7 +40,9 @@ export default function SubAreasPanel() {
       setLocations(fetchedLocations);
       // Functional update: this effect runs once, so a closed-over selectedLocationId is always stale (null)
       if (fetchedLocations.length > 0) {
-        setSelectedLocationId(prev => prev ?? fetchedLocations[0].id);
+        const stored = sessionStorage.getItem('gm.subareas.locationId');
+        const restored = fetchedLocations.find(l => l.id === stored)?.id;
+        setSelectedLocationId(prev => prev ?? restored ?? fetchedLocations[0].id);
       }
     });
     return () => unsubscribe();
@@ -41,6 +58,11 @@ export default function SubAreasPanel() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedSubAreas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubArea));
       setSubAreas(fetchedSubAreas);
+      if (pendingSubAreaId.current) {
+        const match = fetchedSubAreas.find(s => s.id === pendingSubAreaId.current);
+        pendingSubAreaId.current = null;
+        if (match) selectSubAreaToEdit(match);
+      }
     }, (error) => {
       console.error(`Error fetching sub-areas for location ${selectedLocationId}:`, error);
       setSubAreas([]);
@@ -267,16 +289,27 @@ export default function SubAreasPanel() {
   const selectedLocation = locations.find(l => l.id === selectedLocationId);
   const allPossibleSkills: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
 
-  const handlePathColorChange = async (color: string) => {
+  const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+  const savedColor = selectedLocation?.pathColor || '#fbbf24';
+  const displayColor = colorDraft ?? savedColor;
+  const previewColor = HEX_COLOR.test(displayColor) ? displayColor : savedColor;
+
+  // Update the UI immediately; write to Firestore once the value is a valid hex and input has settled
+  const handlePathColorChange = (color: string) => {
     if (!selectedLocationId) return;
-    try {
-      await updateDoc(doc(db, 'locations', selectedLocationId), {
-        pathColor: color,
-      });
-      setLocations(prev => prev.map(loc => loc.id === selectedLocationId ? { ...loc, pathColor: color } : loc));
-    } catch (err) {
-      console.error("Failed to update path color:", err);
-    }
+    setColorDraft(color);
+    if (colorSaveTimer.current) clearTimeout(colorSaveTimer.current);
+    if (!HEX_COLOR.test(color)) return;
+
+    const locationId = selectedLocationId;
+    colorSaveTimer.current = setTimeout(async () => {
+      try {
+        await updateDoc(doc(db, 'locations', locationId), { pathColor: color });
+        setColorDraft(prev => (prev === color ? null : prev));
+      } catch (err) {
+        console.error("Failed to update path color:", err);
+      }
+    }, 300);
   };
 
   return (
@@ -289,7 +322,7 @@ export default function SubAreasPanel() {
           {locations.map(loc => (
             <TabButton 
               key={loc.id} 
-              onClick={() => { setSelectedLocationId(loc.id); startNewSubArea(); }} 
+              onClick={() => { setColorDraft(null); setSelectedLocationId(loc.id); startNewSubArea(); }} 
               active={selectedLocationId === loc.id}
             >
               {loc.name}
@@ -325,15 +358,16 @@ export default function SubAreasPanel() {
               <div className="flex items-center gap-2">
                 <input
                   type="color"
-                  value={selectedLocation.pathColor || '#fbbf24'}
+                  value={previewColor}
                   onChange={(e) => handlePathColorChange(e.target.value)}
                   className="w-7 h-7 rounded border border-gray-600 cursor-pointer bg-transparent"
                   title="Choose custom path color"
                 />
                 <input
                   type="text"
-                  value={selectedLocation.pathColor || '#fbbf24'}
+                  value={displayColor}
                   onChange={(e) => handlePathColorChange(e.target.value)}
+                  onBlur={() => { if (!HEX_COLOR.test(displayColor)) setColorDraft(null); }}
                   className="w-24 px-2 py-1 rounded bg-gray-800 text-white font-mono text-xs border border-gray-700"
                   placeholder="#fbbf24"
                 />
@@ -359,7 +393,7 @@ export default function SubAreasPanel() {
                   title={preset.name}
                   style={{ backgroundColor: preset.color }}
                   className={`w-5 h-5 rounded-full border border-black/40 shadow-sm transition-transform hover:scale-125 ${
-                    (selectedLocation.pathColor || '#fbbf24').toLowerCase() === preset.color.toLowerCase()
+                    previewColor.toLowerCase() === preset.color.toLowerCase()
                       ? 'ring-2 ring-white scale-110'
                       : 'opacity-80 hover:opacity-100'
                   }`}
@@ -429,7 +463,7 @@ export default function SubAreasPanel() {
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none z-10 overflow-visible">
               <path
                 d={bezierPath}
-                stroke={selectedLocation?.pathColor || '#fbbf24'}
+                stroke={previewColor}
                 strokeWidth="3.5"
                 vectorEffect="non-scaling-stroke"
                 strokeDasharray="4 4"
