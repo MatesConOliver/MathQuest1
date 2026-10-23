@@ -71,12 +71,13 @@ export default function ShopPage() {
     try {
       const charRef = doc(db, "characters", user.uid);
       
-      // Create the inventory object
+      const isWeapon = item.slot === "mainHand" || item.slot === "offHand" || item.type === "weapon";
+      // Create the inventory object (only weapons have durability)
       const newItem = {
         itemId: item.id,
         obtainedAt: Date.now(),
         instanceId: crypto.randomUUID(),
-        ...(item.maxDurability ? { 
+        ...(isWeapon && item.maxDurability ? { 
             durability: item.maxDurability, 
             maxDurability: item.maxDurability 
         } : {})
@@ -127,7 +128,6 @@ export default function ShopPage() {
         price: 30,
         // Changed Defense -> Max HP
         stats: { maxHp: { flat: 10 } }, 
-        maxDurability: 50,
         inShop: true
       },
       {
@@ -313,8 +313,8 @@ export default function ShopPage() {
                         </div>
                     )}
 
-                    {/* DURABILITY */}
-                    {item.maxDurability && (
+                    {/* DURABILITY (Weapons only) */}
+                    {(item.slot === 'mainHand' || item.slot === 'offHand' || item.type === 'weapon') && item.maxDurability && (
                         <div className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-bold rounded flex items-center gap-1 border border-gray-200 dark:border-gray-600">
                             <span>🔨</span> {item.maxDurability} Dur
                         </div>

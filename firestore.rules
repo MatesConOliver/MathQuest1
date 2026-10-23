@@ -6,7 +6,10 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
     function isGM() {
-      return signedIn() && request.auth.token.email == "oliveru1996@gmail.com";
+      return signedIn() && (
+        request.auth.token.email == "oliveru1996@gmail.com" ||
+        request.auth.token.email == "oliverozcariz@britanico-aragon.edu"
+      );
     }
 
     // --- CHARACTERS ---
@@ -63,13 +66,22 @@ service cloud.firestore {
     match /questions/{questionId} {
       allow read: if signedIn();
       allow write: if isGM();
+      // Allow signed-in students to cache AI generated solutions without modifying question data
+      allow update: if isGM() || (signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aiSolution']));
+    }
+
+    // --- REPORTS ---
+    match /reports/{reportId} {
+      allow create: if signedIn();
+      allow read: if isGM() || (signedIn() && (resource.data.userId == request.auth.uid || resource.data.ownerUid == request.auth.uid));
+      allow update, delete: if isGM();
     }
 
     // --- SUBMISSIONS ---
     match /submissions/{submissionId} {
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow read: if (signedIn() && resource.data.ownerUid == request.auth.uid) || isGM();
-      allow update, delete: if false;
+      allow update, delete: if isGM();
     }
   }
 }

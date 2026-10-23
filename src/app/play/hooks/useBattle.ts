@@ -147,8 +147,9 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
           const def = gameItems[instance.itemId];
           if (!def || !def.stats) return;
     
+          const isWeapon = def.slot === "mainHand" || def.slot === "offHand" || def.type === "weapon";
           const isBroken =
-            (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
+            isWeapon && (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
           if (isBroken) return;
     
           const s = def.stats;
@@ -447,9 +448,10 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       const correct = choiceIndex === currentQuestion.correctIndex;
 
       // Durability degradation rules:
+      // Only weapons have durability (both hands):
       // - Main hand weapon: loses 1 durability on correct answer
-      // - Armor & Head gear: lose 1 durability on wrong answer / timeout
       // - Off hand weapon/shield: loses 1 durability on EVERY answer regardless
+      // Armor and head gear NEVER lose durability
       setBattleInventory((prevInventory) => {
         const source = prevInventory.length > 0 ? prevInventory : (character?.inventory || []);
         return source.map((item) => {
@@ -457,12 +459,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
 
           const isMainHand = correct && character?.equipment?.mainHand === item.instanceId;
           const isOffHand = character?.equipment?.offHand === item.instanceId;
-          const isArmorOrHead = !correct && (
-            character?.equipment?.armor === item.instanceId ||
-            character?.equipment?.head === item.instanceId
-          );
 
-          if (isMainHand || isOffHand || isArmorOrHead) {
+          if (isMainHand || isOffHand) {
             const currentDur = typeof item.durability === 'number' ? item.durability : item.maxDurability;
             const nextDurability = Math.max(0, currentDur - 1);
             return { ...item, durability: nextDurability };

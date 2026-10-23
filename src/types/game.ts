@@ -31,6 +31,7 @@ export interface GameItem {
   slot?: EquipmentSlot;
   maxDurability?: number;
   inShop?: boolean;
+  goldValue?: number; // Consuming/opening grants this amount of gold
 }
 
 export interface InventoryItem {
@@ -39,6 +40,11 @@ export interface InventoryItem {
   instanceId: string;
   durability?: number;
   maxDurability?: number;
+  customData?: {
+    goldAmount?: number;
+    reason?: string;
+    title?: string;
+  };
 }
 
 export interface CharacterStats {
@@ -144,6 +150,14 @@ export type QuestionDoc = {
   imageUrl?: string;
   solutionUrl?: string; // Optional URL to video walkthrough, image solution, or interactive applet
   solutionText?: string; // Optional text / LaTeX explanation of the solution
+  aiSolution?: {
+    text: string;
+    verifiedCorrectIndex?: number;
+    isDiscrepancy?: boolean;
+    discrepancyNote?: string;
+    generatedAt?: number;
+    model?: string;
+  };
 };
 
 export type FoeDoc = {
@@ -274,3 +288,32 @@ export interface StoryScene {
   // If no choices, where does the "Next" button go?
   nextSceneId?: string | "END";
 }
+
+export type ReportStatus = 'pending' | 'resolved' | 'rewarded' | 'dismissed';
+export type ReportCategory = 'question' | 'bug' | 'suggestion' | 'other';
+
+export interface GameReport {
+  id: string;
+  category: ReportCategory;
+  status: ReportStatus;
+  userId: string;
+  userEmail?: string;
+  characterName?: string;
+  questionId?: string;
+  questionTitle?: string;
+  questionPrompt?: string;
+  subAreaId?: string;
+  locationId?: string;
+  problemDescription: string;
+  issueType: string;
+  selectedChoiceIndex?: number;
+  expectedCorrectIndex?: number;
+  configuredCorrectIndex?: number;
+  aiSolutionText?: string;
+  rewardGold?: number;
+  rewardItemInstanceId?: string;
+  gmNotes?: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+

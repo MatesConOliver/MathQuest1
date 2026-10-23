@@ -110,7 +110,12 @@ const InventoryItemCard = ({
   onUse: (i: InventoryItem) => void;
   onSell: (i: InventoryItem) => void;
 }) => {
-  const isBroken = (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
+  const isGoldPouch = item.itemId === 'gift_gold_bounty' || !!item.customData?.goldAmount || !!def.goldValue;
+  const goldAmount = item.customData?.goldAmount || def.goldValue || 100;
+  const displayName = item.customData?.title || def.name;
+
+  const isWeapon = def.slot === "mainHand" || def.slot === "offHand" || def.type === "weapon";
+  const isBroken = isWeapon && (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
   const isGear = def.slot || ["armor", "head", "mainHand", "offHand", "weapon", "shield"].includes(def.type as string);
   const isFirstRow = index < 2;
 
@@ -120,7 +125,9 @@ const InventoryItemCard = ({
 
   return (
     <div className={`group relative p-3 rounded-xl flex flex-col gap-2 transition-all ${
-      isBroken 
+      isGoldPouch
+        ? "bg-amber-50/80 border-2 border-amber-400 dark:bg-amber-950/40 dark:border-amber-500/70 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+        : isBroken 
         ? "bg-red-950/30 border-2 border-red-600/70 dark:bg-red-950/40 dark:border-red-600/80 shadow-[0_0_12px_rgba(220,38,38,0.25)]" 
         : "border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-700/50"
     }`}>
@@ -132,27 +139,41 @@ const InventoryItemCard = ({
       <div className="flex justify-between items-start gap-2">
           <div className="flex-1 min-w-0">
               <div className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">
-                  {def.name} 
+                  {displayName} 
+                  {isGoldPouch && <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 px-1.5 py-0.5 rounded ml-1 font-black border border-amber-300 dark:border-amber-700">GIFT</span>}
                   {isEquipped && <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1 rounded ml-1 border border-green-200 dark:border-green-800">EQUIPPED</span>}
                   {isBroken && <span className="text-[10px] bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 px-1 rounded ml-1 font-black border border-red-200 dark:border-red-800 animate-pulse">BROKEN</span>}
               </div>
               <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
-                {def.slot || (def.type as string)}
+                {isGoldPouch ? `Consumable Gift (+${goldAmount} Gold)` : def.slot || (def.type as string)}
               </div>
+              {item.customData?.reason && (
+                <div className="mt-1.5 p-2 rounded-lg bg-amber-100/90 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700/60 text-[11px] text-amber-950 dark:text-amber-200 leading-snug shadow-inner">
+                  <div className="font-black flex items-center gap-1 text-[9px] uppercase tracking-wider text-amber-800 dark:text-amber-400 mb-0.5">
+                    <span>📜</span>
+                    <span>Note from GM:</span>
+                  </div>
+                  <div className="italic break-words">&ldquo;{item.customData.reason}&rdquo;</div>
+                </div>
+              )}
                 
-              {item.maxDurability ? (
+              {isWeapon && item.maxDurability ? (
                 <div className="mt-2 w-full max-w-[130px]">
                   <DurabilityBar current={item.durability || 0} max={item.maxDurability} />
                 </div>
               ) : null}
           </div>
-          {def.imageUrl && (
+          {def.imageUrl ? (
             <img 
               src={def.imageUrl} 
               className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 object-cover shrink-0 border border-gray-300 dark:border-gray-600" 
-              alt={def.name}
+              alt={displayName}
             />
-          )}
+          ) : isGoldPouch ? (
+            <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-950 flex items-center justify-center text-xl shrink-0 border border-amber-300">
+              🎁
+            </div>
+          ) : null}
       </div>
 
       {/* BUTTONS */}
@@ -160,26 +181,38 @@ const InventoryItemCard = ({
           <button 
             onClick={isGear ? () => onEquip(item) : () => onUse(item)}
             disabled={isEquipped || (isGear && isBroken)}
-            className={`flex-1 py-1.5 text-xs rounded-lg font-bold transition-colors ${
-              isEquipped || (isGear && isBroken)
+            className={`flex-1 py-1.5 text-xs rounded-lg font-bold transition-all active:scale-95 ${
+              isGoldPouch
+                ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black shadow-md"
+                : isEquipped || (isGear && isBroken)
                 ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
                 : "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
             }`}
           >
-            {isEquipped ? "Equipped" : (isGear && isBroken ? "Needs Repair" : (isGear ? "Equip" : "Use"))}
+            {isGoldPouch
+              ? `Open Pouch (+${goldAmount}G)`
+              : isEquipped
+              ? "Equipped"
+              : isGear && isBroken
+              ? "Needs Repair"
+              : isGear
+              ? "Equip"
+              : "Use"}
           </button>
 
-          <button 
-            onClick={() => onSell(item)}
-            disabled={isEquipped}
-            className={`px-3 py-1.5 text-xs rounded-lg font-bold border transition-colors ${
-              isEquipped 
-                ? "bg-gray-100 text-gray-300 border-gray-200 dark:bg-gray-700 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed"
-                : "bg-red-50 text-red-600 border-red-100 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-900/40 dark:hover:bg-red-900/40"
-            }`}
-          >
-            {isEquipped ? "In Use" : `Sell ${sellValue}G`}
-          </button>
+          {!isGoldPouch && (
+            <button 
+              onClick={() => onSell(item)}
+              disabled={isEquipped}
+              className={`px-3 py-1.5 text-xs rounded-lg font-bold border transition-colors ${
+                isEquipped 
+                  ? "bg-gray-100 text-gray-300 border-gray-200 dark:bg-gray-700 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed"
+                  : "bg-red-50 text-red-600 border-red-100 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-900/40 dark:hover:bg-red-900/40"
+              }`}
+            >
+              {isEquipped ? "In Use" : `Sell ${sellValue}G`}
+            </button>
+          )}
       </div>
     </div>
   );
@@ -255,7 +288,8 @@ function EquipRow({ slotName, slotKey, equippedId, gameItems, inventory, onUnequ
       : null;
 
   const def = instance ? gameItems[instance.itemId] : null;
-  const isBroken = instance && (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
+  const isWeaponSlot = slotKey === "mainHand" || slotKey === "offHand";
+  const isBroken = isWeaponSlot && instance && (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
 
   const slotIcons: Record<string, string> = {
     mainHand: "⚔️",
@@ -294,8 +328,8 @@ function EquipRow({ slotName, slotKey, equippedId, gameItems, inventory, onUnequ
             </span>
           </div>
 
-          {/* NO other stats displayed directly, ONLY durability bar */}
-          {instance && instance.maxDurability ? (
+          {/* NO other stats displayed directly, ONLY durability bar for weapons */}
+          {isWeaponSlot && instance && instance.maxDurability ? (
             <div className="mt-1.5 max-w-[180px]">
               <DurabilityBar current={instance.durability || 0} max={instance.maxDurability} />
             </div>
@@ -396,7 +430,8 @@ const calculateMaxHpForEquipment = (
     const def = gameItems[instance.itemId];
     if (!def || !def.stats) return;
 
-    const isBroken = (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
+    const isWeapon = def.slot === "mainHand" || def.slot === "offHand" || def.type === "weapon";
+    const isBroken = isWeapon && (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
     if (isBroken) return;
 
     if (def.stats.maxHp?.flat) hpFlat += def.stats.maxHp.flat;
@@ -500,7 +535,8 @@ export default function CharacterPage() {
       const def = gameItems[instance.itemId];
       if (!def || !def.stats) return;
 
-      const isBroken = (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
+      const isWeapon = def.slot === "mainHand" || def.slot === "offHand" || def.type === "weapon";
+      const isBroken = isWeapon && (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
       if (isBroken) return;
 
       const s = def.stats;
@@ -687,7 +723,8 @@ export default function CharacterPage() {
     }
 
     // Broken objects are sellable for half of usual selling price (usual is 50%, broken is 25%)
-    const isBroken = (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
+    const isWeapon = def.slot === "mainHand" || def.slot === "offHand" || def.type === "weapon";
+    const isBroken = isWeapon && (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
     const usualSellPrice = Math.max(1, Math.ceil(def.price * 0.5));
     const sellPrice = isBroken ? Math.max(1, Math.floor(usualSellPrice / 2)) : usualSellPrice;
 
@@ -709,6 +746,25 @@ export default function CharacterPage() {
   const handleUse = async (item: InventoryItem) => {
     if (!char || !user) return;
     const def = gameItems[item.itemId];
+
+    // Gold Bounty Pouch / Gift Consumable
+    if (item.itemId === 'gift_gold_bounty' || item.customData?.goldAmount || def?.goldValue) {
+        const goldAmt = item.customData?.goldAmount || def?.goldValue || 100;
+        const newGold = (char.gold || 0) + goldAmt;
+        const newInventory = char.inventory.filter(i => (i.instanceId ? i.instanceId !== item.instanceId : i.itemId !== item.itemId));
+
+        setChar({ ...char, gold: newGold, inventory: newInventory });
+        await updateDoc(doc(db, "characters", user.uid), {
+            gold: increment(goldAmt),
+            inventory: newInventory
+        });
+        playSfx("/item-sold.mp3");
+        const gmNote = item.customData?.reason ? ` • Note: "${item.customData.reason}"` : "";
+        setMsg(`💰 Opened ${item.customData?.title || def?.name || "Gold Bounty Pouch"}! Claimed +${goldAmt} Gold!${gmNote}`);
+        setTimeout(() => setMsg(""), 5000);
+        return;
+    }
+
     if (!def) return;
 
     // Rare Candy

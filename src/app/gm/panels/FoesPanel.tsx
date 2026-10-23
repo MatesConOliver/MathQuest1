@@ -23,7 +23,8 @@ export function FoesPanel() {
   );
 
   // Form State
-  const [id, setId] = useState("");
+  const [foeId, setFoeId] = useState("");
+  const [originalFoeId, setOriginalFoeId] = useState("");
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [emoji, setEmoji] = useState("👾");
@@ -45,7 +46,8 @@ export function FoesPanel() {
   }
 
   function resetForm() {
-    setId("");
+    setFoeId("");
+    setOriginalFoeId("");
     setName("");
     setDesc("");
     setEmoji("👾");
@@ -56,7 +58,8 @@ export function FoesPanel() {
   }
 
   function loadFoeToEdit(f: FoeDoc) {
-    setId(f.id || "");
+    setFoeId(f.id || "");
+    setOriginalFoeId(f.id || "");
     setName(f.name);
     setDesc(f.description || "");
     setEmoji(f.emoji || "👾");
@@ -71,6 +74,11 @@ export function FoesPanel() {
       setMsg("❌ Name is required");
       return;
     }
+
+    // Determine target ID: custom input, or slugified name, or auto doc ID
+    const sanitizedInputId = foeId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+    const targetId = sanitizedInputId || name.toLowerCase().replace(/[^a-z0-9_-]/g, "-") || doc(collection(db, "foes")).id;
+
     setMsg("Saving...");
 
     const docData: Partial<FoeDoc> = {
@@ -83,23 +91,25 @@ export function FoesPanel() {
     };
 
     try {
-      if (id) {
-        await setDoc(doc(db, "foes", id), docData, { merge: true });
-        setMsg("✅ Updated Foe!");
-      } else {
-        const newDocRef = await addDoc(collection(db, "foes"), docData);
-        setId(newDocRef.id); // Set the new ID in the form
-        setMsg("✅ Created New Foe!");
+      await setDoc(doc(db, "foes", targetId), docData, { merge: true });
+
+      // If ID changed during edit, clean up the old doc
+      if (originalFoeId && originalFoeId !== targetId) {
+        await deleteDoc(doc(db, "foes", originalFoeId));
       }
+
+      setFoeId(targetId);
+      setOriginalFoeId(targetId);
+      setMsg(originalFoeId ? "✅ Updated Foe!" : "✅ Created New Foe!");
       loadFoes();
     } catch (e: any) {
       setMsg("Error: " + e.message);
     }
   }
 
-  async function deleteFoe(foeId: string) {
-    if (!confirm("Delete this foe?")) return;
-    await deleteDoc(doc(db, "foes", foeId));
+  async function deleteFoe(idToDelete: string) {
+    if (!confirm(`Delete foe '${idToDelete}'?`)) return;
+    await deleteDoc(doc(db, "foes", idToDelete));
     resetForm();
     loadFoes();
   }
@@ -108,13 +118,35 @@ export function FoesPanel() {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border dark:border-gray-700 shadow-sm transition-colors">
       {/* FORM SIDE */}
       <div className="space-y-4">
-        <h2 className="text-xl font-bold">{id ? "✏️ Edit Foe" : "👾 New Foe"}</h2>
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-bold">{originalFoeId ? "✏️ Edit Foe" : "👾 New Foe"}</h2>
+          {originalFoeId && (
+            <button
+              onClick={resetForm}
+              className="text-xs text-blue-500 hover:text-blue-400 font-bold"
+            >
+              + Create New Foe
+            </button>
+          )}
+        </div>
 
         {msg && (
           <div className="text-center bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-blue-800 dark:text-blue-200 font-bold text-sm">
             {msg}
           </div>
         )}
+
+        <div>
+          <Input
+            label="Foe ID (Editable)"
+            value={foeId}
+            onChange={(e: any) => setFoeId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "-"))}
+            placeholder="e.g. slime-king, dark-mage (auto-slugs if empty)"
+          />
+          <span className="text-[10px] text-gray-500 dark:text-gray-400">
+            Unique identifier referenced by encounters and subarea spawns.
+          </span>
+        </div>
 
         <Input
           label="Name"
@@ -161,9 +193,9 @@ export function FoesPanel() {
             onClick={saveFoe}
             className="btn-primary flex-1 bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 py-2 rounded-lg font-bold"
           >
-            {id ? "Update Foe" : "Create Foe"}
+            {originalFoeId ? "Update Foe" : "Create Foe"}
           </button>
-          {id && (
+          {originalFoeId && (
             <button
               onClick={resetForm}
               className="px-4 py-2 bg-gray-200 dark:bg-gray-700 dark:text-white rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-600"
@@ -190,10 +222,10 @@ export function FoesPanel() {
             <div
               key={f.id}
               onClick={() => loadFoeToEdit(f)}
-              className={`p-3 border rounded flex justify-between items-center cursor-pointer transition-colors 
+              className={`p-3 border rounded-xl flex justify-between items-center cursor-pointer transition-colors 
                       ${
-                        id === f.id
-                          ? "border-purple-500 bg-purple-50 ring-1 ring-purple-500 dark:bg-purple-900/30 dark:border-purple-400"
+                        originalFoeId === f.id
+                          ? "border-purple-500 bg-purple-50 ring-2 ring-purple-500 dark:bg-purple-900/30 dark:border-purple-400"
                           : "dark:border-gray-600 hover:bg-purple-50 dark:hover:bg-purple-900/20"
                       }`}
             >
@@ -208,8 +240,11 @@ export function FoesPanel() {
                   <div className="text-2xl">{f.emoji || "👾"}</div>
                 )}
                 <div>
-                  <div className="font-bold text-sm dark:text-gray-100">
-                    {f.name}
+                  <div className="font-bold text-sm dark:text-gray-100 flex items-center gap-2">
+                    <span>{f.name}</span>
+                    <span className="font-mono text-[10px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950/60 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-800">
+                      {f.id}
+                    </span>
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                     ❤️{f.maxHp} ⚔️{f.attackDamage ?? "?"}

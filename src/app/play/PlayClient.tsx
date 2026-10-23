@@ -98,6 +98,7 @@ export default function PlayClient() {
           usePotion={battle.usePotion}
           subArea={currentSubArea}
           combatEffect={battle.combatEffect}
+          user={user}
         />
       );
     case 'win':

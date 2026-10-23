@@ -40,32 +40,36 @@ body {
   }
 }
 
-@keyframes floatDamageUp {
+@keyframes showdownDamageFloat {
   0% {
     opacity: 0;
-    transform: translateY(12px) scale(0.7);
+    transform: translateY(8px) scale(0.95);
   }
-  20% {
+  14% {
     opacity: 1;
-    transform: translateY(-8px) scale(1.25);
+    transform: translateY(0) scale(1.02);
   }
-  75% {
+  22% {
     opacity: 1;
-    transform: translateY(-30px) scale(1.05);
+    transform: translateY(0) scale(1);
+  }
+  68% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translateY(-48px) scale(0.9);
+    transform: translateY(-24px) scale(0.96);
   }
 }
 
-@keyframes spriteDamageFlash {
-  0% { filter: brightness(1); opacity: 1; transform: scale(1); }
-  20% { filter: brightness(2.8) drop-shadow(0 0 16px rgba(239, 68, 68, 0.95)); opacity: 0.15; transform: scale(0.95) translateX(-6px); }
-  40% { filter: brightness(1.6); opacity: 0.9; transform: scale(1.02) translateX(6px); }
-  60% { filter: brightness(2.2) drop-shadow(0 0 12px rgba(239, 68, 68, 0.8)); opacity: 0.2; transform: scale(0.97) translateX(-3px); }
-  85% { opacity: 0.95; }
-  100% { filter: brightness(1); opacity: 1; transform: scale(1); }
+@keyframes spriteDamageRecoil {
+  0% { transform: scale(1) translateX(0); filter: brightness(1); }
+  15% { transform: scale(0.97) translateX(-6px); filter: brightness(1.3) drop-shadow(0 0 12px rgba(239, 68, 68, 0.7)); }
+  35% { transform: scale(1.02) translateX(6px); filter: brightness(1.15); }
+  55% { transform: scale(0.99) translateX(-3px); filter: brightness(1.05); }
+  75% { transform: scale(1.01) translateX(2px); filter: brightness(1); }
+  100% { transform: scale(1) translateX(0); filter: brightness(1); }
 }
 
 @keyframes playerAttackLunge {
@@ -90,11 +94,11 @@ body {
 }
 
 .animate-damage-float {
-  animation: floatDamageUp 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: showdownDamageFloat 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .animate-sprite-hit {
-  animation: spriteDamageFlash 0.55s ease-in-out;
+  animation: spriteDamageRecoil 0.5s ease-out;
 }
 
 .animate-player-lunge {

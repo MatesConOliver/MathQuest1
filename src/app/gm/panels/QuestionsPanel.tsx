@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -103,9 +103,13 @@ export function QuestionsPanel() {
     const [questions, setQuestions] = useState<QuestionDoc[]>([]);
     const [editingId, setEditingId] = useState("");
   
-    // Search
+    // Search & Tag Fetch State
     const [dbTagSearch, setDbTagSearch] = useState("");
+    const [selectedDropdownTag, setSelectedDropdownTag] = useState("");
+    const [availableTags, setAvailableTags] = useState<string[]>([]);
+    const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
     const [localFilter, setLocalFilter] = useState("");
+    const [debouncedFilter, setDebouncedFilter] = useState("");
   
     // UNIFIED FORM STATE
     const [title, setTitle] = useState("");
@@ -118,6 +122,7 @@ export function QuestionsPanel() {
     const [groupId, setGroupId] = useState("");
     const [solutionUrl, setSolutionUrl] = useState("");
     const [solutionText, setSolutionText] = useState("");
+    const [currentAiSolution, setCurrentAiSolution] = useState("");
     const [qMinutes, setQMinutes] = useState(0);
     const [qSeconds, setQSeconds] = useState(30);
 
@@ -125,25 +130,81 @@ export function QuestionsPanel() {
     const promptPreview = useMemo(() => stringToContentBlocks(promptString), [promptString]);
     const choicesPreview = useMemo(() => choices.map(c => stringToContentBlocks(c)), [choices]);
   
-    useEffect(() => { loadRecent(); }, []);
-  
-    async function loadRecent() {
+    // 1. GATHER KNOWN TAGS ALPHABETICALLY ON MOUNT (MINIMAL READS: Encounters collection only)
+    // NOTE: Questions list intentionally starts VOID to minimize Firestore document reads!
+    useEffect(() => {
+      async function loadKnownTags() {
+        try {
+          const defaultCurriculumTags = [
+            "algebra", "arithmetic", "boss", "calculus", "derivatives",
+            "equations", "fractions", "functions", "geometry", "integrals",
+            "level1", "level2", "level3", "limits", "matrices", "polynomials",
+            "probabilityAndStatistics", "statistics", "trigonometry", "vectors"
+          ];
+          const tagSet = new Set<string>(defaultCurriculumTags);
+
+          // Read small encounters collection once
+          const encSnap = await getDocs(collection(db, "encounters"));
+          encSnap.docs.forEach((d) => {
+            const data = d.data();
+            if (data.questionTag && typeof data.questionTag === "string") {
+              tagSet.add(data.questionTag.trim());
+            }
+            if (Array.isArray(data.questionTags)) {
+              data.questionTags.forEach((t: string) => {
+                if (t && typeof t === "string") tagSet.add(t.trim());
+              });
+            }
+          });
+
+          const sortedTags = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+          setAvailableTags(sortedTags);
+        } catch (e) {
+          console.error("Error gathering tags:", e);
+        }
+      }
+      loadKnownTags();
+    }, []);
+
+    // 2. FETCH QUESTIONS BY SPECIFIC TAG
+    const loadByTag = useCallback(async (tagToSearch?: string) => {
+      const tag = (tagToSearch !== undefined ? tagToSearch : dbTagSearch).trim();
+      if (!tag) {
+        setMsg("⚠️ Please enter or select a tag to fetch questions.");
+        return;
+      }
+      setIsLoadingQuestions(true);
       try {
-        const q = query(collection(db, "questions"), limit(1000));
+        const q = query(collection(db, "questions"), where("tags", "array-contains", tag));
         const snap = await getDocs(q);
-        setQuestions(snap.docs.map(d => ({ ...d.data(), id: d.id } as QuestionDoc)));
-      } catch (e) { console.error(e); }
-    }
-  
-    async function loadByTag() {
-      if (!dbTagSearch) return loadRecent();
-      try {
-        const q = query(collection(db, "questions"), where("tags", "array-contains", dbTagSearch));
-        const snap = await getDocs(q);
-        setQuestions(snap.docs.map(d => ({ ...d.data(), id: d.id } as QuestionDoc)));
-        setMsg(`Found ${snap.docs.length} questions with tag: '${dbTagSearch}'`);
-      } catch (e) { setMsg("Error searching tag."); }
-    }
+        const fetched = snap.docs.map(d => ({ ...d.data(), id: d.id } as QuestionDoc));
+        setQuestions(fetched);
+        setMsg(`✅ Loaded ${fetched.length} questions matching tag '${tag}'`);
+      } catch (e: any) {
+        setMsg("Error searching tag: " + (e?.message || e));
+      } finally {
+        setIsLoadingQuestions(false);
+      }
+    }, [dbTagSearch]);
+
+    // 3. DEBOUNCE MICRO-TIME FOR LOCAL FILTER (250ms)
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        setDebouncedFilter(localFilter);
+      }, 250);
+      return () => clearTimeout(timer);
+    }, [localFilter]);
+
+    // 4. DEBOUNCE MICRO-TIME FOR TAG SEARCH INPUT (500ms)
+    useEffect(() => {
+      const trimmed = dbTagSearch.trim();
+      if (!trimmed || trimmed.length < 2) return;
+
+      const timer = setTimeout(() => {
+        loadByTag(trimmed);
+      }, 500);
+      return () => clearTimeout(timer);
+    }, [dbTagSearch, loadByTag]);
 
     const getQuestionDisplayText = (q: QuestionDoc): string => {
         if (q.promptContent) return contentBlocksToString(q.promptContent);
@@ -153,14 +214,17 @@ export function QuestionsPanel() {
         return "Untitled";
     }
   
-    const visibleQuestions = questions
-    .filter(q => {
-        const mainText = getQuestionDisplayText(q);
-        const tags = q.tags ? q.tags.join(" ") : "";
-        const searchString = `${q.title || ""} ${mainText} ${tags}`.toLowerCase();
-        return searchString.includes(localFilter.toLowerCase());
-    })
-    .sort((a, b) => (b.title || "").localeCompare(a.title || ""));
+    const visibleQuestions = useMemo(() => {
+      return questions
+        .filter(q => {
+          if (!debouncedFilter.trim()) return true;
+          const mainText = getQuestionDisplayText(q);
+          const tags = q.tags ? q.tags.join(" ") : "";
+          const searchString = `${q.title || ""} ${mainText} ${tags}`.toLowerCase();
+          return searchString.includes(debouncedFilter.toLowerCase());
+        })
+        .sort((a, b) => (b.title || "").localeCompare(a.title || ""));
+    }, [questions, debouncedFilter]);
   
     function loadQuestionToEdit(q: QuestionDoc) {
       if (!q.id) return;
@@ -187,6 +251,7 @@ export function QuestionsPanel() {
       setGroupId(q.groupId || "");
       setSolutionUrl(q.solutionUrl || "");
       setSolutionText(q.solutionText || "");
+      setCurrentAiSolution(q.aiSolution?.text || "");
       const totalSecs = q.timeLimit || 30; 
       setQMinutes(Math.floor(totalSecs / 60));
       setQSeconds(totalSecs % 60);
@@ -199,7 +264,7 @@ export function QuestionsPanel() {
       setCorrectIndex(0); 
       setQMinutes(0); setQSeconds(30);
       setDifficulty(1); setTagsText("level1"); setOrder(""); setGroupId("");
-      setSolutionUrl(""); setSolutionText(""); setMsg("");
+      setSolutionUrl(""); setSolutionText(""); setCurrentAiSolution(""); setMsg("");
     }
   
     async function saveQuestion() {
@@ -226,14 +291,23 @@ export function QuestionsPanel() {
       try {
         if (editingId) {
           await setDoc(doc(db, "questions", editingId), docData, { merge: true });
+          const updatedDoc = { ...docData, id: editingId } as QuestionDoc;
+          setQuestions((prev) => prev.map((q) => (q.id === editingId ? updatedDoc : q)));
           setMsg("✅ Updated & Migrated Question!");
         } else {
           docData.createdAt = serverTimestamp();
-          await addDoc(collection(db, "questions"), docData);
+          const docRef = await addDoc(collection(db, "questions"), docData);
+          const newDoc = { ...docData, id: docRef.id } as QuestionDoc;
+          setQuestions((prev) => [newDoc, ...prev]);
           setMsg("✅ Created New Question!");
         }
+
+        // Add any newly typed tags to available tags dropdown list
+        if (tagsArray.length > 0) {
+          setAvailableTags((prev) => Array.from(new Set([...prev, ...tagsArray])).sort((a, b) => a.localeCompare(b)));
+        }
+
         if (!editingId) resetForm(); 
-        if (dbTagSearch) loadByTag(); else loadRecent();
       } catch (e: any) { setMsg("Error: " + e.message); }
     }    
   
@@ -241,9 +315,9 @@ export function QuestionsPanel() {
       if (!confirm("Permanently delete this question?")) return;
       try {
         await deleteDoc(doc(db, "questions", qId));
+        setQuestions((prev) => prev.filter((q) => q.id !== qId));
         setMsg("🗑️ Question deleted.");
         if (editingId === qId) resetForm();
-        if (dbTagSearch) loadByTag(); else loadRecent();
       } catch (e: any) { setMsg("Error: " + e.message); }
     }
   
@@ -319,8 +393,22 @@ export function QuestionsPanel() {
                   rows={2}
                   value={solutionText}
                   onChange={(e) => setSolutionText(e.target.value)}
-                  placeholder="Explicación detallada paso a paso..."
+                  placeholder="Manual step-by-step explanation (overwrites any AI solution)..."
                 />
+                {currentAiSolution && !solutionText && (
+                  <div className="mt-1.5 p-2 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-800 text-[11px] text-indigo-800 dark:text-indigo-300 flex items-center justify-between gap-2">
+                    <div className="truncate flex-1">
+                      <span className="font-bold">🤖 Stored AI Solution:</span> {currentAiSolution}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSolutionText(currentAiSolution)}
+                      className="px-2 py-0.5 bg-indigo-600 text-white font-bold rounded text-[10px] hover:bg-indigo-500 shrink-0"
+                    >
+                      Copy to Edit
+                    </button>
+                  </div>
+                )}
              </div>
           </div>
 
@@ -351,18 +439,89 @@ export function QuestionsPanel() {
         </div>
   
         {/* LIST SIDE */}
-        <div className="space-y-4 border-l dark:border-gray-700 pl-4 h-[70vh] flex flex-col">
-          <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-xl space-y-2">
-            <h3 className="font-bold text-xs uppercase text-gray-500 dark:text-gray-300">Database Search</h3>
-            <div className="flex gap-2">
-              <input className="input flex-1 text-xs" placeholder="Load by Tag..." value={dbTagSearch} onChange={(e) => setDbTagSearch(e.target.value)}/>
-              <button onClick={loadByTag} className="bg-black text-white dark:bg-white dark:text-black px-3 rounded text-xs font-bold">Fetch</button>
+        <div className="space-y-4 border-l dark:border-gray-700 pl-4 h-[75vh] flex flex-col">
+          <div className="bg-gray-100 dark:bg-gray-700/60 p-3.5 rounded-xl space-y-2.5 border border-gray-200 dark:border-gray-600">
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold text-xs uppercase text-gray-600 dark:text-gray-300 flex items-center gap-1.5">
+                <span>🏷️</span>
+                <span>Fetch by Tag (On-Demand)</span>
+              </h3>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
+                {questions.length} loaded
+              </span>
             </div>
+
+            {/* 1. Alphabetical Dropdown */}
+            <div>
+              <label className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 block mb-1">
+                Choose Existing Tag (Alphabetical)
+              </label>
+              <select
+                className="input w-full text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                value={selectedDropdownTag}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedDropdownTag(val);
+                  setDbTagSearch(val);
+                  if (val) loadByTag(val);
+                }}
+              >
+                <option value="">-- Choose tag ({availableTags.length} available) --</option>
+                {availableTags.map((tag) => (
+                  <option key={tag} value={tag}>
+                    🏷️ {tag}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. Manual Tag Input & Fetch Button */}
+            <div className="flex gap-2">
+              <input
+                className="input flex-1 text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                placeholder="Or type custom tag (auto-loads)..."
+                value={dbTagSearch}
+                onChange={(e) => {
+                  setDbTagSearch(e.target.value);
+                  setSelectedDropdownTag(e.target.value);
+                }}
+              />
+              <button
+                onClick={() => loadByTag(dbTagSearch)}
+                disabled={isLoadingQuestions}
+                className="bg-black text-white dark:bg-white dark:text-black px-3.5 py-1.5 rounded-lg text-xs font-bold hover:opacity-80 transition-opacity disabled:opacity-50 shrink-0 shadow-sm"
+              >
+                {isLoadingQuestions ? "Fetching..." : "Fetch"}
+              </button>
+            </div>
+
             <hr className="border-gray-200 dark:border-gray-600" />
-            <input className="input w-full text-xs" placeholder="Filter loaded list..." value={localFilter} onChange={(e) => setLocalFilter(e.target.value)}/>
+
+            {/* 3. Debounced local filter */}
+            <input
+              className="input w-full text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+              placeholder="🔍 Filter loaded list (debounced)..."
+              value={localFilter}
+              onChange={(e) => setLocalFilter(e.target.value)}
+            />
           </div>
   
-          <div className="space-y-2 overflow-y-auto pr-2 flex-1">
+          <div className="space-y-2 overflow-y-auto pr-2 flex-1 custom-scrollbar">
+            {isLoadingQuestions && (
+              <div className="py-8 text-center text-xs text-gray-500 dark:text-gray-400 font-bold animate-pulse">
+                ⏳ Loading questions for tag &lsquo;{dbTagSearch}&rsquo;...
+              </div>
+            )}
+
+            {questions.length === 0 && !isLoadingQuestions && (
+              <div className="py-12 px-4 text-center text-gray-500 dark:text-gray-400 space-y-2 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 my-2">
+                <div className="text-3xl">📭</div>
+                <div className="font-bold text-sm text-gray-700 dark:text-gray-300">Question Pool is Empty</div>
+                <p className="text-xs max-w-xs mx-auto leading-relaxed">
+                  Select an existing tag from the dropdown or type a tag above to fetch questions. Starting empty prevents unnecessary database reads.
+                </p>
+              </div>
+            )}
             {visibleQuestions.map((q) => (
               <div key={q.id} onClick={() => loadQuestionToEdit(q)} 
                 className={`p-3 border rounded-lg cursor-pointer transition-all flex justify-between items-start 
@@ -377,9 +536,19 @@ export function QuestionsPanel() {
                     {q.title ? q.title : "Untitled Question"}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">{getQuestionDisplayText(q)}</div>
-                  <div className="text-xs text-gray-400 flex gap-2 mt-2">
+                  <div className="text-xs text-gray-400 flex flex-wrap items-center gap-1.5 mt-2">
                     <span className="bg-gray-100 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded-full font-mono">{q.tags?.join(", ")}</span>
                     <span className="font-bold text-orange-400">★{q.difficulty}</span>
+                    {q.solutionText && (
+                      <span className="bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
+                        👑 GM Sol
+                      </span>
+                    )}
+                    {!q.solutionText && q.aiSolution?.text && (
+                      <span className="bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
+                        ⚡ AI Sol
+                      </span>
+                    )}
                   </div>
                 </div>
                 <button 
