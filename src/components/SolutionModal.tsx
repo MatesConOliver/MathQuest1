@@ -450,16 +450,7 @@ export function SolutionModal({
               <span className="text-2xl">💡</span>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-base sm:text-lg font-black text-indigo-300">Explanation & Derivation</h2>
-                  {effectiveLoc && (
-                    <span
-                      className="text-[10px] font-bold bg-purple-900/60 text-purple-200 border border-purple-500/50 px-2 py-0.5 rounded-full flex items-center gap-1"
-                      title={`Explanation strictly scoped to Topics 1–${Math.min(effectiveLoc, 16)} of IB Math AA HL`}
-                    >
-                      <span>📚</span>
-                      <span>Location {effectiveLoc} (Topics 1–{Math.min(effectiveLoc, 16)})</span>
-                    </span>
-                  )}
+                  <h2 className="text-base sm:text-lg font-black text-indigo-300">Question explanation</h2>
                   {source === "gm" && (
                     <span className="text-[10px] font-bold bg-amber-900/60 text-amber-300 border border-amber-500/50 px-2 py-0.5 rounded-full">
                       👑 GM Authored
@@ -528,7 +519,7 @@ export function SolutionModal({
                 </a>
               </div>
               <p className="text-gray-300 text-[11px] leading-relaxed">
-                Enter your Google AI Studio API key below.
+                This project uses a free Google AI Studio API key of its own to access Google AI. If you want to use a key of yours, enter it below.
                 <span className="text-amber-300 block mt-1">
                   💡 <strong>Free Tier Tip:</strong> If your project has &ldquo;Nivel 1 de facturación&rdquo; with a $0 budget, Google returns error 402. Create a key in a project <strong>WITHOUT billing attached</strong> to use Google&apos;s 100% Free Tier (1,500 daily requests free)!
                 </span>
@@ -633,6 +624,9 @@ export function SolutionModal({
                 <p className="text-xs text-gray-400 max-w-sm mx-auto">
                   Preparing step-by-step mathematical derivation scoped to your location syllabus.
                 </p>
+                <p className="text-[11px] text-amber-300/80 bg-black/40 border border-amber-500/20 rounded-lg px-3 py-1.5 max-w-md mx-auto">
+                  ⏱️ If answer is not rendered after 30 seconds or an error occurs, wait a few seconds and try again.
+                </p>
               </div>
             )}
 
@@ -687,6 +681,12 @@ export function SolutionModal({
                     <span>AI is beginning to derive the solution...</span>
                   </div>
                 )}
+
+                {/* Fixed guidance notice */}
+                <div className="mt-3.5 pt-2.5 border-t border-indigo-500/20 flex items-center gap-1.5 text-[11px] text-gray-400">
+                  <span className="text-amber-400 shrink-0">⏱️</span>
+                  <span>If answer is not rendered after 30 seconds or an error occurs, wait a few seconds and try again.</span>
+                </div>
               </div>
             )}
 

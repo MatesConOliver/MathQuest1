@@ -52,21 +52,21 @@ export function MathMarkdown({ content, className = "" }: MathMarkdownProps) {
               if (trimmed.startsWith("### ")) {
                 return (
                   <h4 key={lIdx} className="font-bold text-sm text-yellow-300 mt-2 mb-1">
-                    {renderInlineMath(trimmed.slice(4))}
+                    {renderInlineFormatted(trimmed.slice(4))}
                   </h4>
                 );
               }
               if (trimmed.startsWith("## ")) {
                 return (
                   <h3 key={lIdx} className="font-black text-base text-yellow-400 mt-3 mb-1">
-                    {renderInlineMath(trimmed.slice(3))}
+                    {renderInlineFormatted(trimmed.slice(3))}
                   </h3>
                 );
               }
               if (trimmed.startsWith("# ")) {
                 return (
                   <h2 key={lIdx} className="font-black text-lg text-yellow-400 mt-3 mb-1.5">
-                    {renderInlineMath(trimmed.slice(2))}
+                    {renderInlineFormatted(trimmed.slice(2))}
                   </h2>
                 );
               }
@@ -80,14 +80,14 @@ export function MathMarkdown({ content, className = "" }: MathMarkdownProps) {
                 return (
                   <div key={lIdx} className="flex items-start gap-2 ml-2 my-1 text-xs sm:text-sm">
                     <span className="text-yellow-400 font-bold shrink-0">•</span>
-                    <div className="flex-1">{renderInlineMath(bulletText)}</div>
+                    <div className="flex-1">{renderInlineFormatted(bulletText)}</div>
                   </div>
                 );
               }
 
               return (
                 <p key={lIdx} className="text-xs sm:text-sm text-gray-200">
-                  {renderInlineMath(line)}
+                  {renderInlineFormatted(line)}
                 </p>
               );
             })}
@@ -98,51 +98,106 @@ export function MathMarkdown({ content, className = "" }: MathMarkdownProps) {
   );
 }
 
-function renderInlineMath(text: string): React.ReactNode {
-  if (!text.includes("$")) {
-    return renderBoldAndItalic(text);
-  }
+/**
+ * Renders inline text, properly handling bold (**...**), italic (*...*),
+ * and LaTeX math ($...$) even when math is nested inside bold text.
+ */
+function renderInlineFormatted(text: string): React.ReactNode {
+  if (!text) return null;
 
-  const parts = text.split(/(\$.*?\$)/g);
+  // Matches:
+  // 1. Double asterisk bold: **text** (can contain $...$)
+  // 2. Double underscore bold: __text__
+  // 3. Inline LaTeX: $math$
+  // 4. Single asterisk emphasis: *text*
+  const tokenRegex = /(\*\*[^\n*]+?\*\*|__[^\n_]+?__|\$[^\$\n]+?\$|\*[^\n*]+?\*)/g;
+  const parts = text.split(tokenRegex);
+
   return (
     <>
-      {parts.map((part, index) => {
+      {parts.map((part, idx) => {
+        if (!part) return null;
+
+        // Double asterisk bold: **text**
+        if (part.startsWith("**") && part.endsWith("**") && part.length >= 4) {
+          const inner = part.slice(2, -2);
+          return (
+            <strong key={idx} className="font-bold text-white">
+              {renderMathOnly(inner)}
+            </strong>
+          );
+        }
+
+        // Double underscore bold: __text__
+        if (part.startsWith("__") && part.endsWith("__") && part.length >= 4) {
+          const inner = part.slice(2, -2);
+          return (
+            <strong key={idx} className="font-bold text-white">
+              {renderMathOnly(inner)}
+            </strong>
+          );
+        }
+
+        // Inline LaTeX math: $math$
         if (part.startsWith("$") && part.endsWith("$") && part.length > 2) {
           const math = part.slice(1, -1);
           try {
             return (
-              <span key={index} className="inline-block mx-1 text-sky-300 font-medium">
+              <span key={idx} className="inline-block mx-1 text-sky-300 font-medium">
                 <InlineMath math={math} />
               </span>
             );
           } catch {
             return (
-              <span key={index} className="text-red-400 font-mono text-xs">
+              <span key={idx} className="text-red-400 font-mono text-xs">
                 {part}
               </span>
             );
           }
         }
-        return <React.Fragment key={index}>{renderBoldAndItalic(part)}</React.Fragment>;
+
+        // Single asterisk emphasis: *text*
+        if (part.startsWith("*") && part.endsWith("*") && part.length >= 2) {
+          const inner = part.slice(1, -1);
+          return (
+            <span key={idx} className="font-semibold text-yellow-200">
+              {renderMathOnly(inner)}
+            </span>
+          );
+        }
+
+        return <React.Fragment key={idx}>{part}</React.Fragment>;
       })}
     </>
   );
 }
 
-function renderBoldAndItalic(text: string): React.ReactNode {
-  if (!text.includes("**")) return text;
-  const parts = text.split(/(\*\*.*?\*\*)/g);
+/**
+ * Helper to render any $...$ math nested inside bold/italic text
+ */
+function renderMathOnly(text: string): React.ReactNode {
+  if (!text.includes("$")) return text;
+  const parts = text.split(/(\$[^\$\n]+?\$)/g);
   return (
     <>
-      {parts.map((p, idx) => {
-        if (p.startsWith("**") && p.endsWith("**")) {
-          return (
-            <strong key={idx} className="font-bold text-white">
-              {p.slice(2, -2)}
-            </strong>
-          );
+      {parts.map((p, i) => {
+        if (p.startsWith("$") && p.endsWith("$") && p.length > 2) {
+          const math = p.slice(1, -1);
+          try {
+            return (
+              <span key={i} className="inline-block mx-1 text-sky-300 font-medium">
+                <InlineMath math={math} />
+              </span>
+            );
+          } catch {
+            return (
+              <span key={i} className="text-red-400 font-mono text-xs">
+                {p}
+              </span>
+            );
+          }
         }
-        return p;
+        return <React.Fragment key={i}>{p}</React.Fragment>;
       })}
     </>
   );
