@@ -27,6 +27,7 @@ export default function PlayClient() {
     isLoading: isGameDataLoading,
     getFoe,
     getSubArea,
+    getLocation,
     completeStory,
   } = useGameData(user);
 
@@ -52,6 +53,9 @@ export default function PlayClient() {
   }
   
   const currentSubArea = battle.currentEncounter ? getSubArea(battle.currentEncounter.subAreaId) : null;
+  const currentLocation = battle.currentEncounter
+    ? (currentSubArea ? getLocation(currentSubArea.locationId) : getLocation(battle.currentEncounter.locationId))
+    : null;
 
   switch (battle.mode) {
     case 'intro':
@@ -97,6 +101,8 @@ export default function PlayClient() {
           executeEscape={battle.executeEscape}
           usePotion={battle.usePotion}
           subArea={currentSubArea}
+          locationOrder={currentLocation?.order ?? null}
+          locationName={currentLocation?.name}
           combatEffect={battle.combatEffect}
           user={user}
         />

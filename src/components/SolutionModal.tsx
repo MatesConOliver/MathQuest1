@@ -15,6 +15,7 @@ interface SolutionModalProps {
   user: User | null;
   character: Character | null;
   subArea?: SubArea | null;
+  locationOrder?: number | null;
   onClose: () => void;
   onQuestionUpdated?: (updatedQ: QuestionDoc) => void;
 }
@@ -82,6 +83,7 @@ export function SolutionModal({
   user,
   character,
   subArea,
+  locationOrder,
   onClose,
   onQuestionUpdated,
 }: SolutionModalProps) {
@@ -94,6 +96,14 @@ export function SolutionModal({
   const [verifiedCorrectIndex, setVerifiedCorrectIndex] = useState<number>(question.correctIndex ?? 0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
+
+  // Effective location order for curriculum scoping
+  const effectiveLoc =
+    typeof locationOrder === "number" && locationOrder > 0
+      ? locationOrder
+      : typeof subArea?.order === "number" && subArea.order > 0
+      ? subArea.order
+      : null;
 
   // Custom Google AI Studio API Key support
   const [customApiKey, setCustomApiKey] = useState<string>("");
@@ -130,6 +140,7 @@ export function SolutionModal({
           questionData: question,
           forceRefresh,
           geminiApiKey: activeKey.trim() || undefined,
+          locationOrder: effectiveLoc,
         }),
       });
 
@@ -168,7 +179,8 @@ export function SolutionModal({
         isDiscrepancy: data.isDiscrepancy,
         discrepancyNote: data.discrepancyNote,
         generatedAt: data.generatedAt || Date.now(),
-        model: "gemini-3.8-flash",
+        model: "gemini-flash-latest",
+        locationOrder: effectiveLoc,
       };
 
       // Cache to Firestore from client if user is signed in
@@ -206,8 +218,11 @@ export function SolutionModal({
       return;
     }
 
-    // 2. If cached AI solution exists on question doc, use it immediately (0 tokens)
-    if (question.aiSolution && question.aiSolution.text) {
+    // 2. If cached AI solution exists and matches curriculum location, use it immediately (0 tokens)
+    const cachedLoc = question.aiSolution?.locationOrder ?? null;
+    const isMatchingLoc = !effectiveLoc || cachedLoc === effectiveLoc;
+
+    if (question.aiSolution && question.aiSolution.text && isMatchingLoc) {
       setSolutionText(question.aiSolution.text);
       setSource("cached_ai");
       setIsDiscrepancy(Boolean(question.aiSolution.isDiscrepancy));
@@ -217,9 +232,9 @@ export function SolutionModal({
       return;
     }
 
-    // 3. Otherwise, fetch from server API
+    // 3. Otherwise, fetch from server API with location constraint
     fetchSolution(false);
-  }, [question]);
+  }, [question, effectiveLoc]);
 
   const handleSaveApiKey = () => {
     const key = apiKeyInput.trim();
@@ -254,6 +269,15 @@ export function SolutionModal({
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-base sm:text-lg font-black text-indigo-300">Explanation & Derivation</h2>
+                  {effectiveLoc && (
+                    <span
+                      className="text-[10px] font-bold bg-purple-900/60 text-purple-200 border border-purple-500/50 px-2 py-0.5 rounded-full flex items-center gap-1"
+                      title={`Explanation strictly scoped to Topics 1–${Math.min(effectiveLoc, 16)} of IB Math AA HL`}
+                    >
+                      <span>📚</span>
+                      <span>Location {effectiveLoc} (Topics 1–{Math.min(effectiveLoc, 16)})</span>
+                    </span>
+                  )}
                   {source === "gm" && (
                     <span className="text-[10px] font-bold bg-amber-900/60 text-amber-300 border border-amber-500/50 px-2 py-0.5 rounded-full">
                       👑 GM Authored

@@ -157,6 +157,7 @@ export type QuestionDoc = {
     discrepancyNote?: string;
     generatedAt?: number;
     model?: string;
+    locationOrder?: number | null;
   };
 };
 

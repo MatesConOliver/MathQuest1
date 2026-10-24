@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { QuestionDoc, ContentBlock } from "@/types/game";
+import { getCurriculumConstraintPrompt } from "@/lib/syllabus";
 
 // Extract all image URLs from a QuestionDoc (prompt and choices)
 function extractImageUrls(question: QuestionDoc): string[] {
@@ -58,7 +59,11 @@ function contentBlocksToText(blocks?: ContentBlock[]): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { questionId, questionData: clientQuestionData, forceRefresh } = body;
+    const { questionId, questionData: clientQuestionData, forceRefresh, locationOrder } = body;
+    const reqLocationOrder =
+      typeof locationOrder === "number" && !isNaN(locationOrder) && locationOrder > 0
+        ? Math.round(locationOrder)
+        : null;
 
     if (!questionId && !clientQuestionData) {
       return NextResponse.json({ error: "questionId or questionData is required" }, { status: 400 });
@@ -96,8 +101,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Priority 2: Return cached AI solution if it already exists (0 tokens consumed!)
-    if (questionData.aiSolution && questionData.aiSolution.text && !forceRefresh) {
+    // 3. Priority 2: Return cached AI solution if it exists AND matches requested curriculum location
+    const cachedLocationOrder = questionData.aiSolution?.locationOrder ?? null;
+    const isLocationMatch = !reqLocationOrder || cachedLocationOrder === reqLocationOrder;
+
+    if (questionData.aiSolution && questionData.aiSolution.text && !forceRefresh && isLocationMatch) {
       return NextResponse.json({
         source: "cached_ai",
         solutionText: questionData.aiSolution.text,
@@ -106,6 +114,7 @@ export async function POST(req: NextRequest) {
         isDiscrepancy: !!questionData.aiSolution.isDiscrepancy,
         discrepancyNote: questionData.aiSolution.discrepancyNote || null,
         generatedAt: questionData.aiSolution.generatedAt,
+        locationOrder: cachedLocationOrder,
         cached: true,
       });
     }
@@ -185,9 +194,11 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    const curriculumPrompt = getCurriculumConstraintPrompt(reqLocationOrder);
+
     // Compose user prompt
     const userPrompt = `
-You are analyzing a multiple-choice mathematics problem from an educational game.
+You are an expert mathematics professor analyzing a multiple-choice mathematics problem from an educational adventure game.
 
 TITLE: ${questionData.title || "Mathematics Question"}
 PROBLEM STATEMENT:
@@ -199,17 +210,20 @@ ${choicesTexts.join("\n")}
 GAME DATABASE CONFIGURATION:
 Configured Correct Option in database: Option ${configuredLetter} (index ${configuredIndex})
 
-INSTRUCTIONS:
-1. Solve the mathematics problem completely and step-by-step from scratch using clean pedagogical explanations and standard LaTeX ($...$ for inline equations and $$...$$ for standalone display formulas).
-2. Carefully inspect any diagram or graphic provided if an image is attached.
-3. Compute which option is mathematically correct (0 for A, 1 for B, 2 for C, 3 for D). If none of the options are correct or the question has a fatal mathematical paradox/typo, set computedCorrectIndex to -1.
-4. Compare your mathematically verified choice with Option ${configuredLetter} (index ${configuredIndex}).
-5. If the game's choice matches your calculation, set isDiscrepancy to false.
-6. If the game's choice is WRONG (e.g. author human typo in database), set isDiscrepancy to true and provide a respectful, clear discrepancyNote explaining why the game's marked answer appears incorrect and what the true answer is.
+${curriculumPrompt}
+
+EXPLANATION REQUIREMENTS:
+1. Provide a rigorous, crystal-clear, step-by-step derivation from the allowed curriculum concepts to solve the problem.
+2. PEDAGOGICAL NARRATIVE: You MUST include clear explanatory sentences BETWEEN mathematical steps. Do not simply chain formulas together. Explain the mathematical intuition, why a particular substitution, factoring, or formula is used, and how it directly advances the solution toward the answer.
+3. FORMATTING: Use standard LaTeX formatting ($...$ for inline expressions, $$...$$ for standalone display equations).
+4. Verify all options carefully against your derivation. Compute which option is mathematically correct (0 for A, 1 for B, 2 for C, 3 for D). If none are correct or the question contains a mathematical paradox/typo, set computedCorrectIndex to -1.
+5. Compare your mathematically verified choice with Option ${configuredLetter} (index ${configuredIndex}).
+6. If the game's choice matches your calculation, set isDiscrepancy to false.
+7. If the game's choice is WRONG (e.g. author human typo in database), set isDiscrepancy to true and provide a respectful, clear discrepancyNote explaining why the game's marked answer appears incorrect and what the true answer is.
 
 Return your response strictly in the following JSON format:
 {
-  "stepByStepExplanation": "Detailed step-by-step solution with LaTeX formulas...",
+  "stepByStepExplanation": "Detailed step-by-step solution with explanatory text between LaTeX formulas...",
   "computedCorrectIndex": 0,
   "computedCorrectLetter": "A",
   "isDiscrepancy": false,
@@ -227,10 +241,10 @@ Return your response strictly in the following JSON format:
         contents: contentParts,
         config: {
           systemInstruction:
-            "You are an expert mathematics professor and curriculum auditor. You explain math clearly with LaTeX notation and check multiple-choice question authoring for errors. Be clear, concise, and direct.",
+            "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You explain math with deep pedagogical clarity, using LaTeX notation and thoughtful explanations between steps, strictly obeying the student's current location syllabus bounds.",
           responseMimeType: "application/json",
           temperature: 0.1,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 2500,
         },
       });
     } catch (modelErr: any) {
@@ -264,16 +278,17 @@ Return your response strictly in the following JSON format:
         );
       }
 
-      console.warn("[Gemini Solver] gemini-3.8-flash failed, falling back to gemini-flash-latest:", modelErr);
+      console.warn("[Gemini Solver] gemini-flash-latest failed, trying fallback to gemini-3.8-flash:", modelErr);
       try {
         response = await ai.models.generateContent({
-          model: "gemini-flash-latest",
+          model: "gemini-3.8-flash",
           contents: contentParts,
           config: {
             systemInstruction:
-              "You are an expert mathematics professor and curriculum auditor. You explain math clearly with LaTeX notation and check multiple-choice question authoring for errors.",
+              "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You explain math clearly with LaTeX notation, include pedagogical narrative between steps, and strictly respect curriculum constraints.",
             responseMimeType: "application/json",
             temperature: 0.1,
+            maxOutputTokens: 2500,
           },
         });
       } catch (fbErr: any) {
@@ -322,7 +337,8 @@ Return your response strictly in the following JSON format:
       isDiscrepancy: Boolean(parsed.isDiscrepancy),
       discrepancyNote: parsed.discrepancyNote || "",
       generatedAt: Date.now(),
-      model: "gemini-3.8-flash",
+      model: "gemini-flash-latest",
+      locationOrder: reqLocationOrder,
     };
 
     // 5. CACHE TO FIRESTORE: Save directly onto question document if ref exists
@@ -345,6 +361,7 @@ Return your response strictly in the following JSON format:
       isDiscrepancy: aiSolutionPayload.isDiscrepancy,
       discrepancyNote: aiSolutionPayload.discrepancyNote,
       generatedAt: aiSolutionPayload.generatedAt,
+      locationOrder: reqLocationOrder,
       cached: false,
     });
   } catch (err: any) {

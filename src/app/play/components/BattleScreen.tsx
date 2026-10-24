@@ -165,6 +165,8 @@ interface BattleScreenProps {
   executeEscape: () => void;
   usePotion: (item: InventoryItem) => void;
   subArea: SubArea | null;
+  locationOrder?: number | null;
+  locationName?: string;
   combatEffect?: CombatEffect | null;
   user?: User | null;
 }
@@ -278,7 +280,7 @@ export function BattleScreen(props: BattleScreenProps) {
     character, foe, currentQuestion, currentQIndex, totalQuestions, playerHp, playerMaxHp, foeHp, msg, timeLeft, totalTime,
     isPaused, selectedChoice, gameItems, inventory, showInventory, setShowInventory, showEscapeConfirm,
     setShowEscapeConfirm, showSubquestionMenu, abandonGroupTurnCost, handleAnswer, nextQuestion, continueSubquestion, abandonGroup,
-    skipQuestion, executeEscape, usePotion, subArea, combatEffect, user
+    skipQuestion, executeEscape, usePotion, subArea, locationOrder, locationName, combatEffect, user
   } = props;
 
   const [showAnswers, setShowAnswers] = useState(false);
@@ -739,6 +741,7 @@ export function BattleScreen(props: BattleScreenProps) {
           user={user || null}
           character={character}
           subArea={subArea}
+          locationOrder={locationOrder ?? subArea?.order ?? null}
           onClose={() => setShowSolutionModal(false)}
         />
       )}

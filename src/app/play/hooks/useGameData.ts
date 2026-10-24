@@ -13,6 +13,7 @@ export function useGameData(user: User | null) {
   const [gameItems, setGameItems] = useState<Record<string, GameItem>>({});
   const [foes, setFoes] = useState<Record<string, FoeDoc>>({});
   const [subAreas, setSubAreas] = useState<Record<string, SubArea>>({});
+  const [locations, setLocations] = useState<Record<string, GameLocation>>({});
   const [activeStory, setActiveStory] = useState<StoryEvent | null>(null);
   const [msg, setMsg] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -70,6 +71,8 @@ export function useGameData(user: User | null) {
             return acc;
         }, {});
 
+        setLocations(locationsMap);
+
         const unlockedSubAreas: { [key: string]: UnlockedSubArea } = {};
         unlockedSnap.forEach(doc => { unlockedSubAreas[doc.id] = doc.data() as UnlockedSubArea });
 
@@ -104,6 +107,7 @@ export function useGameData(user: User | null) {
 
   const getFoe = useCallback((id: string) => foes[id], [foes]);
   const getSubArea = useCallback((id: string) => subAreas[id], [subAreas]);
+  const getLocation = useCallback((id: string) => locations[id], [locations]);
 
   const completeStory = async () => {
     if (!user || !activeStory) return;
@@ -119,5 +123,22 @@ export function useGameData(user: User | null) {
   };
 
 
-  return { character, setCharacter, encounters, gameItems, foes, subAreas, activeStory, msg, setMsg, isLoading, getFoe, getSubArea, completeStory, setActiveStory };
+  return {
+    character,
+    setCharacter,
+    encounters,
+    gameItems,
+    foes,
+    subAreas,
+    locations,
+    activeStory,
+    msg,
+    setMsg,
+    isLoading,
+    getFoe,
+    getSubArea,
+    getLocation,
+    completeStory,
+    setActiveStory,
+  };
 }
