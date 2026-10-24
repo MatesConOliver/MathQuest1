@@ -78,10 +78,9 @@ const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = f
 };
 
 function parseStreamingContent(fullText: string) {
-  const markerIndex = fullText.indexOf("---VERIFICATION---");
-  if (markerIndex === -1) {
+  if (!fullText) {
     return {
-      displayText: fullText,
+      displayText: "",
       verifiedIndex: null,
       isDiscrepancy: false,
       discrepancyNote: "",
@@ -89,8 +88,21 @@ function parseStreamingContent(fullText: string) {
     };
   }
 
-  const displayText = fullText.slice(0, markerIndex).trim();
-  const vBlock = fullText.slice(markerIndex);
+  // Look for either structured section header or legacy verification marker (case-insensitive)
+  const markerMatch = fullText.match(/(?:###\s*Verification|##\s*Verification|---VERIFICATION---)/i);
+  const markerIndex = markerMatch && markerMatch.index !== undefined ? markerMatch.index : -1;
+
+  let displayText = fullText;
+  let vBlock = "";
+
+  if (markerIndex !== -1) {
+    const candidateText = fullText.slice(0, markerIndex).trim();
+    vBlock = fullText.slice(markerIndex);
+    // Only strip the verification block if there actually is text before it!
+    if (candidateText.length > 0) {
+      displayText = candidateText;
+    }
+  }
 
   const optMatch = vBlock.match(/CORRECT_OPTION:\s*([A-D])/i);
   const discMatch = vBlock.match(/IS_DISCREPANCY:\s*(TRUE|FALSE)/i);
@@ -106,7 +118,7 @@ function parseStreamingContent(fullText: string) {
     verifiedIndex,
     isDiscrepancy,
     discrepancyNote: note,
-    hasVerification: true,
+    hasVerification: verifiedIndex !== null,
   };
 }
 
@@ -130,6 +142,7 @@ export function SolutionModal({
   const [verifiedCorrectIndex, setVerifiedCorrectIndex] = useState<number>(question.correctIndex ?? 0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
 
   // Effective location order for curriculum scoping
   const effectiveLoc =
@@ -154,6 +167,14 @@ export function SolutionModal({
 
   const fetchSolution = async (forceRefresh = false, overrideKey?: string) => {
     if (!question.id) return;
+
+    // Cancel any previous in-flight stream
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     setIsStreaming(false);
     setErrorMsg(null);
@@ -166,6 +187,7 @@ export function SolutionModal({
     try {
       const res = await fetch("/api/questions/solve", {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
           ...(activeKey.trim() ? { "x-gemini-api-key": activeKey.trim() } : {}),
@@ -279,9 +301,12 @@ export function SolutionModal({
         isDiscrepancy: finalParsed.isDiscrepancy ?? finalIsDiscrepancy,
         discrepancyNote: finalParsed.discrepancyNote || finalDiscrepancyNote || "",
         generatedAt: Date.now(),
-        model: "gemini-flash-latest",
+        model: "gemini-3.8-flash",
         locationOrder: effectiveLoc,
       };
+
+      // In-memory cache ensures immediate 0ms reload if the student closes and re-opens in the same battle
+      question.aiSolution = aiPayload;
 
       // Cache to Firestore from client if question has an ID
       if (cleanSolutionText && question.id) {
@@ -301,6 +326,10 @@ export function SolutionModal({
         });
       }
     } catch (err: any) {
+      if (err.name === "AbortError") {
+        // Stream aborted due to modal close or fresh retry
+        return;
+      }
       console.error("Failed to load solution:", err);
       setErrorMsg(err.message || "Unable to retrieve or generate solution right now. Please try again.");
       setLoading(false);
@@ -335,6 +364,12 @@ export function SolutionModal({
 
     // 3. Otherwise, fetch from server API with location constraint
     fetchSolution(false);
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [question, effectiveLoc]);
 
   const handleSaveApiKey = () => {
@@ -401,8 +436,8 @@ export function SolutionModal({
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-gray-400 truncate max-w-md">
-                  {question.title || "Mathematics Problem Walkthrough"}
+                <p className="text-xs text-gray-400">
+                  Step-by-Step Problem Walkthrough
                 </p>
               </div>
             </div>

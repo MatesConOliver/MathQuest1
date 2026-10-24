@@ -184,11 +184,10 @@ export async function POST(req: NextRequest) {
 
     const curriculumPrompt = getCurriculumConstraintPrompt(reqLocationOrder);
 
-    // Compose user prompt for live streaming
+    // Compose user prompt (NO internal question title included)
     const userPrompt = `
-You are an expert mathematics professor analyzing a multiple-choice mathematics problem from an educational adventure game.
+You are an expert mathematics professor explaining a multiple-choice mathematics problem from an educational adventure game.
 
-TITLE: ${questionData.title || "Mathematics Question"}
 PROBLEM STATEMENT:
 ${promptText}
 
@@ -200,31 +199,32 @@ Configured Correct Option in database: Option ${configuredLetter} (index ${confi
 
 ${curriculumPrompt}
 
-INSTRUCTIONS FOR YOUR EXPLANATION:
-1. Provide a rigorous, crystal-clear, step-by-step mathematical derivation using ONLY the allowed curriculum concepts to solve the problem.
-2. PEDAGOGICAL NARRATIVE: You MUST include clear explanatory sentences BETWEEN mathematical steps. Explain WHY each step is done, what algebraic identity or formula is being applied, and how it directly advances the solution toward the answer. Do not merely list raw equations without narrative explanation.
+MANDATORY INSTRUCTIONS:
+You MUST structure your response into the following two sections in order:
+
+### Step-by-Step Derivation & Explanation
+1. Provide a rigorous, crystal-clear, step-by-step mathematical derivation from first principles/allowed tools to reach the correct answer.
+2. PEDAGOGICAL NARRATIVE: You MUST include clear explanatory sentences BETWEEN intermediate mathematical steps. Explain WHY each step is done, what theorem, identity, or formula is being applied, and how it directly advances the solution toward the answer. Do not merely list raw equations without narrative explanation.
 3. FORMATTING: Use standard LaTeX formatting ($...$ for inline expressions, $$...$$ for standalone display equations).
 4. Verify all options carefully against your derivation. Compute which option is mathematically correct (Option A, B, C, or D).
-5. At the VERY END of your explanation, output a separate verification block on new lines with this exact format:
 
----VERIFICATION---
+### Verification
 CORRECT_OPTION: [A, B, C, or D]
 IS_DISCREPANCY: [TRUE or FALSE]
 DISCREPANCY_NOTE: [If IS_DISCREPANCY is TRUE, explain author error here. If FALSE, write: None]
----END_VERIFICATION---
 `.trim();
 
     contentParts.push({ text: userPrompt });
 
-    // Call Gemini with Streaming (ultra-low latency, tokens stream immediately)
+    // Call Gemini with Streaming (gemini-3.8-flash with ThinkingLevel.LOW for low latency)
     let responseStream: any;
     try {
       responseStream = await ai.models.generateContentStream({
-        model: "gemini-flash-latest",
+        model: "gemini-3.8-flash",
         contents: contentParts,
         config: {
           systemInstruction:
-            "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You explain math with deep pedagogical clarity, using standard LaTeX notation ($...$ inline and $$...$$ display) and thoughtful explanatory sentences between intermediate steps, strictly obeying the student's current location syllabus bounds.",
+            "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You always write the complete step-by-step mathematical derivation with pedagogical explanations between steps first under '### Step-by-Step Derivation & Explanation', followed by the short '### Verification' block.",
           temperature: 0.1,
           thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           maxOutputTokens: 2500,
@@ -261,16 +261,15 @@ DISCREPANCY_NOTE: [If IS_DISCREPANCY is TRUE, explain author error here. If FALS
         );
       }
 
-      console.warn("[Gemini Solver] gemini-flash-latest failed, trying fallback to gemini-3.8-flash:", modelErr);
+      console.warn("[Gemini Solver] gemini-3.8-flash failed, trying fallback to gemini-flash-latest:", modelErr);
       try {
         responseStream = await ai.models.generateContentStream({
-          model: "gemini-3.8-flash",
+          model: "gemini-flash-latest",
           contents: contentParts,
           config: {
             systemInstruction:
-              "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You explain math clearly with LaTeX notation, include pedagogical narrative between steps, and strictly respect curriculum constraints.",
+              "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You always write the complete step-by-step mathematical derivation with explanations between steps first, followed by the verification block.",
             temperature: 0.1,
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
             maxOutputTokens: 2500,
           },
         });
@@ -308,6 +307,9 @@ DISCREPANCY_NOTE: [If IS_DISCREPANCY is TRUE, explain author error here. If FALS
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        // Send immediate heartbeat comment to force proxies and Vercel to flush headers immediately
+        controller.enqueue(encoder.encode(": connected\n\n"));
+
         try {
           for await (const chunk of responseStream) {
             if (chunk.text) {
