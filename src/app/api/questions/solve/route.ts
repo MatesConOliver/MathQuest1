@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { QuestionDoc, ContentBlock } from "@/types/game";
 import { getCurriculumConstraintPrompt } from "@/lib/syllabus";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Extract all image URLs from a QuestionDoc (prompt and choices)
 function extractImageUrls(question: QuestionDoc): string[] {
@@ -69,21 +70,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "questionId or questionData is required" }, { status: 400 });
     }
 
-    // 1. Fetch Question from client data or fallback to Firestore
-    let questionData: QuestionDoc | null = clientQuestionData || null;
-    let questionRef: any = null;
-
-    if (!questionData && questionId) {
-      try {
-        questionRef = doc(db, "questions", questionId);
-        const questionSnap = await getDoc(questionRef);
-        if (questionSnap.exists()) {
-          questionData = { id: questionSnap.id, ...(questionSnap.data() || {}) } as QuestionDoc;
-        }
-      } catch (dbErr) {
-        console.warn("[Gemini Solver] Server-side getDoc skipped:", dbErr);
-      }
-    }
+    const startTime = Date.now();
+    const questionData: QuestionDoc | null = clientQuestionData || null;
 
     if (!questionData) {
       return NextResponse.json({ error: "Question details could not be found" }, { status: 404 });
@@ -196,7 +184,7 @@ export async function POST(req: NextRequest) {
 
     const curriculumPrompt = getCurriculumConstraintPrompt(reqLocationOrder);
 
-    // Compose user prompt
+    // Compose user prompt for live streaming
     const userPrompt = `
 You are an expert mathematics professor analyzing a multiple-choice mathematics problem from an educational adventure game.
 
@@ -212,38 +200,33 @@ Configured Correct Option in database: Option ${configuredLetter} (index ${confi
 
 ${curriculumPrompt}
 
-EXPLANATION REQUIREMENTS:
-1. Provide a rigorous, crystal-clear, step-by-step derivation from the allowed curriculum concepts to solve the problem.
-2. PEDAGOGICAL NARRATIVE: You MUST include clear explanatory sentences BETWEEN mathematical steps. Do not simply chain formulas together. Explain the mathematical intuition, why a particular substitution, factoring, or formula is used, and how it directly advances the solution toward the answer.
+INSTRUCTIONS FOR YOUR EXPLANATION:
+1. Provide a rigorous, crystal-clear, step-by-step mathematical derivation using ONLY the allowed curriculum concepts to solve the problem.
+2. PEDAGOGICAL NARRATIVE: You MUST include clear explanatory sentences BETWEEN mathematical steps. Explain WHY each step is done, what algebraic identity or formula is being applied, and how it directly advances the solution toward the answer. Do not merely list raw equations without narrative explanation.
 3. FORMATTING: Use standard LaTeX formatting ($...$ for inline expressions, $$...$$ for standalone display equations).
-4. Verify all options carefully against your derivation. Compute which option is mathematically correct (0 for A, 1 for B, 2 for C, 3 for D). If none are correct or the question contains a mathematical paradox/typo, set computedCorrectIndex to -1.
-5. Compare your mathematically verified choice with Option ${configuredLetter} (index ${configuredIndex}).
-6. If the game's choice matches your calculation, set isDiscrepancy to false.
-7. If the game's choice is WRONG (e.g. author human typo in database), set isDiscrepancy to true and provide a respectful, clear discrepancyNote explaining why the game's marked answer appears incorrect and what the true answer is.
+4. Verify all options carefully against your derivation. Compute which option is mathematically correct (Option A, B, C, or D).
+5. At the VERY END of your explanation, output a separate verification block on new lines with this exact format:
 
-Return your response strictly in the following JSON format:
-{
-  "stepByStepExplanation": "Detailed step-by-step solution with explanatory text between LaTeX formulas...",
-  "computedCorrectIndex": 0,
-  "computedCorrectLetter": "A",
-  "isDiscrepancy": false,
-  "discrepancyNote": ""
-}
+---VERIFICATION---
+CORRECT_OPTION: [A, B, C, or D]
+IS_DISCREPANCY: [TRUE or FALSE]
+DISCREPANCY_NOTE: [If IS_DISCREPANCY is TRUE, explain author error here. If FALSE, write: None]
+---END_VERIFICATION---
 `.trim();
 
     contentParts.push({ text: userPrompt });
 
-    // Call Gemini with JSON schema output (fast, low-latency generation)
-    let response;
+    // Call Gemini with Streaming (ultra-low latency, tokens stream immediately)
+    let responseStream: any;
     try {
-      response = await ai.models.generateContent({
+      responseStream = await ai.models.generateContentStream({
         model: "gemini-flash-latest",
         contents: contentParts,
         config: {
           systemInstruction:
-            "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You explain math with deep pedagogical clarity, using LaTeX notation and thoughtful explanations between steps, strictly obeying the student's current location syllabus bounds.",
-          responseMimeType: "application/json",
+            "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You explain math with deep pedagogical clarity, using standard LaTeX notation ($...$ inline and $$...$$ display) and thoughtful explanatory sentences between intermediate steps, strictly obeying the student's current location syllabus bounds.",
           temperature: 0.1,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           maxOutputTokens: 2500,
         },
       });
@@ -280,14 +263,14 @@ Return your response strictly in the following JSON format:
 
       console.warn("[Gemini Solver] gemini-flash-latest failed, trying fallback to gemini-3.8-flash:", modelErr);
       try {
-        response = await ai.models.generateContent({
+        responseStream = await ai.models.generateContentStream({
           model: "gemini-3.8-flash",
           contents: contentParts,
           config: {
             systemInstruction:
               "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You explain math clearly with LaTeX notation, include pedagogical narrative between steps, and strictly respect curriculum constraints.",
-            responseMimeType: "application/json",
             temperature: 0.1,
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
             maxOutputTokens: 2500,
           },
         });
@@ -321,48 +304,45 @@ Return your response strictly in the following JSON format:
       }
     }
 
-    const responseText = response.text || "{}";
-    let parsed: any;
-    try {
-      parsed = JSON.parse(responseText);
-    } catch {
-      // Fallback in case raw text wrapped with markdown code fences
-      const clean = responseText.replace(/^```json/m, "").replace(/```$/m, "").trim();
-      parsed = JSON.parse(clean);
-    }
+    // Return Server-Sent Events stream for live word-by-word typing
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of responseStream) {
+            if (chunk.text) {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: "chunk", text: chunk.text })}\n\n`)
+              );
+            }
+          }
+          const durationMs = Date.now() - startTime;
+          console.log(`[Gemini Solver] Stream completed successfully in ${durationMs}ms`);
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ type: "done", locationOrder: reqLocationOrder })}\n\n`
+            )
+          );
+          controller.close();
+        } catch (streamErr: any) {
+          console.error("[Stream Chunk Error]:", streamErr);
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ type: "error", error: streamErr.message || String(streamErr) })}\n\n`
+            )
+          );
+          controller.close();
+        }
+      },
+    });
 
-    const aiSolutionPayload = {
-      text: parsed.stepByStepExplanation || "Step-by-step calculation completed.",
-      verifiedCorrectIndex: typeof parsed.computedCorrectIndex === "number" ? parsed.computedCorrectIndex : configuredIndex,
-      isDiscrepancy: Boolean(parsed.isDiscrepancy),
-      discrepancyNote: parsed.discrepancyNote || "",
-      generatedAt: Date.now(),
-      model: "gemini-flash-latest",
-      locationOrder: reqLocationOrder,
-    };
-
-    // 5. CACHE TO FIRESTORE: Save directly onto question document if ref exists
-    if (questionRef || questionId) {
-      try {
-        const targetRef = questionRef || doc(db, "questions", questionId);
-        await updateDoc(targetRef, {
-          aiSolution: aiSolutionPayload,
-        });
-      } catch (saveErr) {
-        console.warn("[Gemini Solver] Server-side cache update skipped (client will cache):", saveErr);
-      }
-    }
-
-    return NextResponse.json({
-      source: "gemini_generated",
-      solutionText: aiSolutionPayload.text,
-      solutionUrl: questionData.solutionUrl || null,
-      verifiedCorrectIndex: aiSolutionPayload.verifiedCorrectIndex,
-      isDiscrepancy: aiSolutionPayload.isDiscrepancy,
-      discrepancyNote: aiSolutionPayload.discrepancyNote,
-      generatedAt: aiSolutionPayload.generatedAt,
-      locationOrder: reqLocationOrder,
-      cached: false,
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
     });
   } catch (err: any) {
     console.error("[Gemini Solver API Error]:", err);

@@ -77,6 +77,39 @@ const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = f
   );
 };
 
+function parseStreamingContent(fullText: string) {
+  const markerIndex = fullText.indexOf("---VERIFICATION---");
+  if (markerIndex === -1) {
+    return {
+      displayText: fullText,
+      verifiedIndex: null,
+      isDiscrepancy: false,
+      discrepancyNote: "",
+      hasVerification: false,
+    };
+  }
+
+  const displayText = fullText.slice(0, markerIndex).trim();
+  const vBlock = fullText.slice(markerIndex);
+
+  const optMatch = vBlock.match(/CORRECT_OPTION:\s*([A-D])/i);
+  const discMatch = vBlock.match(/IS_DISCREPANCY:\s*(TRUE|FALSE)/i);
+  const noteMatch = vBlock.match(/DISCREPANCY_NOTE:\s*([^\n\r]+)/i);
+
+  const optionLetter = optMatch ? optMatch[1].toUpperCase() : null;
+  const verifiedIndex = optionLetter ? optionLetter.charCodeAt(0) - 65 : null;
+  const isDiscrepancy = discMatch ? discMatch[1].toUpperCase() === "TRUE" : false;
+  const note = noteMatch && noteMatch[1].trim().toLowerCase() !== "none" ? noteMatch[1].trim() : "";
+
+  return {
+    displayText,
+    verifiedIndex,
+    isDiscrepancy,
+    discrepancyNote: note,
+    hasVerification: true,
+  };
+}
+
 export function SolutionModal({
   question,
   selectedChoice,
@@ -88,6 +121,7 @@ export function SolutionModal({
   onQuestionUpdated,
 }: SolutionModalProps) {
   const [loading, setLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [solutionText, setSolutionText] = useState<string>("");
   const [solutionUrl, setSolutionUrl] = useState<string | null>(question.solutionUrl || null);
   const [source, setSource] = useState<"gm" | "cached_ai" | "gemini_generated" | null>(null);
@@ -121,6 +155,7 @@ export function SolutionModal({
   const fetchSolution = async (forceRefresh = false, overrideKey?: string) => {
     if (!question.id) return;
     setLoading(true);
+    setIsStreaming(false);
     setErrorMsg(null);
 
     const activeKey =
@@ -144,47 +179,112 @@ export function SolutionModal({
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const contentType = res.headers.get("content-type") || "";
 
-      if (!res.ok) {
-        const msg = data.error || `Server returned error (${res.status})`;
-        setErrorMsg(msg);
-        if (
-          data.needsApiKey ||
-          data.isBillingError ||
-          res.status === 402 ||
-          res.status === 403 ||
-          msg.toLowerCase().includes("denied") ||
-          msg.toLowerCase().includes("api key") ||
-          msg.toLowerCase().includes("prepago") ||
-          msg.toLowerCase().includes("prepaid")
-        ) {
-          setShowApiKeyConfig(true);
+      // 1. JSON response: either cached solution or error
+      if (contentType.includes("application/json")) {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg = data.error || `Server returned error (${res.status})`;
+          setErrorMsg(msg);
+          if (
+            data.needsApiKey ||
+            data.isBillingError ||
+            res.status === 402 ||
+            res.status === 403 ||
+            msg.toLowerCase().includes("denied") ||
+            msg.toLowerCase().includes("api key") ||
+            msg.toLowerCase().includes("prepago") ||
+            msg.toLowerCase().includes("prepaid")
+          ) {
+            setShowApiKeyConfig(true);
+          }
+          setLoading(false);
+          return;
         }
+
+        setSolutionText(data.solutionText || "");
+        if (data.solutionUrl) setSolutionUrl(data.solutionUrl);
+        setSource(data.source);
+        setIsDiscrepancy(Boolean(data.isDiscrepancy));
+        setDiscrepancyNote(data.discrepancyNote || null);
+        setVerifiedCorrectIndex(data.verifiedCorrectIndex ?? (question.correctIndex ?? 0));
         setLoading(false);
         return;
       }
 
-      setSolutionText(data.solutionText || "");
-      if (data.solutionUrl) setSolutionUrl(data.solutionUrl);
-      setSource(data.source);
-      setIsDiscrepancy(Boolean(data.isDiscrepancy));
-      setDiscrepancyNote(data.discrepancyNote || null);
-      setVerifiedCorrectIndex(data.verifiedCorrectIndex ?? (question.correctIndex ?? 0));
-      setLoading(false);
+      // 2. Real-Time Streaming mode (text/event-stream)
+      setSource("gemini_generated");
+      setLoading(false); // Modal immediately transitions from loading to live stream
+      setIsStreaming(true);
+      setSolutionText("");
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let rawAccumulated = "";
+      let finalVerifiedIndex = question.correctIndex ?? 0;
+      let finalIsDiscrepancy = false;
+      let finalDiscrepancyNote: string | null = null;
+
+      if (reader) {
+        let streamBuffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          streamBuffer += decoder.decode(value, { stream: true });
+          const parts = streamBuffer.split("\n\n");
+          streamBuffer = parts.pop() || "";
+
+          for (const part of parts) {
+            const lines = part.split("\n");
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith("data: ")) continue;
+              const jsonStr = trimmed.slice(6);
+              try {
+                const data = JSON.parse(jsonStr);
+                if (data.type === "chunk" && data.text) {
+                  rawAccumulated += data.text;
+                  const parsed = parseStreamingContent(rawAccumulated);
+                  setSolutionText(parsed.displayText);
+                  if (parsed.verifiedIndex !== null) {
+                    finalVerifiedIndex = parsed.verifiedIndex;
+                    setVerifiedCorrectIndex(parsed.verifiedIndex);
+                  }
+                  if (parsed.hasVerification) {
+                    finalIsDiscrepancy = parsed.isDiscrepancy;
+                    setIsDiscrepancy(parsed.isDiscrepancy);
+                    finalDiscrepancyNote = parsed.discrepancyNote || null;
+                    setDiscrepancyNote(parsed.discrepancyNote || null);
+                  }
+                } else if (data.type === "error") {
+                  setErrorMsg(data.error || "Streaming error occurred");
+                }
+              } catch {}
+            }
+          }
+        }
+      }
+
+      setIsStreaming(false);
+
+      const finalParsed = parseStreamingContent(rawAccumulated);
+      const cleanSolutionText = finalParsed.displayText || rawAccumulated;
+      setSolutionText(cleanSolutionText);
 
       const aiPayload = {
-        text: data.solutionText,
-        verifiedCorrectIndex: data.verifiedCorrectIndex,
-        isDiscrepancy: data.isDiscrepancy,
-        discrepancyNote: data.discrepancyNote,
-        generatedAt: data.generatedAt || Date.now(),
+        text: cleanSolutionText,
+        verifiedCorrectIndex: finalParsed.verifiedIndex ?? finalVerifiedIndex,
+        isDiscrepancy: finalParsed.isDiscrepancy ?? finalIsDiscrepancy,
+        discrepancyNote: finalParsed.discrepancyNote || finalDiscrepancyNote || "",
+        generatedAt: Date.now(),
         model: "gemini-flash-latest",
         locationOrder: effectiveLoc,
       };
 
-      // Cache to Firestore from client if user is signed in
-      if (data.source === "gemini_generated" && question.id) {
+      // Cache to Firestore from client if question has an ID
+      if (cleanSolutionText && question.id) {
         try {
           await updateDoc(doc(db, "questions", question.id), {
             aiSolution: aiPayload,
@@ -194,7 +294,7 @@ export function SolutionModal({
         }
       }
 
-      if (onQuestionUpdated && data.source === "gemini_generated") {
+      if (onQuestionUpdated) {
         onQuestionUpdated({
           ...question,
           aiSolution: aiPayload,
@@ -204,6 +304,7 @@ export function SolutionModal({
       console.error("Failed to load solution:", err);
       setErrorMsg(err.message || "Unable to retrieve or generate solution right now. Please try again.");
       setLoading(false);
+      setIsStreaming(false);
     }
   };
 
@@ -288,9 +389,15 @@ export function SolutionModal({
                       ⚡ Instant Cache (0 Tokens)
                     </span>
                   )}
-                  {source === "gemini_generated" && (
+                  {source === "gemini_generated" && !isStreaming && (
                     <span className="text-[10px] font-bold bg-blue-900/60 text-blue-300 border border-blue-500/50 px-2 py-0.5 rounded-full">
                       ✨ Google AI Verified
+                    </span>
+                  )}
+                  {isStreaming && (
+                    <span className="text-[10px] font-bold bg-indigo-900/70 text-indigo-200 border border-indigo-400/50 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 animate-pulse shadow-[0_0_12px_rgba(99,102,241,0.5)]">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span>Writing Live...</span>
                     </span>
                   )}
                 </div>
@@ -427,7 +534,7 @@ export function SolutionModal({
                   <span>If you answered correctly, you can report this question below to claim a Gold Bounty!</span>
                 </div>
               </div>
-            ) : source && !loading ? (
+            ) : source && !loading && !isStreaming ? (
               <div className="bg-emerald-950/50 border border-emerald-500/50 p-3 rounded-xl flex items-center gap-2.5 text-emerald-200 text-xs">
                 <span className="text-lg text-emerald-400">✓</span>
                 <div>
@@ -437,19 +544,19 @@ export function SolutionModal({
               </div>
             ) : null}
 
-            {/* 3. Loading State */}
+            {/* 3. Loading State (Connecting) */}
             {loading && (
-              <div className="p-8 text-center space-y-3 bg-indigo-950/20 rounded-xl border border-indigo-800/40">
+              <div className="p-8 text-center space-y-3 bg-indigo-950/20 rounded-xl border border-indigo-800/40 animate-pulse">
                 <div className="text-4xl animate-spin inline-block">🔮</div>
-                <h4 className="text-sm font-black text-indigo-300">Solving & Checking Question with Google AI...</h4>
+                <h4 className="text-sm font-black text-indigo-300">Connecting to Google AI...</h4>
                 <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                  Performing independent step-by-step mathematical calculation and inspecting for developer authoring typos.
+                  Preparing step-by-step mathematical derivation scoped to your location syllabus.
                 </p>
               </div>
             )}
 
             {/* 4. Error State */}
-            {errorMsg && !loading && (
+            {errorMsg && !loading && !isStreaming && (
               <div className="p-4 bg-red-950/60 border border-red-500/60 rounded-xl text-xs text-red-200 space-y-3">
                 <div className="font-bold text-red-300 flex items-center gap-1.5">
                   <span>⚠️</span> Could not load automated solution
@@ -472,15 +579,33 @@ export function SolutionModal({
               </div>
             )}
 
-            {/* 5. Step-by-Step Derivation */}
-            {solutionText && !loading && (
-              <div className="bg-indigo-950/30 p-4 sm:p-5 rounded-xl border border-indigo-800/40 text-sm leading-relaxed">
-                <h4 className="text-xs font-bold text-indigo-300 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                  <span>📝</span> Step-by-Step Derivation & Solution:
-                </h4>
-                <div className="text-gray-200">
-                  <MathMarkdown content={solutionText} />
+            {/* 5. Step-by-Step Derivation (Live Streaming or Finished) */}
+            {(solutionText || isStreaming) && !loading && (
+              <div className="bg-indigo-950/30 p-4 sm:p-5 rounded-xl border border-indigo-800/40 text-sm leading-relaxed shadow-lg">
+                <div className="flex items-center justify-between mb-2.5">
+                  <h4 className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>📝</span> Step-by-Step Derivation & Solution:
+                  </h4>
+                  {isStreaming && (
+                    <span className="text-[10px] font-bold text-indigo-300 flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span>Generating live...</span>
+                    </span>
+                  )}
                 </div>
+                {solutionText ? (
+                  <div className="text-gray-200 font-serif">
+                    <MathMarkdown content={solutionText} />
+                    {isStreaming && (
+                      <span className="inline-block w-2 h-4 ml-1 bg-indigo-400 animate-pulse rounded-sm align-middle shadow-[0_0_8px_rgba(129,140,248,0.8)]" />
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-400 italic py-2 flex items-center gap-2">
+                    <span className="animate-spin text-sm">✨</span>
+                    <span>AI is beginning to derive the solution...</span>
+                  </div>
+                )}
               </div>
             )}
 
