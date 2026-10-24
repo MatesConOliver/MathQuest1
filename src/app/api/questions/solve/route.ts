@@ -215,100 +215,81 @@ DISCREPANCY_NOTE: [If IS_DISCREPANCY is TRUE, explain author error here. If FALS
 `.trim();
 
     contentParts.push({ text: userPrompt });
+    const formattedContents = [{ role: "user", parts: contentParts }];
 
-    // Call Gemini with Streaming (gemini-3.8-flash with ThinkingLevel.LOW for low latency)
-    let responseStream: any;
-    try {
-      responseStream = await ai.models.generateContentStream({
-        model: "gemini-3.8-flash",
-        contents: contentParts,
-        config: {
-          systemInstruction:
-            "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You always write the complete step-by-step mathematical derivation with pedagogical explanations between steps first under '### Step-by-Step Derivation & Explanation', followed by the short '### Verification' block.",
-          temperature: 0.1,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-          maxOutputTokens: 2500,
-        },
-      });
-    } catch (modelErr: any) {
-      const errMsg = modelErr?.message || String(modelErr);
-      const isDenied = errMsg.includes("denied access") || errMsg.includes("PERMISSION_DENIED") || errMsg.includes("403");
-      const isKeyInvalid = errMsg.includes("API_KEY_INVALID") || errMsg.includes("not found");
-      const isBillingExhausted = errMsg.includes("402") || errMsg.includes("prepay") || errMsg.includes("prepago") || errMsg.includes("RESOURCE_EXHAUSTED");
-
-      if (isBillingExhausted) {
-        return NextResponse.json(
-          {
-            error: "Google AI Error 402 (Prepaid Budget Exhausted): The Google Cloud project for this key has prepaid billing configured with a budget of $0. In Google AI Studio (https://aistudio.google.com/app/apikey), create a key in a project WITHOUT billing attached to use the 100% Free Tier (15 requests/min, 1,500/day free), or add prepay credit to your current project.",
-            needsApiKey: true,
-            isBillingError: true,
-            details: errMsg,
-          },
-          { status: 402 }
-        );
-      }
-
-      if (isDenied || isKeyInvalid) {
-        return NextResponse.json(
-          {
-            error: isDenied
-              ? "Google AI access was denied for the default environment key. Please enter your Google AI Studio API key (free at https://aistudio.google.com) to generate step-by-step explanations."
-              : `Google AI API key error: ${errMsg}`,
-            needsApiKey: true,
-            details: errMsg,
-          },
-          { status: 403 }
-        );
-      }
-
-      console.warn("[Gemini Solver] gemini-3.8-flash failed, trying fallback to gemini-flash-latest:", modelErr);
-      try {
-        responseStream = await ai.models.generateContentStream({
-          model: "gemini-flash-latest",
-          contents: contentParts,
-          config: {
-            systemInstruction:
-              "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You always write the complete step-by-step mathematical derivation with explanations between steps first, followed by the verification block.",
-            temperature: 0.1,
-            maxOutputTokens: 2500,
-          },
-        });
-      } catch (fbErr: any) {
-        const fbErrMsg = fbErr?.message || String(fbErr);
-        const fbIsBillingExhausted = fbErrMsg.includes("402") || fbErrMsg.includes("prepay") || fbErrMsg.includes("prepago") || fbErrMsg.includes("RESOURCE_EXHAUSTED");
-        const fbIsDenied = fbErrMsg.includes("denied access") || fbErrMsg.includes("PERMISSION_DENIED") || fbErrMsg.includes("403");
-
-        if (fbIsBillingExhausted) {
-          return NextResponse.json(
-            {
-              error: "Google AI Error 402 (Prepaid Budget Exhausted): The project for this API key has prepaid billing with a $0 budget. Create an API key in a Google AI Studio project WITHOUT billing to use the 100% Free Tier (1,500/day free), or add funds to your project.",
-              needsApiKey: true,
-              isBillingError: true,
-              details: fbErrMsg,
-            },
-            { status: 402 }
-          );
-        }
-
-        return NextResponse.json(
-          {
-            error: fbIsDenied
-              ? "Google AI Studio API key required: The default environment key has restricted permissions. Please enter your own Google AI Studio API key."
-              : `AI Generation error: ${fbErrMsg}`,
-            needsApiKey: fbIsDenied,
-            details: fbErrMsg,
-          },
-          { status: fbIsDenied ? 403 : 500 }
-        );
-      }
-    }
-
-    // Return Server-Sent Events stream for live word-by-word typing
+    // Return Server-Sent Events stream immediately (flushes HTTP 200 in ~10ms to eliminate Vercel 504 Gateway Timeouts)
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        // Send immediate heartbeat comment to force proxies and Vercel to flush headers immediately
+        // 1. Immediate heartbeat comment flushes HTTP headers to Vercel and browser instantly
         controller.enqueue(encoder.encode(": connected\n\n"));
+
+        let responseStream: any = null;
+        try {
+          responseStream = await ai.models.generateContentStream({
+            model: "gemini-3.8-flash",
+            contents: formattedContents,
+            config: {
+              systemInstruction:
+                "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You always write the complete step-by-step mathematical derivation with pedagogical explanations between steps first under '### Step-by-Step Derivation & Explanation', followed by the short '### Verification' block.",
+              temperature: 0.1,
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              maxOutputTokens: 1500,
+            },
+          });
+        } catch (modelErr: any) {
+          const errMsg = modelErr?.message || String(modelErr);
+          console.warn("[Gemini Solver] gemini-3.8-flash stream init failed, trying fallback to gemini-flash-latest:", errMsg);
+
+          try {
+            responseStream = await ai.models.generateContentStream({
+              model: "gemini-flash-latest",
+              contents: formattedContents,
+              config: {
+                systemInstruction:
+                  "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You always write the complete step-by-step mathematical derivation with explanations between steps first, followed by the verification block.",
+                temperature: 0.1,
+                maxOutputTokens: 1500,
+              },
+            });
+          } catch (fbErr: any) {
+            const fbErrMsg = fbErr?.message || String(fbErr);
+            console.error("[Gemini Solver] Fallback model also failed:", fbErrMsg);
+
+            const isBillingExhausted =
+              fbErrMsg.includes("402") ||
+              fbErrMsg.includes("prepay") ||
+              fbErrMsg.includes("prepago") ||
+              fbErrMsg.includes("RESOURCE_EXHAUSTED");
+            const isDenied =
+              fbErrMsg.includes("denied access") ||
+              fbErrMsg.includes("PERMISSION_DENIED") ||
+              fbErrMsg.includes("403") ||
+              fbErrMsg.includes("API_KEY_INVALID");
+
+            let userFriendlyError = fbErrMsg;
+            if (isBillingExhausted) {
+              userFriendlyError =
+                "Google AI Error 402 (Prepaid Budget Exhausted): The project for this API key has prepaid billing with a $0 budget. Create an API key in a Google AI Studio project WITHOUT billing to use the 100% Free Tier (1,500/day free), or add funds.";
+            } else if (isDenied) {
+              userFriendlyError =
+                "Google AI Studio API key required: The default environment key has restricted permissions. Please click 'Set API Key' above to enter your free Google AI Studio key.";
+            }
+
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "error",
+                  error: userFriendlyError,
+                  needsApiKey: true,
+                  isBillingError: isBillingExhausted,
+                })}\n\n`
+              )
+            );
+            controller.close();
+            return;
+          }
+        }
 
         try {
           for await (const chunk of responseStream) {
@@ -330,7 +311,10 @@ DISCREPANCY_NOTE: [If IS_DISCREPANCY is TRUE, explain author error here. If FALS
           console.error("[Stream Chunk Error]:", streamErr);
           controller.enqueue(
             encoder.encode(
-              `data: ${JSON.stringify({ type: "error", error: streamErr.message || String(streamErr) })}\n\n`
+              `data: ${JSON.stringify({
+                type: "error",
+                error: streamErr.message || String(streamErr),
+              })}\n\n`
             )
           );
           controller.close();

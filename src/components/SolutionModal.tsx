@@ -203,28 +203,47 @@ export function SolutionModal({
 
       const contentType = res.headers.get("content-type") || "";
 
-      // 1. JSON response: either cached solution or error
+      // 1. If HTTP error (e.g. 504 Gateway Timeout, 403, 402, 500), handle immediately and show error UI
+      if (!res.ok) {
+        let msg = `Server returned error (${res.status})`;
+        let needsKey = res.status === 402 || res.status === 403 || res.status === 504;
+        let isBilling = res.status === 402;
+
+        try {
+          if (contentType.includes("application/json")) {
+            const data = await res.json();
+            msg = data.error || msg;
+            if (data.needsApiKey) needsKey = true;
+            if (data.isBillingError) isBilling = true;
+          } else {
+            const rawText = await res.text();
+            if (rawText) {
+              msg = `Server returned status ${res.status}${res.status === 504 ? " (Gateway Timeout)" : ""}: ${rawText.slice(0, 160)}`;
+            }
+          }
+        } catch {}
+
+        setErrorMsg(msg);
+        setSource(null);
+        setLoading(false);
+        setIsStreaming(false);
+
+        if (
+          needsKey ||
+          isBilling ||
+          msg.toLowerCase().includes("denied") ||
+          msg.toLowerCase().includes("api key") ||
+          msg.toLowerCase().includes("timeout") ||
+          msg.toLowerCase().includes("prepago")
+        ) {
+          setShowApiKeyConfig(true);
+        }
+        return;
+      }
+
+      // 2. JSON response: cached GM or AI solution
       if (contentType.includes("application/json")) {
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const msg = data.error || `Server returned error (${res.status})`;
-          setErrorMsg(msg);
-          if (
-            data.needsApiKey ||
-            data.isBillingError ||
-            res.status === 402 ||
-            res.status === 403 ||
-            msg.toLowerCase().includes("denied") ||
-            msg.toLowerCase().includes("api key") ||
-            msg.toLowerCase().includes("prepago") ||
-            msg.toLowerCase().includes("prepaid")
-          ) {
-            setShowApiKeyConfig(true);
-          }
-          setLoading(false);
-          return;
-        }
-
         setSolutionText(data.solutionText || "");
         if (data.solutionUrl) setSolutionUrl(data.solutionUrl);
         setSource(data.source);
@@ -235,8 +254,7 @@ export function SolutionModal({
         return;
       }
 
-      // 2. Real-Time Streaming mode (text/event-stream)
-      setSource("gemini_generated");
+      // 3. Real-Time Streaming mode (text/event-stream)
       setLoading(false); // Modal immediately transitions from loading to live stream
       setIsStreaming(true);
       setSolutionText("");
@@ -247,6 +265,7 @@ export function SolutionModal({
       let finalVerifiedIndex = question.correctIndex ?? 0;
       let finalIsDiscrepancy = false;
       let finalDiscrepancyNote: string | null = null;
+      let streamHasError = false;
 
       if (reader) {
         let streamBuffer = "";
@@ -281,7 +300,11 @@ export function SolutionModal({
                     setDiscrepancyNote(parsed.discrepancyNote || null);
                   }
                 } else if (data.type === "error") {
+                  streamHasError = true;
                   setErrorMsg(data.error || "Streaming error occurred");
+                  if (data.needsApiKey || data.isBillingError) {
+                    setShowApiKeyConfig(true);
+                  }
                 }
               } catch {}
             }
@@ -292,7 +315,19 @@ export function SolutionModal({
       setIsStreaming(false);
 
       const finalParsed = parseStreamingContent(rawAccumulated);
-      const cleanSolutionText = finalParsed.displayText || rawAccumulated;
+      const cleanSolutionText = (finalParsed.displayText || rawAccumulated).trim();
+
+      // Guard: If no solution text was streamed (or an error occurred), do not show verified state
+      if (!cleanSolutionText || streamHasError) {
+        setSource(null);
+        if (!errorMsg && !streamHasError) {
+          setErrorMsg("No explanation could be generated. Please check your Google AI Studio API key.");
+          setShowApiKeyConfig(true);
+        }
+        return;
+      }
+
+      setSource("gemini_generated");
       setSolutionText(cleanSolutionText);
 
       const aiPayload = {
