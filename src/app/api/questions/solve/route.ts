@@ -224,101 +224,100 @@ DISCREPANCY_NOTE: [If IS_DISCREPANCY is TRUE, explain author error here. If FALS
         // 1. Immediate heartbeat comment flushes HTTP headers to Vercel and browser instantly
         controller.enqueue(encoder.encode(": connected\n\n"));
 
-        let responseStream: any = null;
-        try {
-          responseStream = await ai.models.generateContentStream({
-            model: "gemini-3.8-flash",
-            contents: formattedContents,
-            config: {
+        // Models to try in order: stable production flash first, then 3.8 flash, then flash-lite
+        const candidateModels = [
+          { name: "gemini-flash-latest", thinking: false },
+          { name: "gemini-3.8-flash", thinking: true },
+          { name: "gemini-3.1-flash-lite", thinking: false },
+        ];
+
+        let streamedAnyChunk = false;
+        let lastErrorMsg = "";
+        let isBillingExhausted = false;
+        let isKeyDenied = false;
+
+        for (const candidate of candidateModels) {
+          try {
+            console.log(`[Gemini Solver] Attempting model ${candidate.name}...`);
+            const config: any = {
               systemInstruction:
                 "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You always write the complete step-by-step mathematical derivation with pedagogical explanations between steps first under '### Step-by-Step Derivation & Explanation', followed by the short '### Verification' block.",
               temperature: 0.1,
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
               maxOutputTokens: 1500,
-            },
-          });
-        } catch (modelErr: any) {
-          const errMsg = modelErr?.message || String(modelErr);
-          console.warn("[Gemini Solver] gemini-3.8-flash stream init failed, trying fallback to gemini-flash-latest:", errMsg);
+            };
 
-          try {
-            responseStream = await ai.models.generateContentStream({
-              model: "gemini-flash-latest",
+            if (candidate.thinking) {
+              config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+            }
+
+            const responseStream = await ai.models.generateContentStream({
+              model: candidate.name,
               contents: formattedContents,
-              config: {
-                systemInstruction:
-                  "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You always write the complete step-by-step mathematical derivation with explanations between steps first, followed by the verification block.",
-                temperature: 0.1,
-                maxOutputTokens: 1500,
-              },
+              config,
             });
-          } catch (fbErr: any) {
-            const fbErrMsg = fbErr?.message || String(fbErr);
-            console.error("[Gemini Solver] Fallback model also failed:", fbErrMsg);
 
-            const isBillingExhausted =
-              fbErrMsg.includes("402") ||
-              fbErrMsg.includes("prepay") ||
-              fbErrMsg.includes("prepago") ||
-              fbErrMsg.includes("RESOURCE_EXHAUSTED");
-            const isDenied =
-              fbErrMsg.includes("denied access") ||
-              fbErrMsg.includes("PERMISSION_DENIED") ||
-              fbErrMsg.includes("403") ||
-              fbErrMsg.includes("API_KEY_INVALID");
-
-            let userFriendlyError = fbErrMsg;
-            if (isBillingExhausted) {
-              userFriendlyError =
-                "Google AI Error 402 (Prepaid Budget Exhausted): The project for this API key has prepaid billing with a $0 budget. Create an API key in a Google AI Studio project WITHOUT billing to use the 100% Free Tier (1,500/day free), or add funds.";
-            } else if (isDenied) {
-              userFriendlyError =
-                "Google AI Studio API key required: The default environment key has restricted permissions. Please click 'Set API Key' above to enter your free Google AI Studio key.";
+            for await (const chunk of responseStream) {
+              if (chunk.text) {
+                streamedAnyChunk = true;
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ type: "chunk", text: chunk.text })}\n\n`)
+                );
+              }
             }
 
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({
-                  type: "error",
-                  error: userFriendlyError,
-                  needsApiKey: true,
-                  isBillingError: isBillingExhausted,
-                })}\n\n`
-              )
-            );
-            controller.close();
-            return;
-          }
-        }
-
-        try {
-          for await (const chunk of responseStream) {
-            if (chunk.text) {
+            if (streamedAnyChunk) {
+              const durationMs = Date.now() - startTime;
+              console.log(`[Gemini Solver] Completed with ${candidate.name} in ${durationMs}ms`);
               controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ type: "chunk", text: chunk.text })}\n\n`)
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: "done", locationOrder: reqLocationOrder })}\n\n`
+                )
               );
+              controller.close();
+              return;
             }
+          } catch (modelErr: any) {
+            const rawMsg = modelErr?.message || String(modelErr);
+            console.warn(`[Gemini Solver] Model ${candidate.name} error:`, rawMsg);
+
+            if (rawMsg.includes("402") || rawMsg.includes("prepay") || rawMsg.includes("prepago") || rawMsg.includes("RESOURCE_EXHAUSTED")) {
+              isBillingExhausted = true;
+            }
+            if (rawMsg.includes("denied access") || rawMsg.includes("PERMISSION_DENIED") || rawMsg.includes("403") || rawMsg.includes("API_KEY_INVALID")) {
+              isKeyDenied = true;
+            }
+
+            // Extract cleaner text from JSON if present
+            const matchMsg = rawMsg.match(/"message":\s*"([^"]+)"/);
+            lastErrorMsg = matchMsg ? matchMsg[1].replace(/\\n/g, " ") : rawMsg;
+
+            // If we already started streaming text to the user, we cannot switch models mid-stream
+            if (streamedAnyChunk) {
+              break;
+            }
+            // Otherwise, continue to the next candidate model in the list!
           }
-          const durationMs = Date.now() - startTime;
-          console.log(`[Gemini Solver] Stream completed successfully in ${durationMs}ms`);
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "done", locationOrder: reqLocationOrder })}\n\n`
-            )
-          );
-          controller.close();
-        } catch (streamErr: any) {
-          console.error("[Stream Chunk Error]:", streamErr);
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: "error",
-                error: streamErr.message || String(streamErr),
-              })}\n\n`
-            )
-          );
-          controller.close();
         }
+
+        // If we reach here and no text was streamed, report clean error
+        let finalUserError = lastErrorMsg || "All available models are temporarily busy. Please try again in a few moments.";
+        if (isBillingExhausted) {
+          finalUserError = "Google AI Error 402: Project billing quota exhausted. In Google AI Studio (aistudio.google.com), create a key in a project without billing for 1,500 free requests/day.";
+        } else if (isKeyDenied) {
+          finalUserError = "Google AI API key error: Key is invalid or denied permission. Please check your GEMINI_API_KEY.";
+        }
+
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              type: "error",
+              error: finalUserError,
+              needsApiKey: isKeyDenied || isBillingExhausted,
+              isBillingError: isBillingExhausted,
+            })}\n\n`
+          )
+        );
+        controller.close();
       },
     });
 

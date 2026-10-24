@@ -77,6 +77,17 @@ const renderStructuredContent = (blocks: ContentBlock[] | undefined, isBlock = f
   );
 };
 
+function cleanErrorMessage(raw: string): string {
+  if (!raw) return "";
+  try {
+    const match = raw.match(/"message":\s*"([^"]+)"/);
+    if (match && match[1]) {
+      return match[1].replace(/\\n/g, " ");
+    }
+  } catch {}
+  return raw;
+}
+
 function parseStreamingContent(fullText: string) {
   if (!fullText) {
     return {
@@ -301,7 +312,7 @@ export function SolutionModal({
                   }
                 } else if (data.type === "error") {
                   streamHasError = true;
-                  setErrorMsg(data.error || "Streaming error occurred");
+                  setErrorMsg(cleanErrorMessage(data.error || "Streaming error occurred"));
                   if (data.needsApiKey || data.isBillingError) {
                     setShowApiKeyConfig(true);
                   }
