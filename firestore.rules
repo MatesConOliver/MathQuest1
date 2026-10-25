@@ -7,8 +7,7 @@ service cloud.firestore {
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
     function isGM() {
       return signedIn() && (
-        request.auth.token.email == "oliveru1996@gmail.com" ||
-        request.auth.token.email == "oliverozcariz@britanico-aragon.edu"
+        request.auth.token.email == "oliveru1996@gmail.com"
       );
     }
 

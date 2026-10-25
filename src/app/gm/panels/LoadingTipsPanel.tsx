@@ -2,8 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { DEFAULT_LOADING_TIPS } from "@/components/LoadingScreen";
+
+const SETTINGS_REF = doc(db, "settings", "loadingTips");
+const LOCATIONS_FALLBACK_REF = doc(db, "locations", "loading_screen_settings");
 
 export function LoadingTipsPanel() {
   const [tips, setTips] = useState<string[]>([]);
@@ -13,14 +16,20 @@ export function LoadingTipsPanel() {
   const [msg, setMsg] = useState("");
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editingText, setEditingText] = useState("");
+  const currentUserEmail = auth.currentUser?.email || "";
+  const isGM = currentUserEmail.toLowerCase() === "oliveru1996@gmail.com";
 
   useEffect(() => {
     async function loadTips() {
       setLoading(true);
       try {
-        const snap = await getDoc(doc(db, "settings", "loadingTips"));
-        if (snap.exists() && Array.isArray(snap.data().tips)) {
-          setTips(snap.data().tips);
+        let snap = await getDoc(SETTINGS_REF).catch(() => null);
+        if (!snap || !snap.exists()) {
+          snap = await getDoc(LOCATIONS_FALLBACK_REF).catch(() => null);
+        }
+
+        if (snap && snap.exists() && Array.isArray(snap.data()?.tips)) {
+          setTips(snap.data()!.tips);
         } else {
           setTips(DEFAULT_LOADING_TIPS);
         }
@@ -37,23 +46,40 @@ export function LoadingTipsPanel() {
   const saveTipsToDb = async (updated: string[]) => {
     setSaving(true);
     setMsg("Saving to database...");
+
+    const payload = {
+      tips: updated,
+      updatedAt: serverTimestamp(),
+    };
+
+    let saved = false;
+    let lastError = "";
+
+    // 1. Try locations collection first (existing production Firestore rules already allow locations for GM)
     try {
-      await setDoc(
-        doc(db, "settings", "loadingTips"),
-        {
-          tips: updated,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      await setDoc(LOCATIONS_FALLBACK_REF, payload, { merge: true });
+      saved = true;
+    } catch (err: any) {
+      lastError = err.message;
+    }
+
+    // 2. Also save to settings collection (if rules permit it)
+    try {
+      await setDoc(SETTINGS_REF, payload, { merge: true });
+      saved = true;
+    } catch (err: any) {
+      if (!saved) lastError = err.message;
+    }
+
+    if (saved) {
       setTips(updated);
       setMsg("✅ Loading screen sentences saved successfully!");
       setTimeout(() => setMsg(""), 3500);
-    } catch (err: any) {
-      setMsg("❌ Error saving: " + err.message);
-    } finally {
-      setSaving(false);
+    } else {
+      setMsg(`❌ Error saving: ${lastError}. Make sure you are signed in as oliveru1996@gmail.com.`);
     }
+
+    setSaving(false);
   };
 
   const handleAddTip = () => {
@@ -99,12 +125,27 @@ export function LoadingTipsPanel() {
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             The game picks one of these sentences at random whenever a student enters a battle or loads a new world site.
           </p>
+          <div className="mt-2 text-[11px] flex items-center gap-2">
+            <span className="text-gray-500 dark:text-gray-400">Signed in as:</span>
+            <span className="font-mono font-bold text-gray-800 dark:text-gray-200">
+              {currentUserEmail || "Not signed in"}
+            </span>
+            {isGM ? (
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-[10px]">
+                GM Verified
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 font-bold text-[10px]">
+                ⚠️ Only oliveru1996@gmail.com has GM permissions
+              </span>
+            )}
+          </div>
         </div>
 
         <button
           onClick={handleResetDefaults}
           disabled={saving}
-          className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+          className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors shrink-0"
         >
           🔄 Restore Defaults
         </button>

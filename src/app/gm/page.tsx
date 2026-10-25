@@ -18,7 +18,6 @@ import { TabButton } from "./components/TabButton";
 
 const GM_EMAILS = [
   "oliveru1996@gmail.com",
-  "oliverozcariz@britanico-aragon.edu",
 ];
 
 const isGMUser = (email?: string | null) => !!email && GM_EMAILS.includes(email.toLowerCase().trim());

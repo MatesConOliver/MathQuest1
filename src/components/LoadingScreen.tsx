@@ -39,8 +39,11 @@ export function LoadingScreen({ message }: { message?: string }) {
     let isMounted = true;
     async function fetchTips() {
       try {
-        const snap = await getDoc(doc(db, "settings", "loadingTips"));
-        if (snap.exists()) {
+        let snap = await getDoc(doc(db, "settings", "loadingTips")).catch(() => null);
+        if (!snap || !snap.exists()) {
+          snap = await getDoc(doc(db, "locations", "loading_screen_settings")).catch(() => null);
+        }
+        if (snap && snap.exists()) {
           const data = snap.data();
           if (Array.isArray(data.tips) && data.tips.length > 0) {
             cachedTips = data.tips;
