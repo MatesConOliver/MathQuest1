@@ -737,7 +737,7 @@ export function SolutionModal({
               className="px-3.5 py-2 bg-amber-950/70 hover:bg-amber-900 text-amber-300 hover:text-amber-200 border border-amber-600/50 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 shadow"
             >
               <span>🚩</span>
-              <span>Report Issue / Flag Question</span>
+              <span>Report issue with question or answer</span>
               <span className="text-[10px] bg-yellow-400/20 text-yellow-300 px-1.5 py-0.5 rounded font-black border border-yellow-500/30">
                 💰 Bounty
               </span>

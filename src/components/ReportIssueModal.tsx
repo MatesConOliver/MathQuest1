@@ -36,7 +36,7 @@ export function ReportIssueModal({
   const issueOptions = [
     { id: "answer_incorrect", label: "The marked correct answer is wrong (developer error)" },
     { id: "typo_or_unclear", label: "Typo, broken LaTeX formula, or unclear question wording" },
-    { id: "ai_explanation_issue", label: "The AI explanation has a mistake or is incomplete" },
+    { id: "ai_explanation_issue", label: "The AI explanation has a mistake, is incomplete or is not adequate" },
     { id: "diagram_broken", label: "Image or diagram didn't load properly" },
     { id: "other_bug", label: "Other gameplay bug or problem" },
   ];

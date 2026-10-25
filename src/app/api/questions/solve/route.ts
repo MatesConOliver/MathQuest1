@@ -203,10 +203,11 @@ MANDATORY INSTRUCTIONS:
 You MUST structure your response into the following two sections in order:
 
 ### Step-by-Step Derivation & Explanation
-1. Provide a rigorous, crystal-clear, step-by-step mathematical derivation from first principles/allowed tools to reach the correct answer.
-2. PEDAGOGICAL NARRATIVE: You MUST include clear explanatory sentences BETWEEN intermediate mathematical steps. Explain WHY each step is done, what theorem, identity, or formula is being applied, and how it directly advances the solution toward the answer. Do not merely list raw equations without narrative explanation.
-3. FORMATTING: Use standard LaTeX formatting ($...$ for inline expressions, $$...$$ for standalone display equations).
-4. Verify all options carefully against your derivation. Compute which option is mathematically correct (Option A, B, C, or D).
+1. NOTE ON ALTERNATIVE METHODS: If there are alternative, more obvious, or more direct ways to solve this question (such as direct inspection, testing choice options, symmetry, or intuitive shortcuts), include a brief 1-2 sentence note right at the very beginning (e.g., "**Alternative Approaches:** While this problem can also be solved more directly by [mention alternative method], here is a full step-by-step derivation:"), so the student does not feel this derivation is the only way to reach the solution.
+2. Provide a rigorous, crystal-clear, step-by-step mathematical derivation from first principles/allowed tools to reach the correct answer.
+3. PEDAGOGICAL NARRATIVE: You MUST include clear explanatory sentences BETWEEN intermediate mathematical steps. Explain WHY each step is done, what theorem, identity, or formula is being applied, and how it directly advances the solution toward the answer. Do not merely list raw equations without narrative explanation.
+4. FORMATTING: Use standard LaTeX formatting ($...$ for inline expressions, $$...$$ for standalone display equations).
+5. Verify all options carefully against your derivation. Compute which option is mathematically correct (Option A, B, C, or D).
 
 ### Verification
 CORRECT_OPTION: [A, B, C, or D]
@@ -241,7 +242,7 @@ DISCREPANCY_NOTE: [If IS_DISCREPANCY is TRUE, explain author error here. If FALS
             console.log(`[Gemini Solver] Attempting model ${candidate.name}...`);
             const config: any = {
               systemInstruction:
-                "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. You always write the complete step-by-step mathematical derivation with pedagogical explanations between steps first under '### Step-by-Step Derivation & Explanation', followed by the short '### Verification' block.",
+                "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. If there are more obvious or alternative ways to solve the problem, you always note them briefly at the top of '### Step-by-Step Derivation & Explanation' so students recognize multiple valid paths, then provide the complete step-by-step mathematical derivation with pedagogical explanations between steps, followed by the short '### Verification' block.",
               temperature: 0.1,
               maxOutputTokens: 1500,
             };

@@ -26,7 +26,7 @@ export const IB_MATH_AA_HL_SYLLABUS: SyllabusTopic[] = [
       "Polynomial functions and their graphs",
       "Zeros and factors of polynomial functions; roots of polynomial equations",
       "Applying the factor and remainder theorems",
-      "The sum and product of the roots of a polynomial equation",
+      "The sum and product of the roots of a polynomial equation (relations between coefficients and roots: for ax² + bx + c = 0, sum of roots = -b/a, product of roots = c/a, and relationships for higher-degree polynomials; apply these properties directly without using the name 'Vieta')",
       "Quadratic functions, and different forms in which to express them",
       "Finding characteristics of a parabola: axis of symmetry, x-intercepts and vertex",
       "Solving quadratic equations and inequalities",
@@ -293,6 +293,11 @@ ${
     ? "7. DO NOT use complex numbers or imaginary unit i unless the problem itself introduces it."
     : ""
 }
-8. If the problem naturally invites a higher-level tool (e.g., calculus), but can be solved with earlier tools (e.g., algebra, coordinate geometry, factoring, completing the square), YOU MUST USE THE LOWER-LEVEL TOOL so the student understands it at their current level.
+${
+  maxTopic >= 2
+    ? "8. TOPIC 2 SUM & PRODUCT OF ROOTS: In Topic 2, students work with the properties of the sum and product of the roots of a polynomial equation (for ax² + bx + c = 0, sum of roots = -b/a, product of roots = c/a, and extensions to higher-degree polynomials). You are strongly encouraged to use these sum and product of roots relationships whenever helpful, but DO NOT use the name 'Vieta' or 'Vieta's formulas'—students learn and apply these as standard properties of roots without knowing that name."
+    : ""
+}
+9. If the problem naturally invites a higher-level tool (e.g., calculus), but can be solved with earlier tools (e.g., algebra, coordinate geometry, factoring, completing the square), YOU MUST USE THE LOWER-LEVEL TOOL so the student understands it at their current level.
 `.trim();
 }
