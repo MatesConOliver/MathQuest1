@@ -102,6 +102,11 @@ export default function PlayClient() {
           locationName={currentLocation?.name}
           combatEffect={battle.combatEffect}
           user={user}
+          specialFightActive={battle.specialFightActive}
+          activeSpecialFightId={battle.activeSpecialFightId}
+          isPhase2={battle.isPhase2}
+          phase2SpeedPercent={battle.currentEncounter?.phase2TimeSpeedPercent || 25}
+          onCompleteSpecialFight={battle.handleSpecialFightComplete}
         />
       );
     case 'win':

@@ -109,6 +109,12 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   // Floating combat text and sprite damage animation state
   const [combatEffect, setCombatEffect] = useState<CombatEffect | null>(null);
 
+  // Special Fight & Phase 2 state
+  const [specialFightActive, setSpecialFightActive] = useState(false);
+  const [specialFightTriggered, setSpecialFightTriggered] = useState(false);
+  const [activeSpecialFightId, setActiveSpecialFightId] = useState<string | null>(null);
+  const [isPhase2, setIsPhase2] = useState(false);
+
   useEffect(() => {
     if (character?.inventory) {
       setBattleInventory(character.inventory);
@@ -471,17 +477,51 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
 
       if (correct) {
         const foeDamage = calculatePlayerDamage(currentQuestion.difficulty || 1);
-        const newFoeHp = Math.max(0, foeHp - foeDamage);
-        setMsg(`Correct! You dealt ${foeDamage} damage.`);
-        setFoeHp(newFoeHp);
-        setCombatEffect({
-          target: 'foe',
-          amount: foeDamage,
-          id: Date.now(),
-          isCorrect: true,
-        });
-        playSfx('attack');
-        setTimeout(() => playSfx('hit'), 140);
+        const calculatedFoeHp = foeHp - foeDamage;
+        const maxHp = foe?.maxHp || 50;
+        const halfHp = maxHp * 0.5;
+
+        // Check for special fight trigger: first time foe is below 50% HP (or 0% from 1-hit KO)
+        const shouldTriggerSpecial =
+          Boolean(currentEncounter?.specialFightId) &&
+          !specialFightTriggered &&
+          (calculatedFoeHp <= halfHp || calculatedFoeHp <= 0);
+
+        if (shouldTriggerSpecial) {
+          // Keep foe alive at min 1 HP so handleWin doesn't execute before the special fight
+          const clampedHp = Math.max(1, calculatedFoeHp);
+          setFoeHp(clampedHp);
+          setSpecialFightTriggered(true);
+          setActiveSpecialFightId(currentEncounter!.specialFightId!);
+          setMsg(`Correct! You dealt ${foeDamage} damage... BUT A SPECIAL TRIAL IS TRIGGERED!`);
+          
+          setCombatEffect({
+            target: 'foe',
+            amount: foeDamage,
+            id: Date.now(),
+            isCorrect: true,
+          });
+          playSfx('attack');
+          setTimeout(() => playSfx('hit'), 140);
+
+          // Allow the attack animation to play, then open special fight
+          setTimeout(() => {
+            setIsPaused(true);
+            setSpecialFightActive(true);
+          }, 700);
+        } else {
+          const newFoeHp = Math.max(0, calculatedFoeHp);
+          setMsg(`Correct! You dealt ${foeDamage} damage.`);
+          setFoeHp(newFoeHp);
+          setCombatEffect({
+            target: 'foe',
+            amount: foeDamage,
+            id: Date.now(),
+            isCorrect: true,
+          });
+          playSfx('attack');
+          setTimeout(() => playSfx('hit'), 140);
+        }
       } else {
         const playerDamage = foe?.attackDamage || 5;
         const newPlayerHp = Math.max(0, playerHp - playerDamage);
@@ -517,6 +557,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       foe,
       questionQueue,
       playSfx,
+      currentEncounter,
+      specialFightTriggered,
     ]
   );
 
@@ -620,6 +662,10 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
           setIsPaused(false);
           setSelectedChoice(null);
           setCombatEffect(null);
+          setSpecialFightActive(false);
+          setSpecialFightTriggered(false);
+          setActiveSpecialFightId(null);
+          setIsPhase2(false);
           if (character?.inventory) setBattleInventory(character.inventory);
           setLevelUpData(null);
           setLootDrops([]);
@@ -640,6 +686,31 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     [character, battleStats.maxHp, fetchGroupQuestions]
   );
 
+  const handleSpecialFightComplete = useCallback(
+    (result: { success: boolean; message?: string }) => {
+      setSpecialFightActive(false);
+
+      if (result.success) {
+        // Foe recovers full HP and enters Phase 2!
+        if (foe) {
+          setFoeHp(foe.maxHp);
+        }
+        setIsPhase2(true);
+        const speedBonus = currentEncounter?.phase2TimeSpeedPercent || 25;
+        setMsg(`⚡ PHASE 2 AWAKENED! ${foe?.name || 'The foe'} fully restored HP! Question timer is now ${speedBonus}% faster!`);
+        playSfx('attack');
+        setIsPaused(false);
+      } else {
+        // Penalty on fail: lose 30% of max HP
+        const penalty = Math.max(10, Math.floor((battleStats.maxHp || 100) * 0.3));
+        setPlayerHp((prev) => Math.max(1, prev - penalty));
+        setMsg(`The special trial overwhelmed you for -${penalty} HP!`);
+        setIsPaused(false);
+      }
+    },
+    [foe, currentEncounter, battleStats.maxHp, playSfx]
+  );
+
   useEffect(() => {
     const encounterId = searchParams.get('id');
     
@@ -658,9 +729,13 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   }, [searchParams, encounters, character, handleStartEncounter, mode]);
 
   useEffect(() => {
-    if (mode !== 'battle' || isPaused || !currentQuestion) {
+    if (mode !== 'battle' || isPaused || !currentQuestion || specialFightActive) {
       return;
     }
+
+    // Phase 2 timer speed: ticks faster if isPhase2 is active
+    const speedBonus = isPhase2 ? (currentEncounter?.phase2TimeSpeedPercent || 25) : 0;
+    const intervalMs = Math.max(200, Math.round(1000 / (1 + speedBonus / 100)));
 
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
@@ -671,10 +746,10 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         }
         return prev - 1;
       });
-    }, 1000);
+    }, intervalMs);
 
     return () => clearInterval(interval);
-  }, [mode, isPaused, currentQuestion, handleAnswer]);
+  }, [mode, isPaused, currentQuestion, handleAnswer, isPhase2, currentEncounter?.phase2TimeSpeedPercent, specialFightActive]);
 
   const handleStartBattle = () => setMode('battle');
 
@@ -795,5 +870,9 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     handleReturnToMap,
     combatEffect,
     battleInventory,
+    specialFightActive,
+    activeSpecialFightId,
+    isPhase2,
+    handleSpecialFightComplete,
   };
 }

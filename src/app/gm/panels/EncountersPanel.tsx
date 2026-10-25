@@ -14,16 +14,21 @@ import {
   onSnapshot,
   where,
 } from "firebase/firestore";
-import { EncounterDoc, GameLocation, SubArea } from "@/types/game";
+import { EncounterDoc, GameLocation, SubArea, FoeDoc } from "@/types/game";
 import { Input } from "@/app/gm/components/Input";
+import { SPECIAL_FIGHTS_LIST } from "@/app/play/components/specialFights/registry";
+import SpecialFightModal from "@/app/play/components/specialFights/SpecialFightModal";
+import { Swords, Sparkles } from "lucide-react";
 
 export function EncountersPanel() {
     const [encounters, setEncounters] = useState<EncounterDoc[]>([]);
     const [locations, setLocations] = useState<GameLocation[]>([]);
     const [subAreas, setSubAreas] = useState<SubArea[]>([]);
+    const [foes, setFoes] = useState<FoeDoc[]>([]);
     const [msg, setMsg] = useState("");
     const [editingId, setEditingId] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
+    const [isTestModalOpen, setIsTestModalOpen] = useState(false);
 
     const visibleEncounters = encounters.filter(e => 
       e.title.toLowerCase().includes(searchTerm.toLowerCase())
@@ -42,6 +47,8 @@ export function EncountersPanel() {
     const [emoji, setEmoji] = useState("👹");
     const [shuffle, setShuffle] = useState(false);
     const [winRewardStoryFlag, setWinRewardStoryFlag] = useState("");
+    const [specialFightId, setSpecialFightId] = useState("");
+    const [phase2Speed, setPhase2Speed] = useState(25);
 
     const [selectedLocationId, setSelectedLocationId] = useState("");
     const [selectedSubAreaId, setSelectedSubAreaId] = useState("");
@@ -61,7 +68,10 @@ export function EncountersPanel() {
         const unsubLocs = onSnapshot(query(collection(db, "locations"), orderBy("order")), (snap) => {
             setLocations(snap.docs.map(d => ({ ...d.data(), id: d.id } as GameLocation)));
         });
-        return () => { unsub(); unsubLocs(); };
+        const unsubFoes = onSnapshot(collection(db, "foes"), (snap) => {
+            setFoes(snap.docs.map(d => ({ ...d.data(), id: d.id } as FoeDoc)));
+        });
+        return () => { unsub(); unsubLocs(); unsubFoes(); };
     }, []);
 
     useEffect(() => {
@@ -86,6 +96,8 @@ export function EncountersPanel() {
       setRewardAlgebra(0); setRewardFunctions(0); setRewardGeometry(0); setRewardStats(0); setRewardCalculus(0);
       setImageUrl(""); setEmoji(""); setShuffle(false);
       setWinRewardStoryFlag("");
+      setSpecialFightId("");
+      setPhase2Speed(25);
       setMsg("");
     }
   
@@ -113,6 +125,8 @@ export function EncountersPanel() {
       setEmoji(enc.emoji || "");
       setShuffle(enc.shuffleQuestions || false);
       setWinRewardStoryFlag(enc.winRewardStoryFlag || "");
+      setSpecialFightId(enc.specialFightId || "");
+      setPhase2Speed(enc.phase2TimeSpeedPercent !== undefined ? enc.phase2TimeSpeedPercent : 25);
 
       setRewardAlgebra(enc.winRewardSkills?.algebra || 0);
       setRewardFunctions(enc.winRewardSkills?.functions || 0);
@@ -145,7 +159,9 @@ export function EncountersPanel() {
         locationId: selectedLocationId, // For backward compatibility
         foes: foeIds, foeId: foesText.split(",")[0]?.trim() || "",
         imageUrl: imageUrl || "", emoji: emoji || "👹", shuffleQuestions: shuffle,
-        questionTag: questionTag //legacy
+        questionTag: questionTag, //legacy
+        specialFightId: specialFightId || undefined,
+        phase2TimeSpeedPercent: Number(phase2Speed) || 25,
       };
   
       try {
@@ -169,7 +185,17 @@ export function EncountersPanel() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-xl border dark:border-gray-700 shadow-sm transition-colors">
         {/* FORM SIDE */}
         <div className="space-y-4">
-          <h2 className="text-xl font-bold">{editingId ? "✏️ Edit Encounter" : "⚔️ New Encounter"}</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold">{editingId ? "✏️ Edit Encounter" : "⚔️ New Encounter"}</h2>
+            <button
+              type="button"
+              onClick={() => setIsTestModalOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Swords className="w-3.5 h-3.5 text-amber-300" />
+              🧪 Test Special Fights
+            </button>
+          </div>
           {msg && <div className="text-center bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-blue-800 dark:text-blue-200 font-bold text-sm">{msg}</div>}
   
           <Input label="Title" value={title} onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)} />
@@ -228,6 +254,61 @@ export function EncountersPanel() {
                 </label>
               </div>
           </div>
+
+          {/* SPECIAL FIGHT PHASE SHIFT SECTION */}
+          <div className="bg-indigo-50 dark:bg-indigo-950/40 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800/60 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="label-sm text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 font-bold">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                Special Fight Mechanic (50% HP Phase Shift)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsTestModalOpen(true)}
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
+              >
+                🧪 Test Lab
+              </button>
+            </div>
+
+            <div>
+              <label className="label text-xs font-bold text-gray-700 dark:text-gray-300">Choose Special Fight</label>
+              <select
+                value={specialFightId}
+                onChange={(e) => setSpecialFightId(e.target.value)}
+                className="input text-sm"
+              >
+                <option value="">-- None (Standard Battle Only) --</option>
+                {SPECIAL_FIGHTS_LIST.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name} ({f.locationName.split(':')[0]})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                Triggers the first time the foe drops below 50% HP (or 0% from a 1-hit KO).
+              </p>
+            </div>
+
+            {specialFightId && (
+              <div className="pt-2 border-t border-indigo-200 dark:border-indigo-800/40 grid grid-cols-2 gap-3 items-center">
+                <div>
+                  <label className="label text-xs font-bold text-gray-700 dark:text-gray-300">Phase 2 Speed +%</label>
+                  <Input
+                    type="number"
+                    min="10"
+                    max="100"
+                    value={phase2Speed}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setPhase2Speed(Number(e.target.value))}
+                    placeholder="25"
+                  />
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  After passing, the foe recovers 100% HP and question timers tick <strong className="text-indigo-600 dark:text-indigo-300">+{phase2Speed}% faster</strong>.
+                </div>
+              </div>
+            )}
+          </div>
   
           <div className="flex gap-2 pt-2">
               <button onClick={saveEncounter} className="btn-primary flex-1 py-2 rounded-lg font-bold">
@@ -277,6 +358,15 @@ export function EncountersPanel() {
               })}
           </div>
         </div>
+
+        {/* SPECIAL FIGHT GM TEST MODAL */}
+        <SpecialFightModal
+          isOpen={isTestModalOpen}
+          onClose={() => setIsTestModalOpen(false)}
+          initialFightId={specialFightId || 'loc2_vieta_scales'}
+          foes={foes}
+        />
       </div>
     );
   }
+

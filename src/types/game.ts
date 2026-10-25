@@ -224,6 +224,8 @@ export type EncounterDoc = {
   shuffleQuestions?: boolean;
   imageUrl?: string;
   emoji?: string;
+  specialFightId?: string; // Optional ID of registered special fight (e.g. 'loc2_vieta_scales')
+  phase2TimeSpeedPercent?: number; // % faster timer in Phase 2 after clearing special fight (default 25)
 };
 
 export type UnlockedSubArea = {

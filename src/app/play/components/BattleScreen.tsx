@@ -6,6 +6,7 @@ import React, { useState, useEffect } from "react";
 import { User } from "firebase/auth";
 import { CombatEffect } from "../hooks/useBattle";
 import { SolutionModal } from "@/components/SolutionModal";
+import { getSpecialFightById } from "./specialFights/registry";
 
 // RENDER HELPERS
 const renderLegacyMixedText = (text: string | undefined): React.ReactNode => {
@@ -169,6 +170,11 @@ interface BattleScreenProps {
   locationName?: string;
   combatEffect?: CombatEffect | null;
   user?: User | null;
+  specialFightActive?: boolean;
+  activeSpecialFightId?: string | null;
+  isPhase2?: boolean;
+  phase2SpeedPercent?: number;
+  onCompleteSpecialFight?: (result: { success: boolean; message?: string }) => void;
 }
 
 // CIRCULAR RING TIMER COMPONENT
@@ -238,19 +244,23 @@ function StatusPlate({
   maxHp,
   isFoe = false,
   level,
+  isPhase2 = false,
+  phase2SpeedPercent = 25,
 }: {
   name: string;
   hp: number;
   maxHp: number;
   isFoe?: boolean;
   level?: number;
+  isPhase2?: boolean;
+  phase2SpeedPercent?: number;
 }) {
   const percent = Math.max(0, Math.min(100, (hp / (maxHp || 1)) * 100));
   const hpColor = percent > 50 ? 'bg-green-500' : percent > 20 ? 'bg-yellow-500' : 'bg-red-500 animate-pulse';
 
   return (
     <div className={`p-2.5 sm:p-3 rounded-2xl bg-black/80 backdrop-blur-md border ${
-      isFoe ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.25)]' : 'border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.25)]'
+      isFoe ? (isPhase2 ? 'border-red-500 shadow-[0_0_25px_rgba(239,68,68,0.5)]' : 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.25)]') : 'border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.25)]'
     } w-52 sm:w-64 text-white shadow-xl`}>
       <div className="flex justify-between items-baseline mb-1">
         <span className="font-black text-xs sm:text-sm truncate max-w-[150px]">{name}</span>
@@ -267,9 +277,17 @@ function StatusPlate({
         </div>
       </div>
 
-      <div className="text-right text-[10px] font-mono text-gray-300 font-bold mt-0.5">
-        {hp} / {maxHp}
+      <div className="flex justify-between items-center text-[10px] font-mono text-gray-300 font-bold mt-0.5">
+        <span>{isPhase2 && isFoe ? <span className="text-amber-400 animate-pulse">⚡ Phase 2</span> : ''}</span>
+        <span>{hp} / {maxHp}</span>
       </div>
+
+      {isPhase2 && isFoe && (
+        <div className="mt-1 flex items-center justify-between text-[10px] font-bold text-red-300 bg-red-950/80 px-2 py-0.5 rounded-md border border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse">
+          <span>⚡ ENRAGED PHASE 2</span>
+          <span className="font-mono text-amber-300">+{phase2SpeedPercent}% Speed</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -280,7 +298,8 @@ export function BattleScreen(props: BattleScreenProps) {
     character, foe, currentQuestion, currentQIndex, totalQuestions, playerHp, playerMaxHp, foeHp, msg, timeLeft, totalTime,
     isPaused, selectedChoice, gameItems, inventory, showInventory, setShowInventory, showEscapeConfirm,
     setShowEscapeConfirm, showSubquestionMenu, abandonGroupTurnCost, handleAnswer, nextQuestion, continueSubquestion, abandonGroup,
-    skipQuestion, executeEscape, usePotion, subArea, locationOrder, locationName, combatEffect, user
+    skipQuestion, executeEscape, usePotion, subArea, locationOrder, locationName, combatEffect, user,
+    specialFightActive, activeSpecialFightId, isPhase2, phase2SpeedPercent, onCompleteSpecialFight
   } = props;
 
   const [showAnswers, setShowAnswers] = useState(false);
@@ -341,6 +360,8 @@ export function BattleScreen(props: BattleScreenProps) {
           hp={foeHp}
           maxHp={foe?.maxHp || 50}
           isFoe
+          isPhase2={isPhase2}
+          phase2SpeedPercent={phase2SpeedPercent}
         />
       </header>
 
@@ -745,6 +766,27 @@ export function BattleScreen(props: BattleScreenProps) {
           onClose={() => setShowSolutionModal(false)}
         />
       )}
+
+      {/* SPECIAL FIGHT PHASE SHIFT OVERLAY */}
+      {specialFightActive && activeSpecialFightId && (() => {
+        const def = getSpecialFightById(activeSpecialFightId);
+        if (!def) return null;
+        const FightComponent = def.component;
+        return (
+          <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col p-2 sm:p-4 animate-in fade-in zoom-in-95 duration-500">
+            <div className="flex-1 max-w-6xl w-full mx-auto rounded-3xl overflow-hidden border-2 border-indigo-500/50 shadow-[0_0_50px_rgba(99,102,241,0.4)] relative">
+              <FightComponent
+                foe={foe}
+                character={character}
+                onComplete={(res) => {
+                  if (onCompleteSpecialFight) onCompleteSpecialFight(res);
+                }}
+                isTestMode={false}
+              />
+            </div>
+          </div>
+        );
+      })()}
     </main>
   );
 }
