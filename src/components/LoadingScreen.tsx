@@ -20,22 +20,49 @@ export const DEFAULT_LOADING_TIPS = [
 // In-memory cache so transitions between areas in the same session don't re-read Firestore
 let cachedTips: string[] | null = null;
 
+export function updateCachedTips(tips: string[]) {
+  cachedTips = tips;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("mq_loading_tips", JSON.stringify(tips));
+    } catch {}
+  }
+}
+
 export function LoadingScreen({ message }: { message?: string }) {
-  // Use stable default on initial render to prevent SSR hydration mismatch
-  const [tip, setTip] = useState<string>(message || DEFAULT_LOADING_TIPS[0]);
+  // Use stable placeholder on SSR to avoid hydration mismatch
+  const [tip, setTip] = useState<string>(message || "Loading your adventure...");
+  const [isReady, setIsReady] = useState<boolean>(Boolean(message));
 
   useEffect(() => {
     if (message) {
       setTip(message);
+      setIsReady(true);
       return;
     }
 
-    // Randomize on client mount after hydration
-    const pool = (cachedTips && cachedTips.length > 0) ? cachedTips : DEFAULT_LOADING_TIPS;
-    setTip(pool[Math.floor(Math.random() * pool.length)]);
+    // 1. Synchronously read from in-memory cache or localStorage (0ms instant)
+    let activeTips = cachedTips;
+    if (!activeTips && typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("mq_loading_tips");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            activeTips = parsed;
+            cachedTips = parsed;
+          }
+        }
+      } catch {}
+    }
 
-    if (cachedTips && cachedTips.length > 0) return;
+    // If custom tips exist in cache, pick immediately with 0 delay (never shows deleted default tips!)
+    if (activeTips && activeTips.length > 0) {
+      setTip(activeTips[Math.floor(Math.random() * activeTips.length)]);
+      setIsReady(true);
+    }
 
+    // 2. Sync with Firestore in the background to ensure remote GM updates are applied
     let isMounted = true;
     async function fetchTips() {
       try {
@@ -43,19 +70,30 @@ export function LoadingScreen({ message }: { message?: string }) {
         if (!snap || !snap.exists()) {
           snap = await getDoc(doc(db, "locations", "loading_screen_settings")).catch(() => null);
         }
+
         if (snap && snap.exists()) {
           const data = snap.data();
           if (Array.isArray(data.tips) && data.tips.length > 0) {
-            cachedTips = data.tips;
+            updateCachedTips(data.tips);
             if (isMounted) {
               setTip(data.tips[Math.floor(Math.random() * data.tips.length)]);
+              setIsReady(true);
             }
+            return;
           }
         }
       } catch (err) {
-        // Fallback to defaults
+        // Fallback
+      }
+
+      // If no custom tips exist anywhere (neither in cache nor in database), fall back to defaults
+      if (isMounted && (!cachedTips || cachedTips.length === 0)) {
+        updateCachedTips(DEFAULT_LOADING_TIPS);
+        setTip(DEFAULT_LOADING_TIPS[Math.floor(Math.random() * DEFAULT_LOADING_TIPS.length)]);
+        setIsReady(true);
       }
     }
+
     fetchTips();
 
     return () => {
@@ -75,9 +113,9 @@ export function LoadingScreen({ message }: { message?: string }) {
       <div className="max-w-md text-center space-y-2">
         <h3
           suppressHydrationWarning
-          className="text-base sm:text-lg font-bold text-indigo-200 tracking-wide font-serif leading-relaxed px-4 py-2 bg-black/40 rounded-xl border border-indigo-500/20 shadow-inner"
+          className="text-base sm:text-lg font-bold text-indigo-200 tracking-wide font-serif leading-relaxed px-4 py-2 bg-black/40 rounded-xl border border-indigo-500/20 shadow-inner min-h-[44px] flex items-center justify-center transition-all duration-200"
         >
-          &ldquo;{tip}&rdquo;
+          {isReady ? `\u201C${tip}\u201D` : "Loading your adventure..."}
         </h3>
         <p className="text-xs text-gray-500 font-mono">
           Preparing realm...

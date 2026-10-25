@@ -219,6 +219,8 @@ export function QuestionsPanel() {
     const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
     const [localFilter, setLocalFilter] = useState("");
     const [debouncedFilter, setDebouncedFilter] = useState("");
+    const [hasLoadedAllQuestions, setHasLoadedAllQuestions] = useState(false);
+    const [allQuestionsCache, setAllQuestionsCache] = useState<QuestionDoc[]>([]);
   
     // UNIFIED FORM STATE
     const [title, setTitle] = useState("");
@@ -294,11 +296,35 @@ export function QuestionsPanel() {
       loadKnownTags();
     }, []);
 
-    // 2. FETCH QUESTIONS BY SPECIFIC TAG
+    // 2. FETCH ALL QUESTIONS (Cached in memory for session to minimize Firestore reads)
+    const loadAllQuestions = useCallback(async () => {
+      if (hasLoadedAllQuestions && allQuestionsCache.length > 0) {
+        setQuestions(allQuestionsCache);
+        setMsg(`✅ Showing all ${allQuestionsCache.length} questions`);
+        return allQuestionsCache;
+      }
+      setIsLoadingQuestions(true);
+      try {
+        const snap = await getDocs(collection(db, "questions"));
+        const fetched = snap.docs.map(d => ({ ...d.data(), id: d.id } as QuestionDoc));
+        setQuestions(fetched);
+        setAllQuestionsCache(fetched);
+        setHasLoadedAllQuestions(true);
+        setMsg(`✅ Loaded all ${fetched.length} questions from database`);
+        return fetched;
+      } catch (e: any) {
+        setMsg("Error loading all questions: " + (e?.message || e));
+        return [];
+      } finally {
+        setIsLoadingQuestions(false);
+      }
+    }, [hasLoadedAllQuestions, allQuestionsCache]);
+
+    // 2b. FETCH QUESTIONS BY SPECIFIC TAG OR ALL
     const loadByTag = useCallback(async (tagToSearch?: string) => {
       const tag = (tagToSearch !== undefined ? tagToSearch : dbTagSearch).trim();
-      if (!tag) {
-        setMsg("⚠️ Please enter or select a tag to fetch questions.");
+      if (!tag || tag === "__ALL__") {
+        await loadAllQuestions();
         return;
       }
       setIsLoadingQuestions(true);
@@ -313,15 +339,30 @@ export function QuestionsPanel() {
       } finally {
         setIsLoadingQuestions(false);
       }
-    }, [dbTagSearch]);
+    }, [dbTagSearch, loadAllQuestions]);
 
-    // 3. DEBOUNCE FOR LOCAL FILTER (250ms)
+    // 3. DEBOUNCE FOR LOCAL FILTER (500ms / 0.5s to minimize Firestore reads)
     useEffect(() => {
       const timer = setTimeout(() => {
         setDebouncedFilter(localFilter);
-      }, 250);
+      }, 500);
       return () => clearTimeout(timer);
     }, [localFilter]);
+
+    // 3b. AUTOMATICALLY LOAD ALL QUESTIONS IF FILTERING WITHOUT A TAG
+    useEffect(() => {
+      const trimmed = debouncedFilter.trim();
+      if (!trimmed) return;
+
+      // If user is filtering and no tag is active, automatically load the whole list into memory
+      if (!dbTagSearch.trim()) {
+        if (!hasLoadedAllQuestions) {
+          loadAllQuestions();
+        } else if (questions.length !== allQuestionsCache.length) {
+          setQuestions(allQuestionsCache);
+        }
+      }
+    }, [debouncedFilter, dbTagSearch, hasLoadedAllQuestions, allQuestionsCache, questions.length, loadAllQuestions]);
 
     // 4. DEBOUNCE FOR TAG SEARCH INPUT (500ms)
     useEffect(() => {
@@ -439,12 +480,14 @@ export function QuestionsPanel() {
           await setDoc(doc(db, "questions", editingId), docData, { merge: true });
           const updatedDoc = { ...docData, id: editingId } as QuestionDoc;
           setQuestions((prev) => prev.map((q) => (q.id === editingId ? updatedDoc : q)));
+          setAllQuestionsCache((prev) => prev.map((q) => (q.id === editingId ? updatedDoc : q)));
           setMsg("✅ Updated & Saved Question!");
         } else {
           docData.createdAt = serverTimestamp();
           const docRef = await addDoc(collection(db, "questions"), docData);
           const newDoc = { ...docData, id: docRef.id } as QuestionDoc;
           setQuestions((prev) => [newDoc, ...prev]);
+          setAllQuestionsCache((prev) => [newDoc, ...prev]);
           setMsg("✅ Created New Question!");
         }
 
@@ -461,6 +504,7 @@ export function QuestionsPanel() {
       try {
         await deleteDoc(doc(db, "questions", qId));
         setQuestions((prev) => prev.filter((q) => q.id !== qId));
+        setAllQuestionsCache((prev) => prev.filter((q) => q.id !== qId));
         setSelectedQIds((prev) => {
           const next = new Set(prev);
           next.delete(qId);
@@ -521,6 +565,9 @@ export function QuestionsPanel() {
           setQuestions((prev) =>
             prev.map((q) => (q.id === editingId ? { ...q, aiSolution: aiPayload } : q))
           );
+          setAllQuestionsCache((prev) =>
+            prev.map((q) => (q.id === editingId ? { ...q, aiSolution: aiPayload } : q))
+          );
         }
         setMsg("✅ AI Solution generated and saved!");
       } catch (err: any) {
@@ -539,6 +586,9 @@ export function QuestionsPanel() {
             updatedAt: serverTimestamp(),
           });
           setQuestions((prev) =>
+            prev.map((q) => (q.id === editingId ? { ...q, aiSolution: undefined } : q))
+          );
+          setAllQuestionsCache((prev) =>
             prev.map((q) => (q.id === editingId ? { ...q, aiSolution: undefined } : q))
           );
           setMsg("🗑️ AI Solution cleared. You can generate a new one now.");
@@ -666,6 +716,9 @@ export function QuestionsPanel() {
               updatedAt: serverTimestamp(),
             });
             setQuestions((prev) =>
+              prev.map((item) => (item.id === q.id ? { ...item, aiSolution: aiPayload } : item))
+            );
+            setAllQuestionsCache((prev) =>
               prev.map((item) => (item.id === q.id ? { ...item, aiSolution: aiPayload } : item))
             );
           }
@@ -922,10 +975,10 @@ export function QuestionsPanel() {
             <div className="flex justify-between items-center">
               <h3 className="font-bold text-xs uppercase text-gray-600 dark:text-gray-300 flex items-center gap-1.5">
                 <span>🏷️</span>
-                <span>Fetch by Tag (On-Demand)</span>
+                <span>Question Fetch & Search</span>
               </h3>
               <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
-                {questions.length} loaded
+                {questions.length} loaded {hasLoadedAllQuestions && !dbTagSearch.trim() ? "(All Questions)" : ""}
               </span>
             </div>
 
@@ -938,10 +991,10 @@ export function QuestionsPanel() {
                   const val = e.target.value;
                   setSelectedDropdownTag(val);
                   setDbTagSearch(val);
-                  if (val) loadByTag(val);
+                  loadByTag(val);
                 }}
               >
-                <option value="">-- Choose tag ({availableTags.length} available) --</option>
+                <option value="">-- All Questions (Entire Database) --</option>
                 {availableTags.map((tag) => (
                   <option key={tag} value={tag}>
                     🏷️ {tag}
@@ -954,7 +1007,7 @@ export function QuestionsPanel() {
             <div className="flex gap-2">
               <input
                 className="input flex-1 text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-                placeholder="Or type custom tag (auto-loads)..."
+                placeholder="Type custom tag (or empty for all)..."
                 value={dbTagSearch}
                 onChange={(e) => {
                   setDbTagSearch(e.target.value);
@@ -966,14 +1019,18 @@ export function QuestionsPanel() {
                 disabled={isLoadingQuestions}
                 className="bg-black text-white dark:bg-white dark:text-black px-3.5 py-1.5 rounded-lg text-xs font-bold hover:opacity-80 transition-opacity disabled:opacity-50 shrink-0 shadow-sm"
               >
-                {isLoadingQuestions ? "Fetching..." : "Fetch"}
+                {isLoadingQuestions ? "Fetching..." : dbTagSearch.trim() ? "Fetch Tag" : "Fetch All"}
               </button>
             </div>
 
-            {/* Debounced filter */}
+            {/* Debounced filter (500ms delay to lessen Firestore reads) */}
             <input
               className="input w-full text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-              placeholder="🔍 Filter loaded list..."
+              placeholder={
+                dbTagSearch.trim()
+                  ? `🔍 Filter within '${dbTagSearch}'...`
+                  : "🔍 Search all questions (auto-loads list after 0.5s)..."
+              }
               value={localFilter}
               onChange={(e) => setLocalFilter(e.target.value)}
             />
@@ -1052,8 +1109,15 @@ export function QuestionsPanel() {
                 <div className="text-3xl">📭</div>
                 <div className="font-bold text-sm text-gray-700 dark:text-gray-300">Question Pool is Empty</div>
                 <p className="text-xs max-w-xs mx-auto leading-relaxed">
-                  Select an existing tag from the dropdown or type a tag above to fetch questions. Starting empty prevents unnecessary database reads.
+                  Type in the search box above to search across all questions (auto-loads after 0.5s), choose a tag, or load the whole pool directly.
                 </p>
+                <button
+                  type="button"
+                  onClick={loadAllQuestions}
+                  className="mt-2 px-3 py-1.5 bg-black text-white dark:bg-white dark:text-black rounded-lg text-xs font-bold hover:opacity-80 transition-opacity"
+                >
+                  🌐 Load All Questions
+                </button>
               </div>
             )}
             {visibleQuestions.map((q) => {

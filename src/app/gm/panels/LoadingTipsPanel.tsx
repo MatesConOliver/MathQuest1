@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
-import { DEFAULT_LOADING_TIPS } from "@/components/LoadingScreen";
+import { DEFAULT_LOADING_TIPS, updateCachedTips } from "@/components/LoadingScreen";
 
 const SETTINGS_REF = doc(db, "settings", "loadingTips");
 const LOCATIONS_FALLBACK_REF = doc(db, "locations", "loading_screen_settings");
@@ -30,6 +30,7 @@ export function LoadingTipsPanel() {
 
         if (snap && snap.exists() && Array.isArray(snap.data()?.tips)) {
           setTips(snap.data()!.tips);
+          updateCachedTips(snap.data()!.tips);
         } else {
           setTips(DEFAULT_LOADING_TIPS);
         }
@@ -73,6 +74,7 @@ export function LoadingTipsPanel() {
 
     if (saved) {
       setTips(updated);
+      updateCachedTips(updated);
       setMsg("✅ Loading screen sentences saved successfully!");
       setTimeout(() => setMsg(""), 3500);
     } else {
