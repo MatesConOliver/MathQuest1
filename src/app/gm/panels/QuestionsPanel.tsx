@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -9,52 +9,39 @@ import {
   setDoc,
   addDoc,
   deleteDoc,
-  limit,
   query,
-  orderBy,
   where,
   serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 
 import { InlineMath, BlockMath } from 'react-katex';
 import { QuestionDoc, ContentBlock } from "@/types/game";
 import { Input } from "@/app/gm/components/Input";
 import { QuestionBatchImporter } from "./QuestionBatchImporter";
+import { IB_MATH_AA_HL_SYLLABUS } from "@/lib/syllabus";
 
 // ==================================================================================
-// 👇 NEW HELPERS for migrating to structured content
+// 👇 CONTENT BLOCK HELPERS for structured content
 // ==================================================================================
 
-/**
- * Converts a string with mixed text and LaTeX (e.g., "Find $x$")
- * into an array of structured ContentBlocks.
- * @param text The input string.
- * @returns An array of ContentBlocks.
- */
 const stringToContentBlocks = (text: string): ContentBlock[] => {
     if (!text) return [];
-    // Regex to split by markdown images and by $...$ latex, keeping delimiters
     const parts = text.split(/(!\[.*?\]\(.*?\)|\$.*?\$)/g).filter(Boolean);
   
     return parts.map(part => {
-      if (part.startsWith('![')) { // Handle images
+      if (part.startsWith('![')) {
         const altMatch = part.match(/!\[(.*?)\]/);
         const urlMatch = part.match(/\((.*?)\)/);
         return { type: 'image', value: urlMatch ? urlMatch[1] : '' };
       }
-      if (part.startsWith('$') && part.endsWith('$')) { // Handle LaTeX
+      if (part.startsWith('$') && part.endsWith('$')) {
         return { type: 'latex', value: part.slice(1, -1) };
       }
-      return { type: 'text', value: part }; // Handle text
+      return { type: 'text', value: part };
     });
 };
 
-/**
- * Converts an array of structured ContentBlocks back into a single
- * string for editing in a text field.
- * @param blocks The array of ContentBlocks.
- * @returns A single string representation.
- */
 const contentBlocksToString = (blocks: ContentBlock[] | undefined): string => {
     if (!blocks) return "";
     return blocks.map(block => {
@@ -68,12 +55,6 @@ const contentBlocksToString = (blocks: ContentBlock[] | undefined): string => {
     }).join('');
 };
 
-/**
- * Renders an array of ContentBlocks into React nodes for display.
- * @param blocks The array of ContentBlocks.
- * @param isBlockMath If true, wraps LaTeX in <BlockMath> instead of <InlineMath>.
- * @returns A React fragment with the rendered content.
- */
 const renderContent = (blocks: ContentBlock[] | undefined, isBlockMath = false) => {
     if (!blocks) return null;
     const MathComponent = isBlockMath ? BlockMath : InlineMath;
@@ -86,7 +67,7 @@ const renderContent = (blocks: ContentBlock[] | undefined, isBlockMath = false) 
             case 'latex':
               try {
                 return <span key={index} className="inline-block mx-1 text-blue-600 dark:text-blue-400"><MathComponent math={block.value} /></span>;
-              } catch (e) { return <span key={index} className="text-red-500 font-mono">{`$${block.value}$`}</span> }
+              } catch { return <span key={index} className="text-red-500 font-mono">{`$${block.value}$`}</span>; }
             case 'image':
               return <img key={index} src={block.value} alt="Content" className="my-2 rounded-lg max-w-full h-auto" />;
             default:
@@ -95,8 +76,136 @@ const renderContent = (blocks: ContentBlock[] | undefined, isBlockMath = false) 
         })}
       </>
     );
-  };
+};
 
+// Parse AI response to extract formatted explanation text and verification block
+function parseStreamingContent(fullText: string) {
+  if (!fullText) {
+    return {
+      displayText: "",
+      verifiedIndex: null,
+      isDiscrepancy: false,
+      discrepancyNote: "",
+      hasVerification: false,
+    };
+  }
+
+  const markerMatch = fullText.match(/(?:###\s*Verification|##\s*Verification|---VERIFICATION---)/i);
+  const markerIndex = markerMatch && markerMatch.index !== undefined ? markerMatch.index : -1;
+
+  let displayText = fullText;
+  let vBlock = "";
+
+  if (markerIndex !== -1) {
+    const candidateText = fullText.slice(0, markerIndex).trim();
+    vBlock = fullText.slice(markerIndex);
+    if (candidateText.length > 0) {
+      displayText = candidateText;
+    }
+  }
+
+  const optMatch = vBlock.match(/CORRECT_OPTION:\s*([A-D])/i);
+  const discMatch = vBlock.match(/IS_DISCREPANCY:\s*(TRUE|FALSE)/i);
+  const noteMatch = vBlock.match(/DISCREPANCY_NOTE:\s*([^\n\r]+)/i);
+
+  const optionLetter = optMatch ? optMatch[1].toUpperCase() : null;
+  const verifiedIndex = optionLetter ? optionLetter.charCodeAt(0) - 65 : null;
+  const isDiscrepancy = discMatch ? discMatch[1].toUpperCase() === "TRUE" : false;
+  const note = noteMatch && noteMatch[1].trim().toLowerCase() !== "none" ? noteMatch[1].trim() : "";
+
+  return {
+    displayText,
+    verifiedIndex,
+    isDiscrepancy,
+    discrepancyNote: note,
+    hasVerification: verifiedIndex !== null,
+  };
+}
+
+// Reusable function to call /api/questions/solve and stream/parse answer
+async function generateAiSolutionForQuestion(
+  q: QuestionDoc,
+  locOrder: number | null,
+  signal?: AbortSignal
+): Promise<{ text: string; verifiedIndex: number; isDiscrepancy: boolean; discrepancyNote: string }> {
+  const res = await fetch("/api/questions/solve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      questionId: q.id,
+      questionData: q,
+      forceRefresh: true,
+      locationOrder: locOrder,
+    }),
+    signal,
+  });
+
+  const contentType = res.headers.get("content-type") || "";
+  if (!res.ok) {
+    const errorJson = await res.json().catch(() => ({}));
+    throw new Error(errorJson.error || `HTTP ${res.status}`);
+  }
+
+  if (contentType.includes("application/json")) {
+    const data = await res.json();
+    return {
+      text: data.solutionText || "",
+      verifiedIndex: data.verifiedCorrectIndex ?? (q.correctIndex ?? 0),
+      isDiscrepancy: Boolean(data.isDiscrepancy),
+      discrepancyNote: data.discrepancyNote || "",
+    };
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response body stream");
+
+  const decoder = new TextDecoder();
+  let rawAccumulated = "";
+  let streamBuffer = "";
+  let streamError = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    streamBuffer += decoder.decode(value, { stream: true });
+    const parts = streamBuffer.split("\n\n");
+    streamBuffer = parts.pop() || "";
+
+    for (const part of parts) {
+      const lines = part.split("\n");
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data: ")) continue;
+        const jsonStr = trimmed.slice(6);
+        try {
+          const data = JSON.parse(jsonStr);
+          if (data.type === "chunk" && data.text) {
+            rawAccumulated += data.text;
+          } else if (data.type === "error") {
+            streamError = data.error || "Streaming error";
+          }
+        } catch {}
+      }
+    }
+  }
+
+  if (streamError && !rawAccumulated.trim()) {
+    throw new Error(streamError);
+  }
+
+  const parsed = parseStreamingContent(rawAccumulated);
+  const cleanSolutionText = (parsed.displayText || rawAccumulated).trim();
+  if (!cleanSolutionText) {
+    throw new Error(streamError || "AI returned empty solution");
+  }
+
+  return {
+    text: cleanSolutionText,
+    verifiedIndex: parsed.verifiedIndex ?? (q.correctIndex ?? 0),
+    isDiscrepancy: parsed.isDiscrepancy,
+    discrepancyNote: parsed.discrepancyNote || "",
+  };
+}
 
 export function QuestionsPanel() {
     const [msg, setMsg] = useState("");
@@ -113,7 +222,7 @@ export function QuestionsPanel() {
   
     // UNIFIED FORM STATE
     const [title, setTitle] = useState("");
-    const [promptString, setPromptString] = useState(""); // Unified prompt field
+    const [promptString, setPromptString] = useState("");
     const [choices, setChoices] = useState(["", "", "", ""]);
     const [correctIndex, setCorrectIndex] = useState(0);
     const [difficulty, setDifficulty] = useState(1);
@@ -126,12 +235,32 @@ export function QuestionsPanel() {
     const [qMinutes, setQMinutes] = useState(0);
     const [qSeconds, setQSeconds] = useState(30);
 
+    // AI SOLUTION GENERATION STATE (SINGLE QUESTION)
+    const [singleLocOrder, setSingleLocOrder] = useState<number | null>(null);
+    const [isSingleGenerating, setIsSingleGenerating] = useState(false);
+
+    // BATCH SELECTION & GENERATION STATE
+    const [selectedQIds, setSelectedQIds] = useState<Set<string>>(new Set());
+    const [batchLocOrder, setBatchLocOrder] = useState<number | null>(null);
+    const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+    const [batchRunning, setBatchRunning] = useState(false);
+    const [batchStats, setBatchStats] = useState({
+      total: 0,
+      processed: 0,
+      generated: 0,
+      skipped: 0,
+      errors: 0,
+      currentTitle: "",
+      currentStatus: "",
+      isComplete: false,
+    });
+    const abortControllerRef = useRef<AbortController | null>(null);
+
     // Memoized preview content
     const promptPreview = useMemo(() => stringToContentBlocks(promptString), [promptString]);
     const choicesPreview = useMemo(() => choices.map(c => stringToContentBlocks(c)), [choices]);
   
-    // 1. GATHER KNOWN TAGS ALPHABETICALLY ON MOUNT (MINIMAL READS: Encounters collection only)
-    // NOTE: Questions list intentionally starts VOID to minimize Firestore document reads!
+    // 1. GATHER KNOWN TAGS ALPHABETICALLY ON MOUNT
     useEffect(() => {
       async function loadKnownTags() {
         try {
@@ -143,7 +272,6 @@ export function QuestionsPanel() {
           ];
           const tagSet = new Set<string>(defaultCurriculumTags);
 
-          // Read small encounters collection once
           const encSnap = await getDocs(collection(db, "encounters"));
           encSnap.docs.forEach((d) => {
             const data = d.data();
@@ -187,7 +315,7 @@ export function QuestionsPanel() {
       }
     }, [dbTagSearch]);
 
-    // 3. DEBOUNCE MICRO-TIME FOR LOCAL FILTER (250ms)
+    // 3. DEBOUNCE FOR LOCAL FILTER (250ms)
     useEffect(() => {
       const timer = setTimeout(() => {
         setDebouncedFilter(localFilter);
@@ -195,7 +323,7 @@ export function QuestionsPanel() {
       return () => clearTimeout(timer);
     }, [localFilter]);
 
-    // 4. DEBOUNCE MICRO-TIME FOR TAG SEARCH INPUT (500ms)
+    // 4. DEBOUNCE FOR TAG SEARCH INPUT (500ms)
     useEffect(() => {
       const trimmed = dbTagSearch.trim();
       if (!trimmed || trimmed.length < 2) return;
@@ -212,7 +340,7 @@ export function QuestionsPanel() {
         if (q.promptLatex) return `$${q.promptLatex}$`;
         if (q.promptImageUrl) return `![image](${q.promptImageUrl})`;
         return "Untitled";
-    }
+    };
   
     const visibleQuestions = useMemo(() => {
       return questions
@@ -231,15 +359,14 @@ export function QuestionsPanel() {
       setEditingId(q.id);
       setTitle(q.title || "");
       
-      // MIGRATE-ON-EDIT LOGIC
-      if (q.promptContent) { // New format
+      if (q.promptContent) {
         setPromptString(contentBlocksToString(q.promptContent));
         const choicesStrings = (q.choicesContent || []).map(choice => contentBlocksToString(choice.content));
         setChoices(choicesStrings.length === 4 ? choicesStrings : ["","","",""]);
-      } else { // Legacy format
+      } else {
         let legacyPrompt = q.promptText || "";
-        if(q.promptType === 'latex' && q.promptLatex) legacyPrompt = `$${q.promptLatex}$`;
-        if(q.promptType === 'image' && q.promptImageUrl) legacyPrompt = `![image](${q.promptImageUrl})`;
+        if (q.promptType === 'latex' && q.promptLatex) legacyPrompt = `$${q.promptLatex}$`;
+        if (q.promptType === 'image' && q.promptImageUrl) legacyPrompt = `![image](${q.promptImageUrl})`;
         setPromptString(legacyPrompt);
         setChoices(q.choices && q.choices.length === 4 ? q.choices : ["","","",""]);
       }
@@ -252,6 +379,7 @@ export function QuestionsPanel() {
       setSolutionUrl(q.solutionUrl || "");
       setSolutionText(q.solutionText || "");
       setCurrentAiSolution(q.aiSolution?.text || "");
+      setSingleLocOrder(q.aiSolution?.locationOrder ?? null);
       const totalSecs = q.timeLimit || 30; 
       setQMinutes(Math.floor(totalSecs / 60));
       setQSeconds(totalSecs % 60);
@@ -264,7 +392,9 @@ export function QuestionsPanel() {
       setCorrectIndex(0); 
       setQMinutes(0); setQSeconds(30);
       setDifficulty(1); setTagsText("level1"); setOrder(""); setGroupId("");
-      setSolutionUrl(""); setSolutionText(""); setCurrentAiSolution(""); setMsg("");
+      setSolutionUrl(""); setSolutionText(""); setCurrentAiSolution("");
+      setSingleLocOrder(null);
+      setMsg("");
     }
   
     async function saveQuestion() {
@@ -287,13 +417,29 @@ export function QuestionsPanel() {
         solutionText: solutionText.trim() || null,
         updatedAt: serverTimestamp(),
       };
+
+      // Preserve or update AI solution text if user edited it
+      if (currentAiSolution.trim()) {
+        const existingAi = questions.find(q => q.id === editingId)?.aiSolution;
+        docData.aiSolution = {
+          text: currentAiSolution.trim(),
+          verifiedCorrectIndex: existingAi?.verifiedCorrectIndex ?? correctIndex,
+          isDiscrepancy: existingAi?.isDiscrepancy ?? false,
+          discrepancyNote: existingAi?.discrepancyNote ?? "",
+          generatedAt: existingAi?.generatedAt ?? Date.now(),
+          model: existingAi?.model ?? "gemini-3.8-flash",
+          locationOrder: singleLocOrder,
+        };
+      } else {
+        docData.aiSolution = null;
+      }
     
       try {
         if (editingId) {
           await setDoc(doc(db, "questions", editingId), docData, { merge: true });
           const updatedDoc = { ...docData, id: editingId } as QuestionDoc;
           setQuestions((prev) => prev.map((q) => (q.id === editingId ? updatedDoc : q)));
-          setMsg("✅ Updated & Migrated Question!");
+          setMsg("✅ Updated & Saved Question!");
         } else {
           docData.createdAt = serverTimestamp();
           const docRef = await addDoc(collection(db, "questions"), docData);
@@ -302,7 +448,6 @@ export function QuestionsPanel() {
           setMsg("✅ Created New Question!");
         }
 
-        // Add any newly typed tags to available tags dropdown list
         if (tagsArray.length > 0) {
           setAvailableTags((prev) => Array.from(new Set([...prev, ...tagsArray])).sort((a, b) => a.localeCompare(b)));
         }
@@ -316,10 +461,254 @@ export function QuestionsPanel() {
       try {
         await deleteDoc(doc(db, "questions", qId));
         setQuestions((prev) => prev.filter((q) => q.id !== qId));
+        setSelectedQIds((prev) => {
+          const next = new Set(prev);
+          next.delete(qId);
+          return next;
+        });
         setMsg("🗑️ Question deleted.");
         if (editingId === qId) resetForm();
       } catch (e: any) { setMsg("Error: " + e.message); }
     }
+
+    // ==================================================================================
+    // 💡 SINGLE QUESTION AI SOLUTION GENERATION & CLEAR
+    // ==================================================================================
+    async function handleGenerateSingleAi() {
+      const hasGm = Boolean(solutionText && solutionText.trim());
+      const hasAi = Boolean(currentAiSolution && currentAiSolution.trim());
+
+      if (hasGm || hasAi) {
+        setMsg("⚠️ An answer already exists (GM or AI). Clear it first to generate a new one.");
+        return;
+      }
+
+      setIsSingleGenerating(true);
+      setMsg("⏳ Generating AI explanation...");
+
+      try {
+        const questionDataToSolve: QuestionDoc = {
+          id: editingId || "temp_id",
+          title: title || "Untitled",
+          promptContent: stringToContentBlocks(promptString),
+          choicesContent: choices.map((c) => ({ content: stringToContentBlocks(c) })),
+          correctIndex,
+          difficulty: Number(difficulty),
+          tags: tagsText.split(",").map((s) => s.trim()).filter(Boolean),
+          timeLimit: Number(qMinutes) * 60 + Number(qSeconds),
+          order: order ? Number(order) : undefined,
+          groupId: groupId.trim() || undefined,
+        };
+
+        const result = await generateAiSolutionForQuestion(questionDataToSolve, singleLocOrder);
+        setCurrentAiSolution(result.text);
+
+        const aiPayload = {
+          text: result.text,
+          verifiedCorrectIndex: result.verifiedIndex,
+          isDiscrepancy: result.isDiscrepancy,
+          discrepancyNote: result.discrepancyNote || "",
+          generatedAt: Date.now(),
+          model: "gemini-3.8-flash",
+          locationOrder: singleLocOrder,
+        };
+
+        if (editingId) {
+          await updateDoc(doc(db, "questions", editingId), {
+            aiSolution: aiPayload,
+            updatedAt: serverTimestamp(),
+          });
+          setQuestions((prev) =>
+            prev.map((q) => (q.id === editingId ? { ...q, aiSolution: aiPayload } : q))
+          );
+        }
+        setMsg("✅ AI Solution generated and saved!");
+      } catch (err: any) {
+        setMsg(`❌ Error generating AI solution: ${err.message || err}`);
+      } finally {
+        setIsSingleGenerating(false);
+      }
+    }
+
+    async function handleClearSingleAi() {
+      setCurrentAiSolution("");
+      if (editingId) {
+        try {
+          await updateDoc(doc(db, "questions", editingId), {
+            aiSolution: null,
+            updatedAt: serverTimestamp(),
+          });
+          setQuestions((prev) =>
+            prev.map((q) => (q.id === editingId ? { ...q, aiSolution: undefined } : q))
+          );
+          setMsg("🗑️ AI Solution cleared. You can generate a new one now.");
+        } catch (err: any) {
+          setMsg(`Error clearing: ${err.message || err}`);
+        }
+      } else {
+        setMsg("AI Solution field cleared.");
+      }
+    }
+
+    // ==================================================================================
+    // ⚡ BATCH QUESTION SELECTION & AI GENERATION QUEUE
+    // ==================================================================================
+    function toggleSelectQuestion(id: string) {
+      setSelectedQIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    }
+
+    function selectAllVisible() {
+      const ids = visibleQuestions.map((q) => q.id).filter(Boolean) as string[];
+      setSelectedQIds(new Set(ids));
+    }
+
+    function deselectAll() {
+      setSelectedQIds(new Set());
+    }
+
+    function startBatchGeneration() {
+      const targetQuestions = questions.filter((q) => q.id && selectedQIds.has(q.id));
+      if (targetQuestions.length === 0) {
+        setMsg("⚠️ No questions selected for batch AI generation.");
+        return;
+      }
+
+      setIsBatchModalOpen(true);
+      setBatchRunning(true);
+      setBatchStats({
+        total: targetQuestions.length,
+        processed: 0,
+        generated: 0,
+        skipped: 0,
+        errors: 0,
+        currentTitle: "",
+        currentStatus: "Starting batch queue...",
+        isComplete: false,
+      });
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      runBatchProcess(targetQuestions, controller.signal);
+    }
+
+    function stopBatchGeneration() {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      setBatchRunning(false);
+      setBatchStats((prev) => ({
+        ...prev,
+        currentStatus: "🛑 Stopped by user.",
+        isComplete: true,
+      }));
+    }
+
+    async function runBatchProcess(targetList: QuestionDoc[], signal: AbortSignal) {
+      let genCount = 0;
+      let skipCount = 0;
+      let errCount = 0;
+
+      for (let i = 0; i < targetList.length; i++) {
+        if (signal.aborted) break;
+
+        const q = targetList[i];
+        const qTitle = q.title || getQuestionDisplayText(q) || `Question ${i + 1}`;
+
+        // RULE 3: Only questions with no answer at all will ask for a new AI answer
+        // (if either GM answer or AI answer already exists, skip question)
+        const hasGm = Boolean(q.solutionText && q.solutionText.trim());
+        const hasAi = Boolean(q.aiSolution && q.aiSolution.text && q.aiSolution.text.trim());
+
+        if (hasGm || hasAi) {
+          skipCount++;
+          setBatchStats((prev) => ({
+            ...prev,
+            processed: i + 1,
+            skipped: skipCount,
+            currentTitle: qTitle,
+            currentStatus: `Skipped: Already has ${hasGm ? "GM solution" : "AI solution"}`,
+          }));
+          await new Promise((r) => setTimeout(r, 150));
+          continue;
+        }
+
+        // Generate AI solution for question with no existing answer
+        setBatchStats((prev) => ({
+          ...prev,
+          processed: i + 1,
+          currentTitle: qTitle,
+          currentStatus: `Generating AI answer (${i + 1}/${targetList.length})...`,
+        }));
+
+        try {
+          const result = await generateAiSolutionForQuestion(q, batchLocOrder, signal);
+          if (signal.aborted) break;
+
+          const aiPayload = {
+            text: result.text,
+            verifiedCorrectIndex: result.verifiedIndex,
+            isDiscrepancy: result.isDiscrepancy,
+            discrepancyNote: result.discrepancyNote || "",
+            generatedAt: Date.now(),
+            model: "gemini-3.8-flash",
+            locationOrder: batchLocOrder,
+          };
+
+          if (q.id) {
+            await updateDoc(doc(db, "questions", q.id), {
+              aiSolution: aiPayload,
+              updatedAt: serverTimestamp(),
+            });
+            setQuestions((prev) =>
+              prev.map((item) => (item.id === q.id ? { ...item, aiSolution: aiPayload } : item))
+            );
+          }
+
+          genCount++;
+          setBatchStats((prev) => ({
+            ...prev,
+            generated: genCount,
+            currentStatus: `✅ Generated successfully.`,
+          }));
+
+          // Pacing delay (~3.5s) to safely respect Google AI Studio's 15 RPM free tier limits
+          if (i < targetList.length - 1 && !signal.aborted) {
+            setBatchStats((prev) => ({
+              ...prev,
+              currentStatus: `Pacing delay (3.5s) to protect API rate limit...`,
+            }));
+            await new Promise((r) => setTimeout(r, 3500));
+          }
+        } catch (err: any) {
+          if (signal.aborted) break;
+          errCount++;
+          console.warn(`[Batch AI] Error on question ${q.id}:`, err);
+          setBatchStats((prev) => ({
+            ...prev,
+            errors: errCount,
+            currentStatus: `⚠️ Error: ${err.message || "Failed"}. Moving to next question...`,
+          }));
+          if (i < targetList.length - 1 && !signal.aborted) {
+            await new Promise((r) => setTimeout(r, 3500));
+          }
+        }
+      }
+
+      setBatchRunning(false);
+      setBatchStats((prev) => ({
+        ...prev,
+        currentStatus: signal.aborted ? "🛑 Batch cancelled." : "🎉 Batch complete!",
+        isComplete: true,
+      }));
+    }
+
+    const hasAnyExistingAnswer = Boolean(solutionText?.trim() || currentAiSolution?.trim());
   
     return (
       <>
@@ -383,31 +772,119 @@ export function QuestionsPanel() {
             <Input label="Group ID (para encadenar)" value={groupId} onChange={(e:any) => setGroupId(e.target.value)} placeholder="ej. ejercicio_derivadas_01" />
           </div>
 
-          <div className="space-y-2 bg-indigo-50/60 dark:bg-indigo-950/20 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
-             <div className="text-xs font-bold text-indigo-900 dark:text-indigo-300 uppercase">💡 Solution & Walkthrough (Optional)</div>
-             <Input label="Video / Image / Link URL" value={solutionUrl} onChange={(e:any) => setSolutionUrl(e.target.value)} placeholder="https://youtube.com/watch?v=... o URL de imagen/GeoGebra" />
+          {/* SOLUTION & WALKTHROUGH SECTION */}
+          <div className="space-y-3 bg-indigo-50/60 dark:bg-indigo-950/20 p-3.5 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+             <div className="flex items-center justify-between">
+               <span className="text-xs font-bold text-indigo-900 dark:text-indigo-300 uppercase">
+                 💡 Solution & Walkthrough
+               </span>
+               {solutionText.trim() ? (
+                 <span className="text-[10px] bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-bold">
+                   👑 GM Solution Active
+                 </span>
+               ) : currentAiSolution.trim() ? (
+                 <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full font-bold">
+                   ⚡ AI Solution Stored
+                 </span>
+               ) : (
+                 <span className="text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-500 px-2 py-0.5 rounded-full font-bold">
+                   ⚪ No Solution Yet
+                 </span>
+               )}
+             </div>
+
+             <Input 
+               label="Video / Image / Link URL" 
+               value={solutionUrl} 
+               onChange={(e:any) => setSolutionUrl(e.target.value)} 
+               placeholder="https://youtube.com/watch?v=... o URL de imagen/GeoGebra" 
+             />
+
+             {/* Manual GM Solution */}
              <div>
-                <label className="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Solution Explanation (Supports LaTeX $...$)</label>
+                <label className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 mb-1 block">
+                  👑 Manual GM Solution (Always overrides AI)
+                </label>
                 <textarea
                   className="input w-full text-xs font-mono dark:bg-gray-800"
                   rows={2}
                   value={solutionText}
                   onChange={(e) => setSolutionText(e.target.value)}
-                  placeholder="Manual step-by-step explanation (overwrites any AI solution)..."
+                  placeholder="Manual step-by-step explanation (takes absolute priority over AI)..."
                 />
-                {currentAiSolution && !solutionText && (
-                  <div className="mt-1.5 p-2 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-800 text-[11px] text-indigo-800 dark:text-indigo-300 flex items-center justify-between gap-2">
-                    <div className="truncate flex-1">
-                      <span className="font-bold">🤖 Stored AI Solution:</span> {currentAiSolution}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSolutionText(currentAiSolution)}
-                      className="px-2 py-0.5 bg-indigo-600 text-white font-bold rounded text-[10px] hover:bg-indigo-500 shrink-0"
+             </div>
+
+             {/* AI Solution (Editable + Generatable) */}
+             <div className="pt-2 border-t border-indigo-200/60 dark:border-indigo-900/40 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[10px] font-bold uppercase text-indigo-800 dark:text-indigo-300">
+                    🤖 AI Solution (Editable)
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400">Curriculum Scope:</span>
+                    <select
+                      value={singleLocOrder ?? ""}
+                      onChange={(e) => setSingleLocOrder(e.target.value ? Number(e.target.value) : null)}
+                      className="text-xs py-0.5 px-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-200"
                     >
-                      Copy to Edit
-                    </button>
+                      <option value="">Universal (Topics 1–16)</option>
+                      {IB_MATH_AA_HL_SYLLABUS.map((t) => (
+                        <option key={t.number} value={t.number}>
+                          Loc {t.number}: {t.title.slice(0, 22)}... (1–{t.number})
+                        </option>
+                      ))}
+                    </select>
                   </div>
+                </div>
+
+                <textarea
+                  className="input w-full text-xs font-mono dark:bg-gray-800 border-indigo-200 dark:border-indigo-900"
+                  rows={3}
+                  value={currentAiSolution}
+                  onChange={(e) => setCurrentAiSolution(e.target.value)}
+                  placeholder="No AI solution generated yet. Click 'Generate AI Solution' below or type/paste one..."
+                />
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleGenerateSingleAi}
+                    disabled={isSingleGenerating || hasAnyExistingAnswer}
+                    title={
+                      hasAnyExistingAnswer
+                        ? "An answer already exists. Erase text or click 'Clear AI Solution' first to generate a new one."
+                        : "Generate a step-by-step AI explanation using curriculum constraints"
+                    }
+                    className="flex-1 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    {isSingleGenerating ? (
+                      <>
+                        <span className="animate-spin text-sm">⏳</span>
+                        <span>Generating AI Solution...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>⚡</span>
+                        <span>Generate AI Solution</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleClearSingleAi}
+                    disabled={!currentAiSolution.trim() || isSingleGenerating}
+                    title="Clear the AI solution to re-enable generation"
+                    className="px-3 py-2 bg-gray-200 hover:bg-red-100 hover:text-red-700 dark:bg-gray-700 dark:hover:bg-red-900/40 dark:hover:text-red-300 text-gray-700 dark:text-gray-200 rounded-lg font-bold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  >
+                    🗑️ Clear AI
+                  </button>
+                </div>
+
+                {hasAnyExistingAnswer && (
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 italic">
+                    ℹ️ Answer exists ({solutionText.trim() ? "GM manual" : "AI stored"}). Erase it or click Clear AI to re-enable the Generate button.
+                  </p>
                 )}
              </div>
           </div>
@@ -428,7 +905,7 @@ export function QuestionsPanel() {
           
           <div className="flex gap-2 pt-2 border-t dark:border-gray-700">
               <button onClick={saveQuestion} className="btn-primary flex-1 bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 py-3 rounded-lg font-bold text-base">
-                {editingId ? "Update & Migrate" : "Create Question"}
+                {editingId ? "Update & Save" : "Create Question"}
               </button>
               {editingId && (
                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-600 dark:text-white">
@@ -439,8 +916,9 @@ export function QuestionsPanel() {
         </div>
   
         {/* LIST SIDE */}
-        <div className="space-y-4 border-l dark:border-gray-700 pl-4 h-[75vh] flex flex-col">
-          <div className="bg-gray-100 dark:bg-gray-700/60 p-3.5 rounded-xl space-y-2.5 border border-gray-200 dark:border-gray-600">
+        <div className="space-y-3 border-l dark:border-gray-700 pl-4 h-[80vh] flex flex-col">
+          {/* Tag fetch & Filter header */}
+          <div className="bg-gray-100 dark:bg-gray-700/60 p-3 rounded-xl space-y-2 border border-gray-200 dark:border-gray-600">
             <div className="flex justify-between items-center">
               <h3 className="font-bold text-xs uppercase text-gray-600 dark:text-gray-300 flex items-center gap-1.5">
                 <span>🏷️</span>
@@ -451,11 +929,8 @@ export function QuestionsPanel() {
               </span>
             </div>
 
-            {/* 1. Alphabetical Dropdown */}
+            {/* Alphabetical Tag Dropdown */}
             <div>
-              <label className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 block mb-1">
-                Choose Existing Tag (Alphabetical)
-              </label>
               <select
                 className="input w-full text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white"
                 value={selectedDropdownTag}
@@ -475,7 +950,7 @@ export function QuestionsPanel() {
               </select>
             </div>
 
-            {/* 2. Manual Tag Input & Fetch Button */}
+            {/* Manual Tag Input */}
             <div className="flex gap-2">
               <input
                 className="input flex-1 text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white"
@@ -495,17 +970,76 @@ export function QuestionsPanel() {
               </button>
             </div>
 
-            <hr className="border-gray-200 dark:border-gray-600" />
-
-            {/* 3. Debounced local filter */}
+            {/* Debounced filter */}
             <input
               className="input w-full text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-              placeholder="🔍 Filter loaded list (debounced)..."
+              placeholder="🔍 Filter loaded list..."
               value={localFilter}
               onChange={(e) => setLocalFilter(e.target.value)}
             />
           </div>
+
+          {/* BATCH SELECTION & ACTION TOOLBAR */}
+          {questions.length > 0 && (
+            <div className="bg-indigo-50/70 dark:bg-indigo-950/30 p-2.5 rounded-xl border border-indigo-200/80 dark:border-indigo-900/60 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={selectAllVisible}
+                    className="text-[11px] font-bold px-2 py-1 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded text-gray-700 dark:text-gray-200 hover:bg-gray-50"
+                  >
+                    Select All ({visibleQuestions.length})
+                  </button>
+                  {selectedQIds.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={deselectAll}
+                      className="text-[11px] font-bold px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-200 hover:bg-gray-300"
+                    >
+                      Deselect
+                    </button>
+                  )}
+                  <span className="text-xs font-black text-indigo-700 dark:text-indigo-300 ml-1">
+                    {selectedQIds.size} selected
+                  </span>
+                </div>
+
+                {/* Batch Scope Selector */}
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Scope:</span>
+                  <select
+                    value={batchLocOrder ?? ""}
+                    onChange={(e) => setBatchLocOrder(e.target.value ? Number(e.target.value) : null)}
+                    className="text-[11px] py-1 px-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="">Universal (Topics 1–16)</option>
+                    {IB_MATH_AA_HL_SYLLABUS.map((t) => (
+                      <option key={t.number} value={t.number}>
+                        Loc {t.number}: {t.title.slice(0, 18)}...
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Batch Generate Button */}
+              <button
+                type="button"
+                onClick={startBatchGeneration}
+                disabled={selectedQIds.size === 0 || batchRunning}
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2 px-3 rounded-lg text-xs shadow transition-all flex items-center justify-center gap-1.5"
+              >
+                <span>⚡</span>
+                <span>Batch Generate AI Answers for Selected ({selectedQIds.size})</span>
+              </button>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 text-center">
+                🛡️ Strictly skips questions with existing solutions • Paced at 3.5s per request
+              </div>
+            </div>
+          )}
   
+          {/* QUESTIONS SCROLLABLE LIST */}
           <div className="space-y-2 overflow-y-auto pr-2 flex-1 custom-scrollbar">
             {isLoadingQuestions && (
               <div className="py-8 text-center text-xs text-gray-500 dark:text-gray-400 font-bold animate-pulse">
@@ -522,44 +1056,182 @@ export function QuestionsPanel() {
                 </p>
               </div>
             )}
-            {visibleQuestions.map((q) => (
-              <div key={q.id} onClick={() => loadQuestionToEdit(q)} 
-                className={`p-3 border rounded-lg cursor-pointer transition-all flex justify-between items-start 
-                        ${editingId === q.id 
-                            ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-500 dark:bg-blue-900/30 dark:border-blue-400' 
-                            : 'dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`
-                }
-              >
-                <div className="overflow-hidden">
-                  <div className="font-bold text-sm truncate dark:text-gray-100 flex items-center">
-                    {!q.promptContent && <span title="Legacy Question" className="text-yellow-500 mr-2">⚠️</span>}
-                    {q.title ? q.title : "Untitled Question"}
+            {visibleQuestions.map((q) => {
+              const isSelected = q.id ? selectedQIds.has(q.id) : false;
+              const hasGm = Boolean(q.solutionText && q.solutionText.trim());
+              const hasAi = Boolean(q.aiSolution && q.aiSolution.text && q.aiSolution.text.trim());
+
+              return (
+                <div 
+                  key={q.id} 
+                  onClick={() => loadQuestionToEdit(q)} 
+                  className={`p-3 border rounded-lg cursor-pointer transition-all flex items-start gap-2.5 
+                          ${editingId === q.id 
+                              ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-500 dark:bg-blue-900/30 dark:border-blue-400' 
+                              : isSelected
+                              ? 'bg-indigo-50/70 border-indigo-400 dark:bg-indigo-950/40 dark:border-indigo-700'
+                              : 'dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`
+                  }
+                >
+                  {/* Selection Checkbox */}
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      if (q.id) toggleSelectQuestion(q.id);
+                    }}
+                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer mt-1 shrink-0"
+                  />
+
+                  <div className="overflow-hidden flex-1 min-w-0">
+                    <div className="font-bold text-sm truncate dark:text-gray-100 flex items-center">
+                      {!q.promptContent && <span title="Legacy Question" className="text-yellow-500 mr-2">⚠️</span>}
+                      {q.title ? q.title : "Untitled Question"}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">{getQuestionDisplayText(q)}</div>
+                    <div className="text-xs text-gray-400 flex flex-wrap items-center gap-1.5 mt-2">
+                      <span className="bg-gray-100 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded-full font-mono text-[10px]">{q.tags?.join(", ")}</span>
+                      <span className="font-bold text-orange-400 text-[10px]">★{q.difficulty}</span>
+                      {hasGm && (
+                        <span className="bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
+                          👑 GM Sol
+                        </span>
+                      )}
+                      {!hasGm && hasAi && (
+                        <span className="bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
+                          ⚡ AI Sol
+                        </span>
+                      )}
+                      {!hasGm && !hasAi && (
+                        <span className="bg-gray-100 dark:bg-gray-800 text-gray-400 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
+                          No Sol
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">{getQuestionDisplayText(q)}</div>
-                  <div className="text-xs text-gray-400 flex flex-wrap items-center gap-1.5 mt-2">
-                    <span className="bg-gray-100 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded-full font-mono">{q.tags?.join(", ")}</span>
-                    <span className="font-bold text-orange-400">★{q.difficulty}</span>
-                    {q.solutionText && (
-                      <span className="bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
-                        👑 GM Sol
-                      </span>
-                    )}
-                    {!q.solutionText && q.aiSolution?.text && (
-                      <span className="bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
-                        ⚡ AI Sol
-                      </span>
-                    )}
-                  </div>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); if(q.id) deleteQuestion(q.id); }}
+                    className="text-red-300 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-bold px-2 py-1"
+                  >✕</button>
                 </div>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); if(q.id) deleteQuestion(q.id); }}
-                  className="text-red-300 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-bold px-2"
-                >✕</button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
+
+      {/* ================================================================================== */}
+      {/* 🚀 BATCH AI PROGRESS MODAL WITH QUEUE & SAFE RATE-LIMIT PACING */}
+      {/* ================================================================================== */}
+      {isBatchModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">⚡</span>
+                <div>
+                  <h3 className="font-bold text-base text-gray-900 dark:text-gray-100">
+                    Batch AI Solution Generator
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Queue processing with safe 3.5s delay to protect API limits
+                  </p>
+                </div>
+              </div>
+              {!batchRunning && (
+                <button
+                  type="button"
+                  onClick={() => setIsBatchModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 font-bold text-lg p-1"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-bold text-gray-600 dark:text-gray-300">
+                <span>Progress</span>
+                <span>
+                  {batchStats.processed} / {batchStats.total} (
+                  {batchStats.total > 0
+                    ? Math.round((batchStats.processed / batchStats.total) * 100)
+                    : 0}
+                  %)
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 h-full transition-all duration-300"
+                  style={{
+                    width: `${
+                      batchStats.total > 0
+                        ? Math.min(100, Math.round((batchStats.processed / batchStats.total) * 100))
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Live Status Description */}
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 text-xs space-y-1">
+              <div className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300">
+                {batchRunning && <span className="animate-spin">🔄</span>}
+                <span className="truncate">{batchStats.currentTitle || "Initializing..."}</span>
+              </div>
+              <div className="text-indigo-600 dark:text-indigo-400 font-mono text-[11px]">
+                {batchStats.currentStatus}
+              </div>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-4 gap-2 text-center">
+              <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800">
+                <div className="text-[10px] font-bold text-gray-500 uppercase">Selected</div>
+                <div className="text-lg font-black text-gray-800 dark:text-gray-200">{batchStats.total}</div>
+              </div>
+              <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60">
+                <div className="text-[10px] font-bold text-emerald-600 uppercase">Generated</div>
+                <div className="text-lg font-black text-emerald-600">{batchStats.generated}</div>
+              </div>
+              <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60">
+                <div className="text-[10px] font-bold text-amber-600 uppercase">Skipped</div>
+                <div className="text-lg font-black text-amber-600">{batchStats.skipped}</div>
+              </div>
+              <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60">
+                <div className="text-[10px] font-bold text-red-600 uppercase">Errors</div>
+                <div className="text-lg font-black text-red-600">{batchStats.errors}</div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-2 border-t dark:border-gray-800">
+              {batchRunning ? (
+                <button
+                  type="button"
+                  onClick={stopBatchGeneration}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5"
+                >
+                  <span>🛑</span>
+                  <span>Stop Queue</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsBatchModalOpen(false)}
+                  className="px-5 py-2 bg-black text-white dark:bg-white dark:text-black font-bold text-xs rounded-xl shadow hover:opacity-80 transition-all"
+                >
+                  Done
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       </>
     );
-  }
+}

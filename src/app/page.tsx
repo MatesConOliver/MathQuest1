@@ -6,8 +6,9 @@ import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { doc, getDoc, updateDoc, arrayUnion, onSnapshot, Unsubscribe } from "firebase/firestore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { StoryEvent, Character } from "@/types/game";
 import { StoryPlayer } from "@/components/StoryPlayer";
+import { LoadingScreen } from "@/components/LoadingScreen";
+import { Character, StoryEvent } from "@/types/game";
 
 export default function HomePage() {
   const router = useRouter();
@@ -209,11 +210,7 @@ export default function HomePage() {
 
   const needsToName = character?.name === "Nameless";
 
-  if (loading || isStoryBootstrapping) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 animate-pulse font-bold">
-      Loading World...
-    </div>
-  );
+  if (loading || isStoryBootstrapping) return <LoadingScreen />;
 
   if (storyToPlay) {
     return <StoryPlayer story={storyToPlay} onComplete={handleStoryComplete} />

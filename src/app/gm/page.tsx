@@ -13,6 +13,7 @@ import SubAreasPanel from "./panels/SubAreasPanel"; // Import the new panel
 import { EncountersPanel } from "./panels/EncountersPanel";
 import { StoriesPanel } from "./panels/StoriesPanel";
 import { ReportsPanel } from "./panels/ReportsPanel";
+import { LoadingTipsPanel } from "./panels/LoadingTipsPanel";
 import { TabButton } from "./components/TabButton";
 
 const GM_EMAILS = [
@@ -22,8 +23,8 @@ const GM_EMAILS = [
 
 const isGMUser = (email?: string | null) => !!email && GM_EMAILS.includes(email.toLowerCase().trim());
 
-// Add "subareas" and "reports" to the type definition for the active tab
-type ActiveTab = "questions" | "foes" | "locations" | "subareas" | "encounters" | "items" | "stories" | "reports";
+// Add "subareas", "reports", and "loadingTips" to the type definition for the active tab
+type ActiveTab = "questions" | "foes" | "locations" | "subareas" | "encounters" | "items" | "stories" | "reports" | "loadingTips";
 
 export default function GMPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -60,6 +61,7 @@ export default function GMPage() {
           {/* Add the new Sub-Areas tab button */}
           <TabButton label="Sub-Areas" active={activeTab === "subareas"} onClick={() => setActiveTab("subareas")} />
           <TabButton label="Encounters" active={activeTab === "encounters"} onClick={() => setActiveTab("encounters")} />
+          <TabButton label="Loading Tips 💭" active={activeTab === "loadingTips"} onClick={() => setActiveTab("loadingTips")} />
         </div>
       </header>
 
@@ -73,6 +75,7 @@ export default function GMPage() {
         {activeTab === "encounters" && <EncountersPanel />}
         {activeTab === "items" && <ItemsPanel />}
         {activeTab === "stories" && <StoriesPanel />}
+        {activeTab === "loadingTips" && <LoadingTipsPanel />}
       </div>
     </main>
   );

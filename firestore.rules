@@ -70,6 +70,12 @@ service cloud.firestore {
       allow update: if isGM() || (signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aiSolution']));
     }
 
+    // --- GAME SETTINGS (Loading tips, global configuration) ---
+    match /settings/{settingId} {
+      allow read: if signedIn();
+      allow write: if isGM();
+    }
+
     // --- REPORTS ---
     match /reports/{reportId} {
       allow create: if signedIn();

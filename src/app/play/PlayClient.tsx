@@ -11,6 +11,7 @@ import { BattleScreen } from './components/BattleScreen';
 import { VictoryScreen } from './components/VictoryScreen';
 import { DefeatScreen } from './components/DefeatScreen';
 import { StoryPlayer } from '@/components/StoryPlayer';
+import { LoadingScreen } from '@/components/LoadingScreen';
 
 export default function PlayClient() {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -41,11 +42,7 @@ export default function PlayClient() {
   });
 
   if (isAuthLoading || isGameDataLoading || !character) {
-    return (
-      <div className="w-full h-screen flex items-center justify-center text-lg font-bold text-gray-500 animate-pulse">
-        Loading Your Adventure...
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (activeStory) {
