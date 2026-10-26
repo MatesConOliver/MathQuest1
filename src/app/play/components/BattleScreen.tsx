@@ -306,6 +306,41 @@ export function BattleScreen(props: BattleScreenProps) {
   const [showSolutionModal, setShowSolutionModal] = useState(false);
   const currentQ = currentQuestion;
 
+  // Special fight transition states:
+  // 'idle': standard battle
+  // 'tremble': QA menu disappears, foe trembles violently
+  // 'wipe': black wipe curtain sweeps in from right to left
+  // 'reveal': special fight mounted underneath, black curtain fades out
+  // 'active': special fight fully active
+  const [specialFightStage, setSpecialFightStage] = useState<'idle' | 'tremble' | 'wipe' | 'reveal' | 'active'>('idle');
+  const prevSpecialFightActiveRef = React.useRef(false);
+
+  useEffect(() => {
+    if (specialFightActive && !prevSpecialFightActiveRef.current) {
+      setSpecialFightStage('tremble');
+      const timer1 = setTimeout(() => {
+        setSpecialFightStage('wipe');
+      }, 850);
+      const timer2 = setTimeout(() => {
+        setSpecialFightStage('reveal');
+      }, 1600);
+      const timer3 = setTimeout(() => {
+        setSpecialFightStage('active');
+      }, 2250);
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        clearTimeout(timer3);
+      };
+    } else if (!specialFightActive) {
+      setSpecialFightStage('idle');
+    }
+    prevSpecialFightActiveRef.current = !!specialFightActive;
+  }, [specialFightActive]);
+
+  const isFoeTrembling = specialFightStage === 'tremble' || specialFightStage === 'wipe';
+  const isMenuHidden = specialFightStage !== 'idle';
+
   useEffect(() => {
     setShowAnswers(false);
     setShowSolutionModal(false);
@@ -371,15 +406,28 @@ export function BattleScreen(props: BattleScreenProps) {
         {/* Foe Unit & Shadow (Upper Right Stage) */}
         {foe?.imageUrl && (
           <div className="absolute top-[8%] sm:top-[10%] right-[8%] sm:right-[14%] flex flex-col items-center">
-            {/* Foe Sprite with Hit & Lunge Reactions */}
+            {/* Foe Sprite with Hit & Lunge Reactions & Special Fight Tremble */}
             <div className={`relative transition-transform duration-300 ${
-              combatEffect?.target === 'foe' ? 'animate-sprite-hit' : combatEffect?.target === 'player' ? 'animate-foe-lunge' : ''
+              isFoeTrembling
+                ? 'animate-boss-tremble z-30'
+                : combatEffect?.target === 'foe'
+                ? 'animate-sprite-hit'
+                : combatEffect?.target === 'player'
+                ? 'animate-foe-lunge'
+                : ''
             }`}>
               <img
                 src={foe.imageUrl}
                 alt="Foe"
                 className="w-[min(19rem,32vw)] h-[min(19rem,28vh)] object-contain object-bottom drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]"
               />
+              {/* Ominous magical auras when trembling */}
+              {isFoeTrembling && (
+                <>
+                  <div className="absolute -inset-6 rounded-full bg-red-600/35 blur-2xl animate-ping pointer-events-none" />
+                  <div className="absolute -inset-10 rounded-full bg-purple-600/30 blur-3xl animate-pulse pointer-events-none" />
+                </>
+              )}
               {/* Floating Damage Text over Foe */}
               {combatEffect?.target === 'foe' && (
                 <div
@@ -441,7 +489,9 @@ export function BattleScreen(props: BattleScreenProps) {
       </div>
 
       {/* 3. BOTTOM GRIMOIRE CONSOLE (PROBLEM PANEL + ACTION / CHOICES CONSOLE) */}
-      <footer className="relative z-20 shrink-0 p-2.5 sm:p-3.5 bg-gradient-to-t from-black via-black/95 to-black/80 backdrop-blur-xl border-t-2 border-white/20 shadow-2xl">
+      <footer className={`relative z-20 shrink-0 p-2.5 sm:p-3.5 bg-gradient-to-t from-black via-black/95 to-black/80 backdrop-blur-xl border-t-2 border-white/20 shadow-2xl transition-all duration-500 ease-in-out ${
+        isMenuHidden ? 'opacity-0 translate-y-28 pointer-events-none' : 'opacity-100 translate-y-0'
+      }`}>
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-2.5 sm:gap-3 items-stretch">
           
           {/* LEFT: THE MATH PROBLEM CARD (Fixed 5 columns on desktop, constant bounds) */}
@@ -767,24 +817,42 @@ export function BattleScreen(props: BattleScreenProps) {
         />
       )}
 
-      {/* SPECIAL FIGHT PHASE SHIFT OVERLAY */}
+      {/* SPECIAL FIGHT PHASE SHIFT OVERLAY & RIGHT-TO-LEFT BLACK WIPE */}
       {specialFightActive && activeSpecialFightId && (() => {
         const def = getSpecialFightById(activeSpecialFightId);
         if (!def) return null;
         const FightComponent = def.component;
+        const showFightComponent = specialFightStage === 'reveal' || specialFightStage === 'active';
+
         return (
-          <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col p-2 sm:p-4 animate-in fade-in zoom-in-95 duration-500">
-            <div className="flex-1 max-w-6xl w-full mx-auto rounded-3xl overflow-hidden border-2 border-indigo-500/50 shadow-[0_0_50px_rgba(99,102,241,0.4)] relative">
-              <FightComponent
-                foe={foe}
-                character={character}
-                onComplete={(res) => {
-                  if (onCompleteSpecialFight) onCompleteSpecialFight(res);
-                }}
-                isTestMode={false}
-              />
-            </div>
-          </div>
+          <>
+            {showFightComponent && (
+              <div className="fixed inset-0 z-40 bg-black/95 backdrop-blur-xl flex flex-col p-2 sm:p-4 animate-in fade-in duration-300">
+                <div className="flex-1 max-w-6xl w-full mx-auto rounded-3xl overflow-hidden border-2 border-indigo-500/50 shadow-[0_0_50px_rgba(99,102,241,0.4)] relative">
+                  <FightComponent
+                    foe={foe}
+                    character={character}
+                    onComplete={(res) => {
+                      if (onCompleteSpecialFight) onCompleteSpecialFight(res);
+                    }}
+                    isTestMode={false}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* BLACK SCREEN WIPE TRANSITION (Right to Left) */}
+            {(specialFightStage === 'wipe' || specialFightStage === 'reveal') && (
+              <div
+                className={`fixed inset-0 z-50 pointer-events-auto bg-black overflow-hidden ${
+                  specialFightStage === 'wipe' ? 'animate-black-wipe-in' : 'animate-black-fade-out'
+                }`}
+              >
+                {/* Soft gradient leading shadow on the left edge as it sweeps from right to left */}
+                <div className="absolute top-0 bottom-0 -left-40 w-40 bg-gradient-to-r from-transparent to-black pointer-events-none" />
+              </div>
+            )}
+          </>
         );
       })()}
     </main>

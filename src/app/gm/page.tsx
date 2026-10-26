@@ -14,16 +14,18 @@ import { EncountersPanel } from "./panels/EncountersPanel";
 import { StoriesPanel } from "./panels/StoriesPanel";
 import { ReportsPanel } from "./panels/ReportsPanel";
 import { LoadingTipsPanel } from "./panels/LoadingTipsPanel";
+import { SpecialFightsPanel } from "./panels/SpecialFightsPanel";
 import { TabButton } from "./components/TabButton";
 
 const GM_EMAILS = [
   "oliveru1996@gmail.com",
+  "oliverozcariz@britanico-aragon.edu",
 ];
 
 const isGMUser = (email?: string | null) => !!email && GM_EMAILS.includes(email.toLowerCase().trim());
 
-// Add "subareas", "reports", and "loadingTips" to the type definition for the active tab
-type ActiveTab = "questions" | "foes" | "locations" | "subareas" | "encounters" | "items" | "stories" | "reports" | "loadingTips";
+// Add "subareas", "reports", "loadingTips", and "specialFights" to the type definition for the active tab
+type ActiveTab = "questions" | "foes" | "locations" | "subareas" | "encounters" | "items" | "stories" | "reports" | "loadingTips" | "specialFights";
 
 export default function GMPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -60,6 +62,7 @@ export default function GMPage() {
           {/* Add the new Sub-Areas tab button */}
           <TabButton label="Sub-Areas" active={activeTab === "subareas"} onClick={() => setActiveTab("subareas")} />
           <TabButton label="Encounters" active={activeTab === "encounters"} onClick={() => setActiveTab("encounters")} />
+          <TabButton label="⚔️ Special Fights" active={activeTab === "specialFights"} onClick={() => setActiveTab("specialFights")} />
           <TabButton label="Loading Tips 💭" active={activeTab === "loadingTips"} onClick={() => setActiveTab("loadingTips")} />
         </div>
       </header>
@@ -72,6 +75,7 @@ export default function GMPage() {
         {/* Render the new SubAreasPanel when the tab is active */}
         {activeTab === "subareas" && <SubAreasPanel />}
         {activeTab === "encounters" && <EncountersPanel />}
+        {activeTab === "specialFights" && <SpecialFightsPanel />}
         {activeTab === "items" && <ItemsPanel />}
         {activeTab === "stories" && <StoriesPanel />}
         {activeTab === "loadingTips" && <LoadingTipsPanel />}
