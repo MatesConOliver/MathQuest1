@@ -2,6 +2,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, getIdToken } from "firebase/auth";
 import { getFirestore, collection, getDocs, doc, getDoc as getDocFirestore, updateDoc as updateDocFirestore, DocumentData } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -18,6 +19,7 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 
 // API and Function calling
 const getFirebaseRegion = () => 'us-central1';

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { InlineMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 import { SpecialFightProps } from './types';
+import { LOCATION_2_ASSETS } from '@/config/assetStructure';
 import {
   Sparkles,
   ShieldAlert,
@@ -20,6 +21,37 @@ import {
   Skull,
   RotateCcw,
 } from 'lucide-react';
+
+// Process a sprite on an offscreen canvas to turn white background into smooth alpha transparency
+function createProcessedTransparentCanvas(img: HTMLImageElement): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || img.width || 256;
+  canvas.height = img.naturalHeight || img.height || 256;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  ctx.drawImage(img, 0, 0);
+  try {
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imgData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      if (r > 230 && g > 230 && b > 230) {
+        const avg = (r + g + b) / 3;
+        if (avg >= 245) {
+          data[i + 3] = 0;
+        } else {
+          data[i + 3] = Math.round(((245 - avg) / 15) * 255);
+        }
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+  } catch {
+    // If CORS or local context prevents pixel manipulation, keep canvas as-is
+  }
+  return canvas;
+}
 
 // Fraction utilities for exact mathematical representation
 export interface Fraction {
@@ -316,6 +348,9 @@ export default function Loc2VietaScales({
   // Sprites
   const owlImgRef = useRef<HTMLImageElement | null>(null);
   const foeImgRef = useRef<HTMLImageElement | null>(null);
+  const bgImgRef = useRef<HTMLImageElement | null>(null);
+  const pedestalCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const runeCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
   // Pad cooldown so player doesn't trigger multiple times in one step
@@ -347,8 +382,30 @@ export default function Loc2VietaScales({
 
   const currentRound = selectedRounds[currentRoundIndex] || ROUND_1_POOL[0];
 
-  // Preload images
+  // Preload game sprites & Location 2 visual assets
   useEffect(() => {
+    // 1. Mountain Summit Backdrop
+    const bg = new Image();
+    bg.src = LOCATION_2_ASSETS.SUMMIT_BACKDROP;
+    bg.onload = () => {
+      bgImgRef.current = bg;
+    };
+
+    // 2. Carved Altar Pedestal Sprite
+    const pedImg = new Image();
+    pedImg.src = LOCATION_2_ASSETS.PEDESTAL;
+    pedImg.onload = () => {
+      pedestalCanvasRef.current = createProcessedTransparentCanvas(pedImg);
+    };
+
+    // 3. Ancient Rune Tablet Sprite
+    const rImg = new Image();
+    rImg.src = LOCATION_2_ASSETS.RUNE_TABLET;
+    rImg.onload = () => {
+      runeCanvasRef.current = createProcessedTransparentCanvas(rImg);
+    };
+
+    // 4. Player Owl
     const owl = new Image();
     owl.crossOrigin = 'anonymous';
     owl.src =
@@ -358,6 +415,7 @@ export default function Loc2VietaScales({
       owlImgRef.current = owl;
     };
 
+    // 5. Boss Foe
     if (foe?.imageUrl) {
       const foeImg = new Image();
       foeImg.crossOrigin = 'anonymous';
@@ -771,112 +829,116 @@ export default function Loc2VietaScales({
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 4. Render Mountain Sky & Summit Atmosphere
-      const skyGrad = ctx.createLinearGradient(0, 0, 0, 220);
-      skyGrad.addColorStop(0, '#0c1222');
-      skyGrad.addColorStop(0.6, '#1e293b');
-      skyGrad.addColorStop(1, '#334155');
-      ctx.fillStyle = skyGrad;
-      ctx.fillRect(0, 0, canvas.width, 220);
+      // 4. Render Mountain Sky & Summit Atmosphere (High-fidelity backdrop with procedural fallback)
+      if (bgImgRef.current && bgImgRef.current.complete) {
+        ctx.drawImage(bgImgRef.current, 0, 0, canvas.width, canvas.height);
+      } else {
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, 220);
+        skyGrad.addColorStop(0, '#0c1222');
+        skyGrad.addColorStop(0.6, '#1e293b');
+        skyGrad.addColorStop(1, '#334155');
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, canvas.width, 220);
 
-      // Distant snowy mountain peaks in silhouette
-      ctx.fillStyle = '#1e293b';
-      ctx.beginPath();
-      ctx.moveTo(0, 220);
-      ctx.lineTo(80, 110);
-      ctx.lineTo(160, 160);
-      ctx.lineTo(260, 90);
-      ctx.lineTo(360, 170);
-      ctx.lineTo(480, 80);
-      ctx.lineTo(580, 160);
-      ctx.lineTo(690, 100);
-      ctx.lineTo(800, 220);
-      ctx.closePath();
-      ctx.fill();
-
-      // Snowy peak caps on mountains
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-      ctx.beginPath();
-      ctx.moveTo(80, 110);
-      ctx.lineTo(105, 130);
-      ctx.lineTo(55, 130);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.moveTo(260, 90);
-      ctx.lineTo(290, 115);
-      ctx.lineTo(230, 115);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.moveTo(480, 80);
-      ctx.lineTo(510, 110);
-      ctx.lineTo(450, 110);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.moveTo(690, 100);
-      ctx.lineTo(720, 125);
-      ctx.lineTo(660, 125);
-      ctx.closePath();
-      ctx.fill();
-
-      // 5. Render Snowy Summit Ground (Peak Platform)
-      const groundGrad = ctx.createLinearGradient(0, 200, 0, 600);
-      groundGrad.addColorStop(0, '#cbd5e1');
-      groundGrad.addColorStop(0.3, '#f1f5f9');
-      groundGrad.addColorStop(0.8, '#e2e8f0');
-      groundGrad.addColorStop(1, '#94a3b8');
-      ctx.fillStyle = groundGrad;
-      ctx.fillRect(0, 200, canvas.width, 400);
-
-      // Snowy texture drifts
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      for (let i = 0; i < 8; i++) {
+        // Distant snowy mountain peaks in silhouette
+        ctx.fillStyle = '#1e293b';
         ctx.beginPath();
-        ctx.ellipse(80 + i * 90, 310 + (i % 3) * 60, 60, 14, 0, 0, Math.PI * 2);
+        ctx.moveTo(0, 220);
+        ctx.lineTo(80, 110);
+        ctx.lineTo(160, 160);
+        ctx.lineTo(260, 90);
+        ctx.lineTo(360, 170);
+        ctx.lineTo(480, 80);
+        ctx.lineTo(580, 160);
+        ctx.lineTo(690, 100);
+        ctx.lineTo(800, 220);
+        ctx.closePath();
+        ctx.fill();
+
+        // Snowy peak caps on mountains
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.beginPath();
+        ctx.moveTo(80, 110);
+        ctx.lineTo(105, 130);
+        ctx.lineTo(55, 130);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(260, 90);
+        ctx.lineTo(290, 115);
+        ctx.lineTo(230, 115);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(480, 80);
+        ctx.lineTo(510, 110);
+        ctx.lineTo(450, 110);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(690, 100);
+        ctx.lineTo(720, 125);
+        ctx.lineTo(660, 125);
+        ctx.closePath();
+        ctx.fill();
+
+        // 5. Render Snowy Summit Ground (Peak Platform)
+        const groundGrad = ctx.createLinearGradient(0, 200, 0, 600);
+        groundGrad.addColorStop(0, '#cbd5e1');
+        groundGrad.addColorStop(0.3, '#f1f5f9');
+        groundGrad.addColorStop(0.8, '#e2e8f0');
+        groundGrad.addColorStop(1, '#94a3b8');
+        ctx.fillStyle = groundGrad;
+        ctx.fillRect(0, 200, canvas.width, 400);
+
+        // Snowy texture drifts
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        for (let i = 0; i < 8; i++) {
+          ctx.beginPath();
+          ctx.ellipse(80 + i * 90, 310 + (i % 3) * 60, 60, 14, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Mountain rocks & snowy boulders on edges
+        ctx.fillStyle = '#475569';
+        ctx.beginPath();
+        ctx.moveTo(0, 240);
+        ctx.lineTo(50, 270);
+        ctx.lineTo(35, 340);
+        ctx.lineTo(55, 420);
+        ctx.lineTo(25, 520);
+        ctx.lineTo(0, 560);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.ellipse(35, 270, 20, 6, 0, 0, Math.PI * 2);
+        ctx.ellipse(40, 340, 18, 5, 0, 0, Math.PI * 2);
+        ctx.ellipse(30, 420, 22, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#475569';
+        ctx.beginPath();
+        ctx.moveTo(800, 240);
+        ctx.lineTo(750, 280);
+        ctx.lineTo(765, 360);
+        ctx.lineTo(745, 440);
+        ctx.lineTo(775, 520);
+        ctx.lineTo(800, 560);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.ellipse(765, 280, 20, 6, 0, 0, Math.PI * 2);
+        ctx.ellipse(755, 360, 18, 5, 0, 0, Math.PI * 2);
+        ctx.ellipse(770, 440, 22, 6, 0, 0, Math.PI * 2);
         ctx.fill();
       }
-
-      // Mountain rocks & snowy boulders on edges
-      ctx.fillStyle = '#475569';
-      ctx.beginPath();
-      ctx.moveTo(0, 240);
-      ctx.lineTo(50, 270);
-      ctx.lineTo(35, 340);
-      ctx.lineTo(55, 420);
-      ctx.lineTo(25, 520);
-      ctx.lineTo(0, 560);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.ellipse(35, 270, 20, 6, 0, 0, Math.PI * 2);
-      ctx.ellipse(40, 340, 18, 5, 0, 0, Math.PI * 2);
-      ctx.ellipse(30, 420, 22, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#475569';
-      ctx.beginPath();
-      ctx.moveTo(800, 240);
-      ctx.lineTo(750, 280);
-      ctx.lineTo(765, 360);
-      ctx.lineTo(745, 440);
-      ctx.lineTo(775, 520);
-      ctx.lineTo(800, 560);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.ellipse(765, 280, 20, 6, 0, 0, Math.PI * 2);
-      ctx.ellipse(755, 360, 18, 5, 0, 0, Math.PI * 2);
-      ctx.ellipse(770, 440, 22, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
 
       // 6. Falling Snowflakes
       ctx.fillStyle = '#ffffff';
@@ -1001,39 +1063,53 @@ export default function Loc2VietaScales({
 
         // Shadow
         ctx.beginPath();
-        ctx.ellipse(ped.x, ped.y + 16, 44, 14, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.ellipse(ped.x, ped.y + 18, 42, 14, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
         ctx.fill();
 
-        // Mountain stone altar column (wider and taller)
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(ped.x - 34, ped.y - 30, 68, 46);
-
-        // Snow dusting on top of altar
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.ellipse(ped.x, ped.y - 30, 36, 12, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#64748b';
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-
-        // Socket
-        ctx.beginPath();
-        ctx.ellipse(ped.x, ped.y - 30, 24, 8, 0, 0, Math.PI * 2);
         const hasRune = ped.placedRuneId !== null;
-        ctx.fillStyle = hasRune ? 'rgba(56, 189, 248, 0.85)' : 'rgba(71, 85, 105, 0.4)';
-        ctx.fill();
+
+        // Render carved altar sprite or procedural fallback
+        if (pedestalCanvasRef.current) {
+          const pw = 84;
+          const ph = 102;
+          ctx.drawImage(pedestalCanvasRef.current, ped.x - pw / 2, ped.y - ph + 24, pw, ph);
+
+          // Glowing socket on altar top
+          ctx.beginPath();
+          ctx.ellipse(ped.x, ped.y - ph + 34, 26, 9, 0, 0, Math.PI * 2);
+          ctx.fillStyle = hasRune ? 'rgba(56, 189, 248, 0.85)' : 'rgba(14, 165, 233, 0.25)';
+          ctx.fill();
+        } else {
+          // Mountain stone altar column (wider and taller)
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(ped.x - 34, ped.y - 30, 68, 46);
+
+          // Snow dusting on top of altar
+          ctx.fillStyle = '#f8fafc';
+          ctx.beginPath();
+          ctx.ellipse(ped.x, ped.y - 30, 36, 12, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+
+          // Socket
+          ctx.beginPath();
+          ctx.ellipse(ped.x, ped.y - 30, 24, 8, 0, 0, Math.PI * 2);
+          ctx.fillStyle = hasRune ? 'rgba(56, 189, 248, 0.85)' : 'rgba(71, 85, 105, 0.4)';
+          ctx.fill();
+        }
 
         // Altar Greek Engraving on Column Face (BIGGER, NO SUBTEXT)
         ctx.save();
         ctx.fillStyle = '#fef08a';
-        ctx.shadowColor = 'rgba(250, 204, 21, 0.6)';
-        ctx.shadowBlur = 8;
-        ctx.font = 'bold 22px serif';
+        ctx.shadowColor = 'rgba(250, 204, 21, 0.7)';
+        ctx.shadowBlur = 9;
+        ctx.font = 'bold 24px serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(ped.symbol, ped.x, ped.y - 4);
+        ctx.fillText(ped.symbol, ped.x, ped.y - 12);
         ctx.restore();
 
         // Pulsate RED when altar has wrong rune and owl is on the platform
@@ -1042,7 +1118,7 @@ export default function Loc2VietaScales({
           ctx.save();
           // Pulsing red aura ring around the pedestal
           ctx.beginPath();
-          ctx.ellipse(ped.x, ped.y - 8, 48 + redPulse * 8, 36 + redPulse * 6, 0, 0, Math.PI * 2);
+          ctx.ellipse(ped.x, ped.y - 10, 50 + redPulse * 8, 40 + redPulse * 6, 0, 0, Math.PI * 2);
           ctx.strokeStyle = `rgba(239, 68, 68, ${0.45 + redPulse * 0.55})`;
           ctx.lineWidth = 3.5;
           ctx.shadowColor = '#ef4444';
@@ -1051,7 +1127,9 @@ export default function Loc2VietaScales({
 
           // Pulsing red overlay on altar face
           ctx.fillStyle = `rgba(239, 68, 68, ${0.25 + redPulse * 0.35})`;
-          ctx.fillRect(ped.x - 34, ped.y - 30, 68, 46);
+          ctx.beginPath();
+          ctx.ellipse(ped.x, ped.y - 14, 34, 40, 0, 0, Math.PI * 2);
+          ctx.fill();
           ctx.restore();
         }
 
@@ -1059,7 +1137,7 @@ export default function Loc2VietaScales({
         if (hasRune) {
           const placedRune = runes.find((r) => r.id === ped.placedRuneId);
           if (placedRune) {
-            const floatY = ped.y - 52 + Math.sin(Date.now() / 250) * 3;
+            const floatY = ped.y - 64 + Math.sin(Date.now() / 250) * 3;
             drawRuneStone(ctx, placedRune, ped.x, floatY, true);
           }
         }
@@ -1262,40 +1340,60 @@ export default function Loc2VietaScales({
     if (isHovering) {
       ctx.beginPath();
       ctx.ellipse(x, y + 20, 18, 6, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.fill();
     }
 
     ctx.shadowColor = rune.color;
-    ctx.shadowBlur = isHovering ? 16 : 8;
+    ctx.shadowBlur = isHovering ? 18 : 8;
 
-    const size = 19;
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const angle = (i * Math.PI) / 3;
-      const rx = x + size * Math.cos(angle);
-      const ry = y + size * Math.sin(angle);
-      if (i === 0) ctx.moveTo(rx, ry);
-      else ctx.lineTo(rx, ry);
+    const rSize = isHovering ? 46 : 40;
+
+    if (runeCanvasRef.current) {
+      ctx.drawImage(runeCanvasRef.current, x - rSize / 2, y - rSize / 2, rSize, rSize);
+
+      // Inner glowing core
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(x, y, 13, 0, Math.PI * 2);
+      ctx.fillStyle = rune.glowColor;
+      ctx.fill();
+
+      // Readability contrast backing badge for fraction text
+      ctx.beginPath();
+      ctx.arc(x, y, 11, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fill();
+    } else {
+      // Hexagonal procedural fallback
+      const size = 19;
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (i * Math.PI) / 3;
+        const rx = x + size * Math.cos(angle);
+        const ry = y + size * Math.sin(angle);
+        if (i === 0) ctx.moveTo(rx, ry);
+        else ctx.lineTo(rx, ry);
+      }
+      ctx.closePath();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.fill();
+      ctx.strokeStyle = rune.color;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(x, y, 12, 0, Math.PI * 2);
+      ctx.fillStyle = rune.glowColor;
+      ctx.fill();
     }
-    ctx.closePath();
-
-    ctx.fillStyle = '#0f172a';
-    ctx.fill();
-    ctx.strokeStyle = rune.color;
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(x, y, 12, 0, Math.PI * 2);
-    ctx.fillStyle = rune.glowColor;
-    ctx.fill();
 
     // Fraction or integer text
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#ffffff';
     const text = fracToDisplay(rune.value);
-    ctx.font = text.length > 3 ? 'bold 10px sans-serif' : 'bold 12px sans-serif';
+    ctx.font = text.length > 3 ? 'bold 10px monospace' : 'bold 12px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, x, y + 1);

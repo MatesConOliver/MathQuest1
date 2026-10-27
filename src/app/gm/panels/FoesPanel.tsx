@@ -13,11 +13,14 @@ import {
 
 import { FoeDoc } from "@/types/game";
 import { Input } from "@/app/gm/components/Input";
+import { AssetPickerModal } from "@/app/gm/components/AssetPickerModal";
+import { Image as ImageIcon } from "lucide-react";
 
 export function FoesPanel() {
   const [foes, setFoes] = useState<FoeDoc[]>([]);
   const [msg, setMsg] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false);
   const visibleFoes = foes.filter((f) =>
     f.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -158,10 +161,38 @@ export function FoesPanel() {
           value={desc}
           onChange={(e: any) => setDesc(e.target.value)}
         />
-        <Input
-          label="Image URL"
-          value={imageUrl}
-          onChange={(e: any) => setImageUrl(e.target.value)}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Image URL</label>
+            <button
+              type="button"
+              onClick={() => setIsAssetPickerOpen(true)}
+              className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors"
+            >
+              <ImageIcon className="w-3.5 h-3.5" /> Pick from Asset Hub
+            </button>
+          </div>
+          <div className="flex gap-2 items-center">
+            <input
+              className="input flex-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              placeholder="e.g. /Assets/Location specific/location 2/boss.png"
+              value={imageUrl}
+              onChange={(e: any) => setImageUrl(e.target.value)}
+            />
+            {imageUrl && (
+              <div className="w-10 h-10 rounded-lg bg-black/40 border border-gray-600 overflow-hidden flex items-center justify-center shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imageUrl} alt="Foe Preview" className="w-full h-full object-contain" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <AssetPickerModal
+          isOpen={isAssetPickerOpen}
+          onClose={() => setIsAssetPickerOpen(false)}
+          onSelectAsset={(path) => setImageUrl(path)}
+          initialFolder="Assets/Location specific/location 2"
         />
 
         <div className="grid grid-cols-2 gap-4">

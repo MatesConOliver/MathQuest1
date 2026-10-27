@@ -368,9 +368,16 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   // Draws a new random question from the eligible starter pool. If it belongs to a
   // group, fetches and queues up the rest of that group's parts in order.
   const drawRandomQuestion = useCallback(async (): Promise<QuestionDoc | null> => {
-    if (eligibleStarterPool.length === 0) return null;
+    let pool = eligibleStarterPool;
+    if (pool.length === 0 && questions.length > 0) {
+      // Extended battle fallback: recycle questions except the current one
+      const recycled = questions.filter((q) => (!q.groupId || (q.order ?? 1) <= 1));
+      const filtered = currentQuestion?.id ? recycled.filter((q) => q.id !== currentQuestion.id) : recycled;
+      pool = filtered.length > 0 ? filtered : recycled;
+    }
+    if (pool.length === 0) return null;
     const picked =
-      eligibleStarterPool[Math.floor(Math.random() * eligibleStarterPool.length)];
+      pool[Math.floor(Math.random() * pool.length)];
 
     if (picked.groupId) {
       try {
@@ -388,7 +395,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       setUsedQuestionIds((prev) => [...prev, picked.id as string]);
     }
     return picked;
-  }, [eligibleStarterPool, fetchGroupQuestions]);
+  }, [eligibleStarterPool, questions, currentQuestion, fetchGroupQuestions]);
 
   const advanceQuestion = useCallback(async (abandonCurrentGroup: boolean) => {
     if (foeHp <= 0) {
@@ -687,8 +694,13 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   );
 
   const handleSpecialFightComplete = useCallback(
-    (result: { success: boolean; message?: string }) => {
+    async (result: { success: boolean; message?: string }) => {
       setSpecialFightActive(false);
+
+      const answeredQuestionId = currentQuestion?.id;
+      if (answeredQuestionId) {
+        setUsedQuestionIds((prev) => (prev.includes(answeredQuestionId) ? prev : [...prev, answeredQuestionId]));
+      }
 
       if (result.success) {
         // Foe recovers full HP and enters Phase 2!
@@ -699,16 +711,68 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         const speedBonus = currentEncounter?.phase2TimeSpeedPercent || 25;
         setMsg(`⚡ PHASE 2 AWAKENED! ${foe?.name || 'The foe'} fully restored HP! Question timer is now ${speedBonus}% faster!`);
         playSfx('attack');
-        setIsPaused(false);
       } else {
         // Penalty on fail: lose 30% of max HP
         const penalty = Math.max(10, Math.floor((battleStats.maxHp || 100) * 0.3));
-        setPlayerHp((prev) => Math.max(1, prev - penalty));
+        const newPlayerHp = Math.max(0, playerHp - penalty);
+        setPlayerHp(newPlayerHp);
         setMsg(`The special trial overwhelmed you for -${penalty} HP!`);
+        if (newPlayerHp <= 0) {
+          handleLoss('You were defeated by the special trial!');
+          return;
+        }
+      }
+
+      // CRITICAL: Advance past the question answered right before the special battle so it is NEVER asked again!
+      setSelectedChoice(null);
+      setCombatEffect(null);
+      setShowSubquestionMenu(false);
+      setCurrentQIndex((prev) => prev + 1);
+
+      if (questionQueue.length > 0) {
+        const [next, ...rest] = questionQueue;
+        setQuestionQueue(rest);
+        setCurrentQuestion(next);
+        setTimeLeft(next.timeLimit || 30);
         setIsPaused(false);
+      } else {
+        // Draw a fresh question from pool, excluding the answered question
+        const drawn = await drawRandomQuestion();
+        if (drawn && drawn.id !== answeredQuestionId) {
+          setCurrentQuestion(drawn);
+          setTimeLeft(drawn.timeLimit || 30);
+          setIsPaused(false);
+        } else {
+          // Fallback: Pick any starter question whose id is not answeredQuestionId
+          const fallbackPool = questions.filter(
+            (q) => (!q.groupId || (q.order ?? 1) <= 1) && q.id !== answeredQuestionId
+          );
+          if (fallbackPool.length > 0) {
+            const picked = fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+            if (picked.id) {
+              setUsedQuestionIds((prev) => (prev.includes(picked.id!) ? prev : [...prev, picked.id!]));
+            }
+            setCurrentQuestion(picked);
+            setTimeLeft(picked.timeLimit || 30);
+            setIsPaused(false);
+          } else {
+            setIsPaused(false);
+          }
+        }
       }
     },
-    [foe, currentEncounter, battleStats.maxHp, playSfx]
+    [
+      foe,
+      currentEncounter,
+      battleStats.maxHp,
+      playSfx,
+      playerHp,
+      currentQuestion,
+      questionQueue,
+      drawRandomQuestion,
+      questions,
+      handleLoss,
+    ]
   );
 
   useEffect(() => {

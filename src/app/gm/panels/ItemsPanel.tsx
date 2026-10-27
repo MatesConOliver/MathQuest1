@@ -13,11 +13,14 @@ import {
 
 import { GameItem, ItemType, EquipmentSlot } from "@/types/game";
 import { Input } from "@/app/gm/components/Input";
+import { AssetPickerModal } from "@/app/gm/components/AssetPickerModal";
+import { Image as ImageIcon } from "lucide-react";
 
 export function ItemsPanel() {
     const [items, setItems] = useState<GameItem[]>([]);
     const [msg, setMsg] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
+    const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false);
   
     // --- Form States ---
     const [id, setId] = useState("");
@@ -187,14 +190,31 @@ export function ItemsPanel() {
             
              {/* IMAGE INPUT */}
              <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-              <label className="label mb-2">Item Image URL</label>
-              <div className="flex gap-4 items-center">
-                  <input className="input flex-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" placeholder="https://..." value={imageUrl} onChange={(e: any) => setImageUrl(e.target.value)} />
-                  <div className="w-16 h-16 bg-white dark:bg-gray-800 dark:border-gray-600 border rounded-lg flex items-center justify-center overflow-hidden shrink-0">
-                      {imageUrl ? <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" /> : <span className="text-xs text-gray-300 dark:text-gray-600">No Img</span>}
-                  </div>
-              </div>
-            </div>
+               <div className="flex items-center justify-between mb-2">
+                 <label className="label mb-0">Item Image URL</label>
+                 <button
+                   type="button"
+                   onClick={() => setIsAssetPickerOpen(true)}
+                   className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors"
+                 >
+                   <ImageIcon className="w-3.5 h-3.5" /> Pick from Asset Hub
+                 </button>
+               </div>
+               <div className="flex gap-4 items-center">
+                   <input className="input flex-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" placeholder="https://... or /Assets/General/gear/..." value={imageUrl} onChange={(e: any) => setImageUrl(e.target.value)} />
+                   <div className="w-16 h-16 bg-white dark:bg-gray-800 dark:border-gray-600 border rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                       {imageUrl ? <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" /> : <span className="text-xs text-gray-300 dark:text-gray-600">No Img</span>}
+                   </div>
+               </div>
+             </div>
+
+             {/* Asset Picker Modal */}
+             <AssetPickerModal
+               isOpen={isAssetPickerOpen}
+               onClose={() => setIsAssetPickerOpen(false)}
+               onSelectAsset={(path) => setImageUrl(path)}
+               initialFolder={type === 'potion' ? 'Assets/General/consumables' : 'Assets/General/gear'}
+             />
   
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div>

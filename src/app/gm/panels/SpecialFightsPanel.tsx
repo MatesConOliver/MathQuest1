@@ -136,6 +136,45 @@ export function SpecialFightsPanel() {
                       <CheckCircle2 className="w-3.5 h-3.5 text-rose-400" /> Monomial Projectiles & 3 Lives
                     </span>
                   </div>
+
+                  {/* Active Sprites Showcase */}
+                  <div className="mt-3 pt-3 border-t border-white/10 flex flex-wrap items-center gap-3">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                      Active Sprites:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 bg-black/60 px-2 py-1 rounded-lg border border-cyan-500/30">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/Assets/Location specific/location 2/summit_backdrop.jpg"
+                          alt="Backdrop"
+                          className="w-7 h-5 object-cover rounded shadow"
+                        />
+                        <span className="text-[10px] text-cyan-300 font-mono">summit_backdrop</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-black/60 px-2 py-1 rounded-lg border border-indigo-500/30">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/Assets/Location specific/location 2/pedestal.jpg"
+                          alt="Pedestal"
+                          className="w-5 h-5 object-contain rounded shadow"
+                        />
+                        <span className="text-[10px] text-indigo-300 font-mono">pedestal</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-black/60 px-2 py-1 rounded-lg border border-amber-500/30">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/Assets/Location specific/location 2/rune_tablet.jpg"
+                          alt="Rune Tablet"
+                          className="w-5 h-5 object-contain rounded shadow"
+                        />
+                        <span className="text-[10px] text-amber-300 font-mono">rune_tablet</span>
+                      </div>
+                      <span className="text-[10px] text-gray-500 font-mono ml-1">
+                        📁 Assets/Location specific/location 2/
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Right: Actions */}

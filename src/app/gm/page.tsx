@@ -15,6 +15,7 @@ import { StoriesPanel } from "./panels/StoriesPanel";
 import { ReportsPanel } from "./panels/ReportsPanel";
 import { LoadingTipsPanel } from "./panels/LoadingTipsPanel";
 import { SpecialFightsPanel } from "./panels/SpecialFightsPanel";
+import { AssetManagerPanel } from "./panels/AssetManagerPanel";
 import { TabButton } from "./components/TabButton";
 
 const GM_EMAILS = [
@@ -24,8 +25,8 @@ const GM_EMAILS = [
 
 const isGMUser = (email?: string | null) => !!email && GM_EMAILS.includes(email.toLowerCase().trim());
 
-// Add "subareas", "reports", "loadingTips", and "specialFights" to the type definition for the active tab
-type ActiveTab = "questions" | "foes" | "locations" | "subareas" | "encounters" | "items" | "stories" | "reports" | "loadingTips" | "specialFights";
+// Add "subareas", "reports", "loadingTips", "specialFights", and "assets" to the type definition for the active tab
+type ActiveTab = "questions" | "foes" | "locations" | "subareas" | "encounters" | "items" | "stories" | "reports" | "loadingTips" | "specialFights" | "assets";
 
 export default function GMPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -63,6 +64,7 @@ export default function GMPage() {
           <TabButton label="Sub-Areas" active={activeTab === "subareas"} onClick={() => setActiveTab("subareas")} />
           <TabButton label="Encounters" active={activeTab === "encounters"} onClick={() => setActiveTab("encounters")} />
           <TabButton label="⚔️ Special Fights" active={activeTab === "specialFights"} onClick={() => setActiveTab("specialFights")} />
+          <TabButton label="📁 Assets" active={activeTab === "assets"} onClick={() => setActiveTab("assets")} />
           <TabButton label="Loading Tips 💭" active={activeTab === "loadingTips"} onClick={() => setActiveTab("loadingTips")} />
         </div>
       </header>
@@ -76,6 +78,7 @@ export default function GMPage() {
         {activeTab === "subareas" && <SubAreasPanel />}
         {activeTab === "encounters" && <EncountersPanel />}
         {activeTab === "specialFights" && <SpecialFightsPanel />}
+        {activeTab === "assets" && <AssetManagerPanel />}
         {activeTab === "items" && <ItemsPanel />}
         {activeTab === "stories" && <StoriesPanel />}
         {activeTab === "loadingTips" && <LoadingTipsPanel />}
