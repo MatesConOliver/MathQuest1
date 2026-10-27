@@ -291,31 +291,37 @@ export default function Loc2VietaScales({
 }: SpecialFightProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Rounds state
-  const [currentRoundIndex, setCurrentRoundIndex] = useState(0); // 0, 1, 2
+  // Rounds state (2 epic rounds for 2-layer barrier)
+  const [currentRoundIndex, setCurrentRoundIndex] = useState(0); // 0 or 1
   const [selectedRounds, setSelectedRounds] = useState<VietaRound[]>([]);
-  const [shieldLayers, setShieldLayers] = useState(3);
+  const [shieldLayers, setShieldLayers] = useState(2); // 2 layers
   const [lives, setLives] = useState(3);
   const [isGameOver, setIsGameOver] = useState(false);
   const [isVictory, setIsVictory] = useState(false);
   const [isShattering, setIsShattering] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
 
-  // Entities state
+  // Boss defeat & fall animation state
+  const [bossState, setBossState] = useState<'normal' | 'hit' | 'falling' | 'fallen'>('normal');
+  const bossYRef = useRef(95);
+  const bossRotationRef = useRef(0);
+  const [isExitingTransition, setIsExitingTransition] = useState(false);
+
+  // Entities state - Grounded firmly on the stone dais rim (y = 335)
   const [runes, setRunes] = useState<RuneEntity[]>([]);
   const [pedestals, setPedestals] = useState<PedestalEntity[]>([
     {
       id: 'sum',
-      symbol: 'Σ αᵢ',
-      x: 300,
-      y: 250,
+      symbol: 'Σ',
+      x: 230,
+      y: 335,
       placedRuneId: null,
     },
     {
       id: 'product',
-      symbol: '∏ αᵢ',
-      x: 500,
-      y: 250,
+      symbol: '∏',
+      x: 570,
+      y: 335,
       placedRuneId: null,
     },
   ]);
@@ -349,20 +355,21 @@ export default function Loc2VietaScales({
   const owlImgRef = useRef<HTMLImageElement | null>(null);
   const foeImgRef = useRef<HTMLImageElement | null>(null);
   const bgImgRef = useRef<HTMLImageElement | null>(null);
-  const pedestalCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const sumPedestalCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const prodPedestalCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const runeCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
   // Pad cooldown so player doesn't trigger multiple times in one step
   const padTriggerCooldownRef = useRef(false);
 
-  // Initialize random 3 rounds on mount
+  // Initialize 2 rounds on mount: Round 1 (Quadratic/Cubic), Round 2 (High Degree/Centenary Colossus)
   useEffect(() => {
     const pickRandom = (arr: VietaRound[]) => arr[Math.floor(Math.random() * arr.length)];
+    const round2Combined = [...ROUND_2_POOL, ...ROUND_3_POOL];
     setSelectedRounds([
       pickRandom(ROUND_1_POOL),
-      pickRandom(ROUND_2_POOL),
-      pickRandom(ROUND_3_POOL),
+      pickRandom(round2Combined),
     ]);
 
     // Initialize snow particles
@@ -384,28 +391,35 @@ export default function Loc2VietaScales({
 
   // Preload game sprites & Location 2 visual assets
   useEffect(() => {
-    // 1. Mountain Summit Backdrop
+    // 1. Mountain Summit Backdrop (matching question fight)
     const bg = new Image();
     bg.src = LOCATION_2_ASSETS.SUMMIT_BACKDROP;
     bg.onload = () => {
       bgImgRef.current = bg;
     };
 
-    // 2. Carved Altar Pedestal Sprite
-    const pedImg = new Image();
-    pedImg.src = LOCATION_2_ASSETS.PEDESTAL;
-    pedImg.onload = () => {
-      pedestalCanvasRef.current = createProcessedTransparentCanvas(pedImg);
+    // 2. Engraved Sum Pedestal Sprite (Σ chiseled directly into the stone)
+    const sumImg = new Image();
+    sumImg.src = LOCATION_2_ASSETS.PEDESTAL_SUM;
+    sumImg.onload = () => {
+      sumPedestalCanvasRef.current = createProcessedTransparentCanvas(sumImg);
     };
 
-    // 3. Ancient Rune Tablet Sprite
+    // 3. Engraved Product Pedestal Sprite (∏ chiseled directly into the stone)
+    const prodImg = new Image();
+    prodImg.src = LOCATION_2_ASSETS.PEDESTAL_PRODUCT;
+    prodImg.onload = () => {
+      prodPedestalCanvasRef.current = createProcessedTransparentCanvas(prodImg);
+    };
+
+    // 4. Ancient Rune Tablet Sprite
     const rImg = new Image();
     rImg.src = LOCATION_2_ASSETS.RUNE_TABLET;
     rImg.onload = () => {
       runeCanvasRef.current = createProcessedTransparentCanvas(rImg);
     };
 
-    // 4. Player Owl
+    // 5. Player Owl
     const owl = new Image();
     owl.crossOrigin = 'anonymous';
     owl.src =
@@ -415,7 +429,7 @@ export default function Loc2VietaScales({
       owlImgRef.current = owl;
     };
 
-    // 5. Boss Foe
+    // 6. Boss Foe
     if (foe?.imageUrl) {
       const foeImg = new Image();
       foeImg.crossOrigin = 'anonymous';
@@ -436,20 +450,20 @@ export default function Loc2VietaScales({
     nextShootTimeRef.current = Date.now() + 2000;
     padTriggerCooldownRef.current = false;
 
-    // Reset pedestals
+    // Reset pedestals firmly on dais
     setPedestals([
       {
         id: 'sum',
-        symbol: 'Σ αᵢ',
-        x: 300,
-        y: 250,
+        symbol: 'Σ',
+        x: 230,
+        y: 335,
         placedRuneId: null,
       },
       {
         id: 'product',
-        symbol: '∏ αᵢ',
-        x: 500,
-        y: 250,
+        symbol: '∏',
+        x: 570,
+        y: 335,
         placedRuneId: null,
       },
     ]);
@@ -641,16 +655,15 @@ export default function Loc2VietaScales({
     const isProductCorrect = isFracEqual(prodRune.value, currentRound.productOfRoots);
 
     if (isSumCorrect && isProductCorrect) {
-      // SUCCESS! Shoot rays and shatter barrier layer
       setIsShattering(true);
 
-      // Spawn laser beams from both pedestals directly to boss
+      // Spawn celestial laser sparks from both pedestals
       pedestals.forEach((p) => {
-        createBurstParticles(p.x, p.y, '#38bdf8', 25);
-        for (let i = 0; i < 30; i++) {
+        createBurstParticles(p.x, p.y - 25, '#38bdf8', 25);
+        for (let i = 0; i < 25; i++) {
           particlesRef.current.push({
             x: p.x + (Math.random() - 0.5) * 20,
-            y: p.y,
+            y: p.y - 25,
             vx: (Math.random() - 0.5) * 2,
             vy: -4 - Math.random() * 5,
             size: 4 + Math.random() * 4,
@@ -662,20 +675,35 @@ export default function Loc2VietaScales({
         }
       });
 
-      // Boss hit explosion (no screen shake)
-      setTimeout(() => {
-        createBurstParticles(400, 100, '#f43f5e', 45);
-        setShieldLayers((prev) => Math.max(0, prev - 1));
-      }, 700);
+      if (currentRoundIndex === 0) {
+        // Round 1 Complete: Break Outer Shield Layer (2 -> 1)
+        setTimeout(() => {
+          createBurstParticles(400, 100, '#38bdf8', 45);
+          createBurstParticles(400, 100, '#a855f7', 25);
+          setShieldLayers(1);
+        }, 700);
 
-      setTimeout(() => {
-        setIsShattering(false);
-        if (currentRoundIndex < 2) {
-          setCurrentRoundIndex((prev) => prev + 1);
-        } else {
-          setIsVictory(true);
-        }
-      }, 1600);
+        setTimeout(() => {
+          setIsShattering(false);
+          setCurrentRoundIndex(1);
+        }, 1500);
+      } else {
+        // Round 2 Complete: Last laser shoots directly at the foe, shattering final layer!
+        setTimeout(() => {
+          setShieldLayers(0);
+          // Blinding strike explosion right on the foe
+          createBurstParticles(400, 95, '#f43f5e', 50);
+          createBurstParticles(400, 95, '#fef08a', 40);
+          createBurstParticles(400, 95, '#ffffff', 30);
+          // Foe takes direct unblocked laser strike and begins falling
+          projectilesRef.current = [];
+          setBossState('falling');
+        }, 700);
+
+        setTimeout(() => {
+          setIsShattering(false);
+        }, 1600);
+      }
     }
   }, [bothPedestalsFilled, isShattering, isVictory, isGameOver, currentRound, pedestals, runes, currentRoundIndex]);
 
@@ -958,91 +986,191 @@ export default function Loc2VietaScales({
         ctx.restore();
       });
 
-      // 7. Render Foe on the Summit Throne (Fully visible, not covered)
+      // 7. Render Foe on the Summit Throne (Dynamic falling & defeat physics)
       const bossX = 400;
-      const bossY = 95;
-      const hoverOffset = Math.sin(Date.now() / 320) * 5;
+      if (bossState === 'falling') {
+        if (bossYRef.current < 285) {
+          bossYRef.current += 4.5;
+          bossRotationRef.current = Math.min(Math.PI / 4, bossRotationRef.current + 0.04);
+        } else {
+          bossYRef.current = 285;
+          setBossState('fallen');
+          createBurstParticles(400, 290, '#cbd5e1', 35);
+          createBurstParticles(400, 290, '#38bdf8', 25);
+          setTimeout(() => {
+            setIsVictory(true);
+          }, 600);
+        }
+      }
 
+      const currentBossY = bossYRef.current;
+      const hoverOffset = bossState === 'normal' ? Math.sin(Date.now() / 320) * 5 : 0;
+
+      // Foe Ground Contact Shadow
       ctx.save();
       ctx.beginPath();
-      ctx.ellipse(bossX, bossY + 45, 55, 14, 0, 0, Math.PI * 2);
+      ctx.ellipse(bossX, currentBossY + (bossState === 'fallen' ? 26 : 45), 55, 14, 0, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
       ctx.filter = 'blur(4px)';
       ctx.fill();
       ctx.restore();
 
+      // Draw Foe Sprite / Emoji (rotates and rests on the ground when fallen)
+      ctx.save();
+      ctx.translate(bossX, currentBossY + hoverOffset);
+      if (bossRotationRef.current !== 0) {
+        ctx.rotate(bossRotationRef.current);
+      }
+      if (bossState === 'fallen') {
+        ctx.globalAlpha = 0.88;
+      }
+
       if (foeImgRef.current && foeImgRef.current.complete) {
-        ctx.drawImage(foeImgRef.current, bossX - 44, bossY - 44 + hoverOffset, 88, 88);
+        ctx.drawImage(foeImgRef.current, -44, -44, 88, 88);
       } else {
         ctx.font = '52px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(foe?.emoji || '👹', bossX, bossY + hoverOffset);
+        ctx.fillText(foe?.emoji || '👹', 0, 0);
       }
+      ctx.restore();
 
-      // Boss Runic Shield Rings
-      if (shieldLayers > 0) {
-        for (let s = 0; s < shieldLayers; s++) {
-          const radius = 58 + s * 13;
-          const spin = (Date.now() / (1100 + s * 280)) * (s % 2 === 0 ? 1 : -1);
+      // 2-Layer Prismatic Crystalline Frost Barrier (Redesigned with ice facets & orbital crystals)
+      if (shieldLayers > 0 && bossState === 'normal') {
+        const time = Date.now();
+
+        // Layer 1 (Inner Arcane Frost Barrier): Shown when shieldLayers >= 1
+        if (shieldLayers >= 1) {
           ctx.save();
-          ctx.translate(bossX, bossY + hoverOffset);
-          ctx.rotate(spin);
+          ctx.translate(bossX, currentBossY + hoverOffset);
+          const spin1 = time / 2200;
+          ctx.rotate(spin1);
+
           ctx.beginPath();
-          ctx.arc(0, 0, radius, 0, Math.PI * 2);
-          ctx.strokeStyle =
-            s === 0
-              ? 'rgba(239, 68, 68, 0.75)'
-              : s === 1
-              ? 'rgba(168, 85, 247, 0.65)'
-              : 'rgba(56, 189, 248, 0.6)';
-          ctx.lineWidth = 2.5;
-          ctx.setLineDash([10, 8]);
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3;
+            const r = 58 + Math.sin(time / 300 + i) * 2;
+            const hx = Math.cos(angle) * r;
+            const hy = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(hx, hy);
+            else ctx.lineTo(hx, hy);
+          }
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(99, 102, 241, 0.22)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(168, 85, 247, 0.9)';
+          ctx.lineWidth = 2.8;
+          ctx.shadowColor = '#a855f7';
+          ctx.shadowBlur = 14;
           ctx.stroke();
+
+          // Vertex runic nodes
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3;
+            const r = 58;
+            ctx.beginPath();
+            ctx.arc(Math.cos(angle) * r, Math.sin(angle) * r, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#f0abfc';
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+
+        // Layer 2 (Outer Prismatic Hexagonal Crystal Aegis): Shown when shieldLayers >= 2
+        if (shieldLayers >= 2) {
+          ctx.save();
+          ctx.translate(bossX, currentBossY + hoverOffset);
+          const spin2 = -(time / 3000);
+          ctx.rotate(spin2);
+
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3;
+            const r = 76 + Math.sin(time / 260 + i) * 3;
+            const hx = Math.cos(angle) * r;
+            const hy = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(hx, hy);
+            else ctx.lineTo(hx, hy);
+          }
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.22)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.95)';
+          ctx.lineWidth = 3.2;
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 18;
+          ctx.stroke();
+
+          // Orbiting Diamond Crystal Shards around outer shield
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3;
+            const r = 76;
+            const cx = Math.cos(angle) * r;
+            const cy = Math.sin(angle) * r;
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(time / 350 + i);
+            ctx.beginPath();
+            ctx.moveTo(0, -7);
+            ctx.lineTo(4.5, 0);
+            ctx.lineTo(0, 7);
+            ctx.lineTo(-4.5, 0);
+            ctx.closePath();
+            ctx.fillStyle = '#e0f2fe';
+            ctx.fill();
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+            ctx.restore();
+          }
           ctx.restore();
         }
       }
 
-      // Laser beams during shattering
+      // Laser Beams: Round 1 hits outer barrier; Round 2 fires DIRECTLY into the foe!
       if (isShattering) {
         pedestals.forEach((ped) => {
           ctx.save();
           ctx.beginPath();
-          ctx.moveTo(ped.x, ped.y - 20);
-          ctx.lineTo(bossX + (Math.random() - 0.5) * 15, bossY + hoverOffset);
-          ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
-          ctx.lineWidth = 6 + Math.random() * 4;
-          ctx.shadowColor = '#38bdf8';
-          ctx.shadowBlur = 16;
+          ctx.moveTo(ped.x, ped.y - 30);
+          ctx.lineTo(bossX + (Math.random() - 0.5) * 10, currentBossY + hoverOffset);
+          ctx.strokeStyle = currentRoundIndex === 1 ? 'rgba(254, 240, 138, 0.95)' : 'rgba(56, 189, 248, 0.95)';
+          ctx.lineWidth = currentRoundIndex === 1 ? 8 + Math.random() * 5 : 6 + Math.random() * 4;
+          ctx.shadowColor = currentRoundIndex === 1 ? '#fef08a' : '#38bdf8';
+          ctx.shadowBlur = 22;
           ctx.stroke();
           ctx.restore();
         });
       }
 
-      // 8. Render Flying Monomial Projectiles
-      projectilesRef.current.forEach((proj) => {
-        ctx.save();
-        ctx.shadowColor = proj.color;
-        ctx.shadowBlur = 14;
+      // 8. Render Flying Monomial Projectiles (inactive if boss is falling/fallen)
+      if (bossState === 'normal') {
+        projectilesRef.current.forEach((proj) => {
+          ctx.save();
+          ctx.shadowColor = proj.color;
+          ctx.shadowBlur = 14;
 
-        ctx.beginPath();
-        ctx.arc(proj.x, proj.y, proj.size, 0, Math.PI * 2);
-        ctx.fillStyle = '#dc2626';
-        ctx.fill();
-        ctx.strokeStyle = '#fef08a';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(proj.x, proj.y, proj.size, 0, Math.PI * 2);
+          ctx.fillStyle = '#dc2626';
+          ctx.fill();
+          ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = 2;
+          ctx.stroke();
 
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 11px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(proj.text, proj.x, proj.y);
-        ctx.restore();
-      });
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 11px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(proj.text, proj.x, proj.y);
+          ctx.restore();
+        });
+      }
 
-      // 9. Render Bigger Pedestals: Sum (Σ α_i) and Product (∏ α_i)
+      // 9. Render Firmly Grounded Pedestals: Sum (Left) and Product (Right)
+      // Symbols (Σ and ∏) are engraved directly in the stone sprites (NO painted text overlay!)
       pedestals.forEach((ped) => {
         const sumPed = pedestals.find((pd) => pd.id === 'sum');
         const prodPed = pedestals.find((pd) => pd.id === 'product');
@@ -1061,19 +1189,21 @@ export default function Loc2VietaScales({
           !isVictory &&
           ((ped.id === 'sum' && !isSumCorrect) || (ped.id === 'product' && !isProductCorrect));
 
-        // Shadow
+        // Ground Contact Shadow (solidly anchors the pillar on the stone dais rim)
         ctx.beginPath();
-        ctx.ellipse(ped.x, ped.y + 18, 42, 14, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.ellipse(ped.x, ped.y + 20, 48, 15, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
         ctx.fill();
 
         const hasRune = ped.placedRuneId !== null;
 
-        // Render carved altar sprite or procedural fallback
-        if (pedestalCanvasRef.current) {
+        // Render carved engraved pillar sprite (Sum or Product)
+        const activePedCanvas = ped.id === 'sum' ? sumPedestalCanvasRef.current : prodPedestalCanvasRef.current;
+
+        if (activePedCanvas) {
           const pw = 84;
-          const ph = 102;
-          ctx.drawImage(pedestalCanvasRef.current, ped.x - pw / 2, ped.y - ph + 24, pw, ph);
+          const ph = 104;
+          ctx.drawImage(activePedCanvas, ped.x - pw / 2, ped.y - ph + 24, pw, ph);
 
           // Glowing socket on altar top
           ctx.beginPath();
@@ -1081,11 +1211,10 @@ export default function Loc2VietaScales({
           ctx.fillStyle = hasRune ? 'rgba(56, 189, 248, 0.85)' : 'rgba(14, 165, 233, 0.25)';
           ctx.fill();
         } else {
-          // Mountain stone altar column (wider and taller)
+          // Procedural stone pillar fallback
           ctx.fillStyle = '#334155';
-          ctx.fillRect(ped.x - 34, ped.y - 30, 68, 46);
+          ctx.fillRect(ped.x - 34, ped.y - 30, 68, 50);
 
-          // Snow dusting on top of altar
           ctx.fillStyle = '#f8fafc';
           ctx.beginPath();
           ctx.ellipse(ped.x, ped.y - 30, 36, 12, 0, 0, Math.PI * 2);
@@ -1094,42 +1223,23 @@ export default function Loc2VietaScales({
           ctx.lineWidth = 2.5;
           ctx.stroke();
 
-          // Socket
           ctx.beginPath();
           ctx.ellipse(ped.x, ped.y - 30, 24, 8, 0, 0, Math.PI * 2);
           ctx.fillStyle = hasRune ? 'rgba(56, 189, 248, 0.85)' : 'rgba(71, 85, 105, 0.4)';
           ctx.fill();
         }
 
-        // Altar Greek Engraving on Column Face (BIGGER, NO SUBTEXT)
-        ctx.save();
-        ctx.fillStyle = '#fef08a';
-        ctx.shadowColor = 'rgba(250, 204, 21, 0.7)';
-        ctx.shadowBlur = 9;
-        ctx.font = 'bold 24px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(ped.symbol, ped.x, ped.y - 12);
-        ctx.restore();
-
         // Pulsate RED when altar has wrong rune and owl is on the platform
         if (isWrongOnPad) {
           const redPulse = (Math.sin(Date.now() / 110) + 1) / 2;
           ctx.save();
-          // Pulsing red aura ring around the pedestal
           ctx.beginPath();
-          ctx.ellipse(ped.x, ped.y - 10, 50 + redPulse * 8, 40 + redPulse * 6, 0, 0, Math.PI * 2);
+          ctx.ellipse(ped.x, ped.y - 10, 52 + redPulse * 8, 42 + redPulse * 6, 0, 0, Math.PI * 2);
           ctx.strokeStyle = `rgba(239, 68, 68, ${0.45 + redPulse * 0.55})`;
           ctx.lineWidth = 3.5;
           ctx.shadowColor = '#ef4444';
           ctx.shadowBlur = 22 + redPulse * 15;
           ctx.stroke();
-
-          // Pulsing red overlay on altar face
-          ctx.fillStyle = `rgba(239, 68, 68, ${0.25 + redPulse * 0.35})`;
-          ctx.beginPath();
-          ctx.ellipse(ped.x, ped.y - 14, 34, 40, 0, 0, Math.PI * 2);
-          ctx.fill();
           ctx.restore();
         }
 
@@ -1137,7 +1247,7 @@ export default function Loc2VietaScales({
         if (hasRune) {
           const placedRune = runes.find((r) => r.id === ped.placedRuneId);
           if (placedRune) {
-            const floatY = ped.y - 64 + Math.sin(Date.now() / 250) * 3;
+            const floatY = ped.y - 68 + Math.sin(Date.now() / 250) * 3;
             drawRuneStone(ctx, placedRune, ped.x, floatY, true);
           }
         }
@@ -1247,34 +1357,64 @@ export default function Loc2VietaScales({
         }
       }
 
-      // 13. Render Player (The Owl) with Damage Blinking
+      // 13. Render Player (The Owl) - Fully Opaque & High Contrast
+      ctx.save();
+      ctx.globalAlpha = 1.0;
+
       const bob = p.isMoving ? Math.sin(p.walkCycle) * 3 : 0;
       const playerY = p.y + bob;
 
+      // Solid Ground Contact Shadow
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y + 16, 20, 7, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.ellipse(p.x, p.y + 16, 22, 8, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
       ctx.fill();
 
-      const isBlinking = p.invulnerableFrames > 0 && Math.floor(p.invulnerableFrames / 6) % 2 === 0;
-
-      if (!isBlinking) {
+      // Damage blinking: pulse a red shield ring instead of disappearing
+      const isDamaged = p.invulnerableFrames > 0;
+      if (isDamaged) {
         ctx.save();
-        ctx.translate(p.x, playerY);
-        if (p.facing === 'left') {
-          ctx.scale(-1, 1);
-        }
-
-        if (owlImgRef.current && owlImgRef.current.complete) {
-          ctx.drawImage(owlImgRef.current, -24, -36, 48, 48);
-        } else {
-          ctx.font = '36px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('🦉', 0, -10);
-        }
+        ctx.beginPath();
+        ctx.arc(p.x, playerY - 12, 28, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+        ctx.fill();
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur = 10;
+        ctx.stroke();
         ctx.restore();
       }
+
+      ctx.save();
+      ctx.translate(p.x, playerY);
+      if (p.facing === 'left') {
+        ctx.scale(-1, 1);
+      }
+
+      if (owlImgRef.current && owlImgRef.current.complete) {
+        ctx.drawImage(owlImgRef.current, -26, -38, 52, 52);
+      } else {
+        // Opaque backing disc with subtle glowing cyan rim so the 🦉 emoji is NEVER transparent or washed out
+        ctx.beginPath();
+        ctx.arc(0, -10, 22, 0, Math.PI * 2);
+        ctx.fillStyle = '#0f172a'; // solid deep slate backing
+        ctx.fill();
+        ctx.strokeStyle = '#38bdf8'; // bright cyan rim
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Opaque crisp emoji text
+        ctx.font = '34px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🦉', 0, -9);
+      }
+      ctx.restore();
+      ctx.restore();
 
       // Carried Rune floating over head
       if (heldRuneId) {
@@ -1325,7 +1465,7 @@ export default function Loc2VietaScales({
       running = false;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [pedestals, runes, heldRuneId, shieldLayers, isShattering, isGameOver, isVictory, foe, currentRound, bothPedestalsFilled, evaluateAltar]);
+  }, [pedestals, runes, heldRuneId, shieldLayers, isShattering, isGameOver, isVictory, foe, currentRound, bothPedestalsFilled, evaluateAltar, bossState, currentRoundIndex]);
 
   // Helper: Draw Rune Stone on Canvas (Supports fractions!)
   const drawRuneStone = (
@@ -1415,23 +1555,28 @@ export default function Loc2VietaScales({
 
   // Close / Skip controls for GM test mode
   const handleSkipRound = () => {
-    if (currentRoundIndex < 2) {
-      setShieldLayers((prev) => Math.max(0, prev - 1));
-      setCurrentRoundIndex((prev) => prev + 1);
+    if (currentRoundIndex < 1) {
+      setShieldLayers(1);
+      setCurrentRoundIndex(1);
     } else {
+      setShieldLayers(0);
+      setBossState('fallen');
       setIsVictory(true);
     }
   };
 
-  // Exit / Continue handler
-  const handleFinishVictory = () => {
-    onComplete({
-      success: true,
-      message: 'All 3 Viète polynomial seals shattered!',
-    });
-    if (isTestMode && onCloseTest) {
-      onCloseTest();
-    }
+  // Exit transition handler with cinematic curtain sweep back to battle
+  const handleTriggerExitTransition = () => {
+    setIsExitingTransition(true);
+    setTimeout(() => {
+      onComplete({
+        success: true,
+        message: 'Function imp defeated!',
+      });
+      if (isTestMode && onCloseTest) {
+        onCloseTest();
+      }
+    }, 750);
   };
 
   const handleRetryAfterGameOver = () => {
@@ -1457,18 +1602,18 @@ export default function Loc2VietaScales({
   return (
     <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-between p-2 sm:p-4 select-none overflow-hidden">
       {/* 1. TOP HEADER & HUD */}
-      <div className="w-full max-w-4xl flex flex-col items-center gap-1 shrink-0 z-20">
+      <div className="w-full max-w-4xl flex flex-col items-center gap-1.5 shrink-0 z-20">
         <div className="w-full flex items-center justify-between text-xs sm:text-sm text-gray-300 px-2">
-          {/* Left: Round & Shield Indicator */}
+          {/* Left: Round & Shield Indicator (2 Rounds, 2 Layers) */}
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-1 rounded-full bg-slate-800/90 border border-cyan-500/40 text-cyan-300 font-bold tracking-wider text-[11px] sm:text-xs uppercase flex items-center gap-1.5 shadow-md">
               <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
-              Round {currentRoundIndex + 1} / 3
+              Round {currentRoundIndex + 1} / 2
             </span>
-            <div className="flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded-full border border-red-500/30">
-              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-              <span className="text-red-300 text-xs font-mono font-bold">
-                Shields: {shieldLayers}/3
+            <div className="flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded-full border border-cyan-500/30">
+              <ShieldAlert className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-cyan-300 text-xs font-mono font-bold">
+                Shields: {shieldLayers}/2
               </span>
             </div>
           </div>
@@ -1507,7 +1652,11 @@ export default function Loc2VietaScales({
                   <Zap className="w-3 h-3" /> Skip Round
                 </button>
                 <button
-                  onClick={() => setIsVictory(true)}
+                  onClick={() => {
+                    setShieldLayers(0);
+                    setBossState('fallen');
+                    setIsVictory(true);
+                  }}
                   className="px-2 py-1 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-white text-[11px] font-bold"
                 >
                   Instant Win
@@ -1526,9 +1675,21 @@ export default function Loc2VietaScales({
             )}
           </div>
         </div>
+
+        {/* ELEGANT TOP RUNIC OBJECTIVE BANNER (REPLACES FLOATING OVER-THE-HEAD POLYNOMIAL) */}
+        <div className="w-full flex items-center justify-center">
+          <div className="bg-slate-900/95 border border-amber-400/50 backdrop-blur-md px-4 sm:px-6 py-1.5 rounded-2xl shadow-[0_0_20px_rgba(245,158,11,0.25)] flex items-center gap-2 sm:gap-3">
+            <span className="text-[11px] sm:text-xs uppercase font-black tracking-wider text-amber-300 flex items-center gap-1.5 shrink-0">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Harmonize Viète Altar:
+            </span>
+            <div className="text-sm sm:text-base md:text-lg text-yellow-300 font-black tracking-wide drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">
+              <InlineMath math={currentRound?.latex || ''} />
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* 2. THE 2D CANVAS ARENA (800x600 coordinate space) */}
+      {/* 2. THE 2D CANVAS ARENA (800x600 coordinate space) - FOE IS FULLY UNOBSTRUCTED */}
       <div className="relative w-full max-w-4xl flex-1 flex items-center justify-center my-1 overflow-hidden">
         <canvas
           ref={canvasRef}
@@ -1537,13 +1698,6 @@ export default function Loc2VietaScales({
           onClick={handleInteract}
           className="w-full h-full max-h-[66vh] object-contain rounded-2xl border-2 border-slate-700/60 shadow-[0_15px_40px_rgba(0,0,0,0.9)] cursor-pointer"
         />
-
-        {/* FLOATING GLOWING POLYNOMIAL ONLY (REFINED SIZE, NO PLAQUE, NO TITLE, NO DEGREE - FOE FULLY VISIBLE BEHIND) */}
-        <div className="absolute top-[13%] sm:top-[15%] left-1/2 -translate-x-1/2 pointer-events-none z-20 text-center select-none w-full px-4">
-          <div className="text-base sm:text-xl md:text-2xl text-yellow-300 font-black tracking-wide drop-shadow-[0_0_12px_rgba(250,204,21,0.9)] drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-            <InlineMath math={currentRound?.latex || ''} />
-          </div>
-        </div>
 
         {/* Controls Legend overlay */}
         <div className="absolute top-2 left-2 pointer-events-none hidden sm:flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[11px] text-gray-300">
@@ -1710,22 +1864,30 @@ export default function Loc2VietaScales({
       {/* 6. VICTORY OVERLAY MODAL */}
       {isVictory && (
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-300">
-          <div className="bg-gradient-to-b from-slate-900 to-cyan-950 border-2 border-yellow-400/60 rounded-3xl p-6 sm:p-8 max-w-lg w-full text-center shadow-[0_0_50px_rgba(234,179,8,0.35)] relative overflow-hidden">
+          <div className="bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-950 border-2 border-yellow-400/60 rounded-3xl p-6 sm:p-8 max-w-lg w-full text-center shadow-[0_0_50px_rgba(234,179,8,0.35)] relative overflow-hidden">
             <div className="absolute -top-12 -left-12 w-32 h-32 bg-yellow-500/20 rounded-full blur-2xl" />
             <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-cyan-500/20 rounded-full blur-2xl" />
 
-            <div className="w-16 h-16 rounded-2xl bg-yellow-500/20 border-2 border-yellow-400 flex items-center justify-center mx-auto mb-4 shadow-[0_0_20px_rgba(234,179,8,0.5)]">
+            <div className="w-16 h-16 rounded-2xl bg-yellow-500/20 border-2 border-yellow-400 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(234,179,8,0.5)]">
               <Award className="w-9 h-9 text-yellow-300" />
             </div>
 
-            <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wider mb-5">
-              All 3 seals shattered!
+            <div className="inline-block px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-bold uppercase tracking-wider mb-2">
+              Altar Trial Victory
+            </div>
+
+            <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wider mb-2">
+              Function imp
             </h2>
+
+            <p className="text-sm text-gray-300 mb-6 leading-relaxed">
+              The dual celestial lasers of Sum and Product pierced the barrier and struck down the Function imp!
+            </p>
 
             <div className="bg-black/60 rounded-xl p-3 mb-6 border border-white/10 flex items-center justify-around text-xs">
               <div>
-                <span className="text-gray-400 block">Seals Broken</span>
-                <span className="text-base font-black text-yellow-300">3 / 3</span>
+                <span className="text-gray-400 block">Seals Harmonized</span>
+                <span className="text-base font-black text-yellow-300">2 / 2</span>
               </div>
               <div className="w-px h-8 bg-white/10" />
               <div>
@@ -1735,12 +1897,21 @@ export default function Loc2VietaScales({
             </div>
 
             <button
-              onClick={handleFinishVictory}
+              onClick={handleTriggerExitTransition}
               className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-yellow-500 via-amber-500 to-orange-500 text-black font-black text-base uppercase tracking-wider shadow-[0_0_25px_rgba(245,158,11,0.6)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
             >
               <Zap className="w-5 h-5 text-black" />
-              {isTestMode ? 'Back to Test Lab' : 'Continue Fight'}
+              {isTestMode ? 'Back to Test Lab' : 'Resume Battle ⚔️'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 7. CINEMATIC EXIT TRANSITION (Right to Left Wipe Back to Battle) */}
+      {isExitingTransition && (
+        <div className="fixed inset-0 z-50 pointer-events-auto bg-black animate-black-wipe-in flex items-center justify-center">
+          <div className="text-cyan-400 font-mono font-bold text-sm tracking-widest uppercase flex items-center gap-2 animate-pulse">
+            <Sparkles className="w-5 h-5 text-cyan-300" /> Returning to Battle...
           </div>
         </div>
       )}

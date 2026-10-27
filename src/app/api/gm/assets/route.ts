@@ -145,6 +145,25 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err: unknown) {
+    const isErofs =
+      err &&
+      typeof err === 'object' &&
+      ('code' in err && (err as { code: string }).code === 'EROFS' ||
+       'message' in err && typeof (err as { message: string }).message === 'string' &&
+       (err as { message: string }).message.includes('read-only file system'));
+
+    if (isErofs) {
+      return NextResponse.json(
+        {
+          success: false,
+          isReadOnly: true,
+          error:
+            'Serverless environment has a read-only filesystem (/var/task). Please upload directly to Firebase Storage using the Cloud storage option in the panel.',
+        },
+        { status: 403 }
+      );
+    }
+
     const message = err instanceof Error ? err.message : 'Upload failed';
     return NextResponse.json({ success: false, error: message }, { status: 400 });
   }

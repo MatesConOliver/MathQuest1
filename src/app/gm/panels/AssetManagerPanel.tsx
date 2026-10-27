@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { storage } from '@/lib/firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
   Folder,
   FolderOpen,
@@ -18,6 +20,8 @@ import {
   ExternalLink,
   Info,
   X,
+  Cloud,
+  HardDrive,
 } from 'lucide-react';
 
 interface AssetFile {
@@ -48,6 +52,9 @@ export function AssetManagerPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Storage Target: 'cloud' (Firebase Storage) or 'local' (/public)
+  const [storageDestination, setStorageDestination] = useState<'cloud' | 'local'>('cloud');
+
   // Upload State
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
@@ -60,6 +67,23 @@ export function AssetManagerPanel() {
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [inspectImage, setInspectImage] = useState<AssetFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Helper to format bytes
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  };
+
+  // Upload to Firebase Storage helper
+  const uploadToFirebaseStorage = async (file: File, filename: string): Promise<string> => {
+    const cloudPath = `${activeFolder}/${filename}`;
+    const fileRef = storageRef(storage, cloudPath);
+    await uploadBytes(fileRef, file);
+    return await getDownloadURL(fileRef);
+  };
 
   // Fetch file list for current folder
   const loadFiles = useCallback(async () => {
@@ -108,8 +132,7 @@ export function AssetManagerPanel() {
     setError(null);
 
     // Auto-fill custom name with original name without extension
-    const ext = file.name.substring(file.name.lastIndexOf('.'));
-    const base = file.name.substring(0, file.name.lastIndexOf('.'));
+    const base = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
     setCustomFileName(base);
 
     // Create thumbnail preview
@@ -131,33 +154,101 @@ export function AssetManagerPanel() {
     setError(null);
     setUploadSuccess(null);
 
+    // Determine clean filename
+    const originalExt = selectedUploadFile.name.substring(selectedUploadFile.name.lastIndexOf('.')).toLowerCase() || '.png';
+    let safeBaseName = (customFileName && customFileName.trim() !== '') ? customFileName.trim() : selectedUploadFile.name.substring(0, selectedUploadFile.name.lastIndexOf('.'));
+    safeBaseName = safeBaseName.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim();
+    if (!safeBaseName) safeBaseName = 'asset';
+    const finalFilename = safeBaseName.endsWith(originalExt) ? safeBaseName : `${safeBaseName}${originalExt}`;
+
     try {
-      const formData = new FormData();
-      formData.append('file', selectedUploadFile);
-      formData.append('folder', activeFolder);
-      if (customFileName.trim()) {
-        formData.append('customName', customFileName.trim());
-      }
-
-      const res = await fetch('/api/gm/assets', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setUploadSuccess(`Successfully uploaded ${data.file.name}!`);
+      if (storageDestination === 'cloud') {
+        // Direct Firebase Storage Upload
+        const downloadUrl = await uploadToFirebaseStorage(selectedUploadFile, finalFilename);
+        setUploadSuccess(`Uploaded to Firebase Cloud Storage!`);
+        // Add to active view
+        const newAsset: AssetFile = {
+          name: finalFilename,
+          path: downloadUrl,
+          size: selectedUploadFile.size,
+          sizeFormatted: formatBytes(selectedUploadFile.size),
+          modifiedAt: new Date().toISOString(),
+          isImage: true,
+          extension: originalExt,
+        };
+        setFiles((prev) => [newAsset, ...prev.filter((f) => f.name !== finalFilename)]);
         setSelectedUploadFile(null);
         setCustomFileName('');
         setPreviewDataUrl(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        loadFiles();
-        loadSummary();
       } else {
-        setError(data.error || 'Upload failed');
+        // Attempt local public directory upload
+        const formData = new FormData();
+        formData.append('file', selectedUploadFile);
+        formData.append('folder', activeFolder);
+        if (customFileName.trim()) {
+          formData.append('customName', customFileName.trim());
+        }
+
+        const res = await fetch('/api/gm/assets', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          setUploadSuccess(`Successfully uploaded ${data.file.name} to /public!`);
+          setSelectedUploadFile(null);
+          setCustomFileName('');
+          setPreviewDataUrl(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          loadFiles();
+          loadSummary();
+        } else if (data.isReadOnly) {
+          // Seamless auto-fallback to Firebase Storage when serverless container has read-only filesystem!
+          const downloadUrl = await uploadToFirebaseStorage(selectedUploadFile, finalFilename);
+          setUploadSuccess(`Read-only server detected — auto-saved to Firebase Storage!`);
+          const newAsset: AssetFile = {
+            name: finalFilename,
+            path: downloadUrl,
+            size: selectedUploadFile.size,
+            sizeFormatted: formatBytes(selectedUploadFile.size),
+            modifiedAt: new Date().toISOString(),
+            isImage: true,
+            extension: originalExt,
+          };
+          setFiles((prev) => [newAsset, ...prev.filter((f) => f.name !== finalFilename)]);
+          setSelectedUploadFile(null);
+          setCustomFileName('');
+          setPreviewDataUrl(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        } else {
+          setError(data.error || 'Upload failed');
+        }
       }
-    } catch {
-      setError('Network error while uploading');
+    } catch (err: unknown) {
+      // In case of any network/CORS error uploading to local, try Firebase Storage
+      try {
+        const downloadUrl = await uploadToFirebaseStorage(selectedUploadFile, finalFilename);
+        setUploadSuccess(`Auto-fallback: Uploaded to Firebase Cloud Storage!`);
+        const newAsset: AssetFile = {
+          name: finalFilename,
+          path: downloadUrl,
+          size: selectedUploadFile.size,
+          sizeFormatted: formatBytes(selectedUploadFile.size),
+          modifiedAt: new Date().toISOString(),
+          isImage: true,
+          extension: originalExt,
+        };
+        setFiles((prev) => [newAsset, ...prev.filter((f) => f.name !== finalFilename)]);
+        setSelectedUploadFile(null);
+        setCustomFileName('');
+        setPreviewDataUrl(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      } catch (cloudErr: unknown) {
+        const msg = cloudErr instanceof Error ? cloudErr.message : 'Upload failed';
+        setError(msg);
+      }
     } finally {
       setIsUploading(false);
     }
@@ -343,11 +434,39 @@ export function AssetManagerPanel() {
 
       {/* 3. Drag-and-Drop Uploader Card */}
       <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-            <Upload className="w-4 h-4 text-indigo-500" /> Upload Asset to /{activeFolder}
-          </h3>
-          <span className="text-xs text-gray-400 font-mono">PNG, JPG, WEBP, SVG</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+              <Upload className="w-4 h-4 text-indigo-500" /> Upload Asset to /{activeFolder}
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">PNG, JPG, WEBP, SVG • Saved permanently for your game</p>
+          </div>
+
+          {/* Storage Destination Selector */}
+          <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setStorageDestination('cloud')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                storageDestination === 'cloud'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-white'
+              }`}
+            >
+              <Cloud className="w-3.5 h-3.5" /> Firebase Cloud
+            </button>
+            <button
+              type="button"
+              onClick={() => setStorageDestination('local')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                storageDestination === 'local'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-white'
+              }`}
+            >
+              <HardDrive className="w-3.5 h-3.5" /> Local Public
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleUpload} className="space-y-4">
