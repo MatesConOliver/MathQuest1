@@ -32,12 +32,13 @@ export function getGeneralAssetPath(subfolder: 'gear' | 'consumables' | 'others'
   return filename ? `${base}/${filename}` : base;
 }
 
-// Pre-defined sprite assets for Location 2 ("Vieta's Arcane Altar")
 export const LOCATION_2_ASSETS = {
   SUMMIT_BACKDROP: '/Assets/Location specific/location 2/summit_backdrop.jpg',
   NEW_SUMMIT_BACKDROP: '/Assets/Location specific/location 2/new summit.png',
   PEDESTAL: '/Assets/Location specific/location 2/pedestal.jpg',
   PEDESTAL_SUM: '/Assets/Location specific/location 2/pedestal_sum.png',
   PEDESTAL_PRODUCT: '/Assets/Location specific/location 2/pedestal_product.png',
+  STEP_DAIS: '/Assets/Location specific/location 2/step_dais.png',
   RUNE_TABLET: '/Assets/Location specific/location 2/rune_tablet.jpg',
+  OWL_SPRITE: '/Assets/Location specific/location 2/owl_sprite.png',
 } as const;

@@ -11,7 +11,6 @@ import {
   Zap,
   HelpCircle,
   X,
-  Award,
   ArrowUp,
   ArrowDown,
   ArrowLeft,
@@ -21,9 +20,79 @@ import {
   Skull,
   RotateCcw,
 } from 'lucide-react';
+import { getLoc2SpriteConfig, Loc2SpriteConfig } from '@/config/specialFightSprites';
+
+// Render an emoji completely 100% opaque on an offscreen canvas with solid backing & clamped alpha
+function createOpaqueEmojiCanvas(emoji: string, size = 128): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const fontSize = Math.round(size * 0.74);
+
+  // 1. Probe canvas to calculate exact alpha bounds
+  const probe = document.createElement('canvas');
+  probe.width = size;
+  probe.height = size;
+  const pCtx = probe.getContext('2d');
+  if (!pCtx) return canvas;
+
+  pCtx.font = `${fontSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+  pCtx.textAlign = 'center';
+  pCtx.textBaseline = 'middle';
+  pCtx.fillText(emoji, cx, cy);
+
+  try {
+    const probeData = pCtx.getImageData(0, 0, size, size);
+    const pD = probeData.data;
+
+    // Solid opaque backing under any non-transparent pixel so background NEVER bleeds through
+    const maskData = ctx.createImageData(size, size);
+    const mD = maskData.data;
+    for (let i = 0; i < pD.length; i += 4) {
+      if (pD[i + 3] > 8) {
+        mD[i] = 255;
+        mD[i + 1] = 255;
+        mD[i + 2] = 255;
+        mD[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(maskData, 0, 0);
+
+    // 2. Draw crisp emoji centered over the solid white backing
+    ctx.font = `${fontSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, cx, cy);
+
+    // 3. Force 100% opacity on all rendered pixels (alpha = 255)
+    const finalData = ctx.getImageData(0, 0, size, size);
+    const fD = finalData.data;
+    for (let i = 0; i < fD.length; i += 4) {
+      if (fD[i + 3] > 8) {
+        fD[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(finalData, 0, 0);
+  } catch {
+    ctx.font = `${fontSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, cx, cy);
+  }
+
+  return canvas;
+}
 
 // Process a sprite on an offscreen canvas to turn white background into smooth alpha transparency
-function createProcessedTransparentCanvas(img: HTMLImageElement): HTMLCanvasElement {
+function createProcessedTransparentCanvas(
+  img: HTMLImageElement,
+  mode: 'removeWhite' | 'removeDark' = 'removeWhite'
+): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = img.naturalWidth || img.width || 256;
   canvas.height = img.naturalHeight || img.height || 256;
@@ -37,12 +106,26 @@ function createProcessedTransparentCanvas(img: HTMLImageElement): HTMLCanvasElem
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
-      if (r > 230 && g > 230 && b > 230) {
-        const avg = (r + g + b) / 3;
-        if (avg >= 245) {
-          data[i + 3] = 0;
-        } else {
-          data[i + 3] = Math.round(((245 - avg) / 15) * 255);
+      if (mode === 'removeWhite') {
+        const minVal = Math.min(r, g, b);
+        const maxVal = Math.max(r, g, b);
+        const diff = maxVal - minVal;
+        if (minVal > 210 && diff < 30) {
+          const avg = (r + g + b) / 3;
+          if (avg >= 238) {
+            data[i + 3] = 0;
+          } else {
+            data[i + 3] = Math.round(((238 - avg) / 28) * 255);
+          }
+        }
+      } else if (mode === 'removeDark') {
+        const maxVal = Math.max(r, g, b);
+        if (maxVal < 36) {
+          if (maxVal < 20) {
+            data[i + 3] = 0;
+          } else {
+            data[i + 3] = Math.round(((maxVal - 20) / 16) * 255);
+          }
         }
       }
     }
@@ -98,10 +181,10 @@ interface VietaRound {
   monomialPool: string[];
 }
 
-// 3 increasingly epic rounds with non-1 leading coefficients & fractional values:
+// 3 distinct rounds:
 // Round 1: Quadratic / Cubic (Degree 2 or 3)
-// Round 2: Degree 3, 4, 5
-// Round 3: High Degree (Degree 20, 50, 77, 100!)
+// Round 2: Cubic / Quartic / Quintic (Degree 3, 4, 5)
+// Round 3: High Degree (Degree 50, 77, 100!)
 const ROUND_1_POOL: VietaRound[] = [
   {
     title: 'Trial of the Snowy Ridge',
@@ -231,6 +314,7 @@ interface RuneEntity {
 interface PedestalEntity {
   id: 'sum' | 'product';
   symbol: string;
+  sublabel: string;
   x: number;
   y: number;
   placedRuneId: string | null;
@@ -280,7 +364,7 @@ const RUNE_PALETTES = [
 // Activation pad coordinates
 const PAD_X = 400;
 const PAD_Y = 515;
-const PAD_RADIUS = 36;
+const PAD_RADIUS = 38;
 
 export default function Loc2VietaScales({
   foe,
@@ -288,40 +372,83 @@ export default function Loc2VietaScales({
   onComplete,
   isTestMode = false,
   onCloseTest,
+  spriteConfig: spriteConfigProp,
 }: SpecialFightProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Rounds state (2 epic rounds for 2-layer barrier)
-  const [currentRoundIndex, setCurrentRoundIndex] = useState(0); // 0 or 1
+  // Active Sprite Config (customizable from GM Special Fights Panel)
+  const [spriteConfig, setSpriteConfig] = useState<Loc2SpriteConfig>(() => {
+    return (spriteConfigProp as Loc2SpriteConfig) || getLoc2SpriteConfig();
+  });
+
+  useEffect(() => {
+    if (spriteConfigProp) {
+      setSpriteConfig(spriteConfigProp as Loc2SpriteConfig);
+    }
+  }, [spriteConfigProp]);
+
+  // Real-time listener for changes made in the GM Special Fights Panel
+  useEffect(() => {
+    const handleUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<Loc2SpriteConfig>;
+      if (customEvent.detail) {
+        setSpriteConfig(customEvent.detail);
+      } else {
+        setSpriteConfig(getLoc2SpriteConfig());
+      }
+    };
+    window.addEventListener('specialFightSpritesUpdated', handleUpdate);
+    return () => window.removeEventListener('specialFightSpritesUpdated', handleUpdate);
+  }, []);
+
+  // Rounds state: 3 epic rounds
+  // Round 1 (0): 2 seals -> breaks 1 seal (shields = 1)
+  // Round 2 (1): 1 seal -> breaks last seal (shields = 0, unprotected!)
+  // Round 3 (2): Unprotected foe -> direct laser hit -> foe falls!
+  const [currentRoundIndex, setCurrentRoundIndex] = useState(0); // 0, 1, or 2
   const [selectedRounds, setSelectedRounds] = useState<VietaRound[]>([]);
-  const [shieldLayers, setShieldLayers] = useState(2); // 2 layers
+  const [shieldLayers, setShieldLayers] = useState(2); // 2 layers -> 1 -> 0
   const [lives, setLives] = useState(3);
   const [isGameOver, setIsGameOver] = useState(false);
-  const [isVictory, setIsVictory] = useState(false);
   const [isShattering, setIsShattering] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
-
-  // Boss defeat & fall animation state
-  const [bossState, setBossState] = useState<'normal' | 'hit' | 'falling' | 'fallen'>('normal');
+  // Boss defeat & rage state:
+  // 'normal': hovering & firing projectiles
+  // 'falling': tumbling down after round 3 unprotected laser strike
+  // 'fallen': landed on floor
+  // 'raging': shaking on floor with speech bubble "It's not over!"
+  const [bossState, setBossState] = useState<'normal' | 'hit' | 'falling' | 'fallen' | 'raging'>('normal');
   const bossYRef = useRef(95);
   const bossRotationRef = useRef(0);
   const [isExitingTransition, setIsExitingTransition] = useState(false);
 
-  // Entities state - Grounded firmly on the stone dais rim (y = 335)
+  const onCompleteRef = useRef(onComplete);
+  const isTestModeRef = useRef(isTestMode);
+  const onCloseTestRef = useRef(onCloseTest);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+    isTestModeRef.current = isTestMode;
+    onCloseTestRef.current = onCloseTest;
+  }, [onComplete, isTestMode, onCloseTest]);
+
+  // Flat Altar Platforms - wider and firmly grounded at y = 340
   const [runes, setRunes] = useState<RuneEntity[]>([]);
   const [pedestals, setPedestals] = useState<PedestalEntity[]>([
     {
       id: 'sum',
-      symbol: 'Σ',
+      symbol: '∑ αᵢ',
+      sublabel: 'SUM OF ROOTS',
       x: 230,
-      y: 335,
+      y: 340,
       placedRuneId: null,
     },
     {
       id: 'product',
-      symbol: '∏',
+      symbol: '∏ αᵢ',
+      sublabel: 'PRODUCT OF ROOTS',
       x: 570,
-      y: 335,
+      y: 340,
       placedRuneId: null,
     },
   ]);
@@ -353,26 +480,30 @@ export default function Loc2VietaScales({
 
   // Sprites
   const owlImgRef = useRef<HTMLImageElement | null>(null);
+  const owlCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const foeImgRef = useRef<HTMLImageElement | null>(null);
+  const foeCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const sumPedestalCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const prodPedestalCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const stepDaisCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const runeCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
-  // Pad cooldown so player doesn't trigger multiple times in one step
+  // Pad cooldown & defeat trigger guard
   const padTriggerCooldownRef = useRef(false);
+  const hasTriggeredFallenRef = useRef(false);
 
-  // Initialize 2 rounds on mount: Round 1 (Quadratic/Cubic), Round 2 (High Degree/Centenary Colossus)
+  // Initialize 3 rounds on mount: Round 1 (Quad/Cubic), Round 2 (Cubic/Quartic), Round 3 (Centenary/High degree)
   useEffect(() => {
     const pickRandom = (arr: VietaRound[]) => arr[Math.floor(Math.random() * arr.length)];
-    const round2Combined = [...ROUND_2_POOL, ...ROUND_3_POOL];
     setSelectedRounds([
       pickRandom(ROUND_1_POOL),
-      pickRandom(round2Combined),
+      pickRandom(ROUND_2_POOL),
+      pickRandom(ROUND_3_POOL),
     ]);
 
-    // Initialize snow particles
+    // Initialize snowflakes
     const flakes: SnowFlake[] = [];
     for (let i = 0; i < 90; i++) {
       flakes.push({
@@ -389,59 +520,124 @@ export default function Loc2VietaScales({
 
   const currentRound = selectedRounds[currentRoundIndex] || ROUND_1_POOL[0];
 
-  // Preload game sprites & Location 2 visual assets
+  // Dynamic Sprite & Asset Preloader based on active Sprite Configuration
   useEffect(() => {
-    // 1. Mountain Summit Backdrop (matching question fight)
-    const bg = new Image();
-    bg.src = LOCATION_2_ASSETS.SUMMIT_BACKDROP;
-    bg.onload = () => {
-      bgImgRef.current = bg;
-    };
-
-    // 2. Engraved Sum Pedestal Sprite (Σ chiseled directly into the stone)
-    const sumImg = new Image();
-    sumImg.src = LOCATION_2_ASSETS.PEDESTAL_SUM;
-    sumImg.onload = () => {
-      sumPedestalCanvasRef.current = createProcessedTransparentCanvas(sumImg);
-    };
-
-    // 3. Engraved Product Pedestal Sprite (∏ chiseled directly into the stone)
-    const prodImg = new Image();
-    prodImg.src = LOCATION_2_ASSETS.PEDESTAL_PRODUCT;
-    prodImg.onload = () => {
-      prodPedestalCanvasRef.current = createProcessedTransparentCanvas(prodImg);
-    };
-
-    // 4. Ancient Rune Tablet Sprite
-    const rImg = new Image();
-    rImg.src = LOCATION_2_ASSETS.RUNE_TABLET;
-    rImg.onload = () => {
-      runeCanvasRef.current = createProcessedTransparentCanvas(rImg);
-    };
-
-    // 5. Player Owl
-    const owl = new Image();
-    owl.crossOrigin = 'anonymous';
-    owl.src =
-      character?.imageUrl ||
-      'https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=bae93c5e-92ed-4958-9274-fb67a3f5f8c9';
-    owl.onload = () => {
-      owlImgRef.current = owl;
-    };
-
-    // 6. Boss Foe
-    if (foe?.imageUrl) {
-      const foeImg = new Image();
-      foeImg.crossOrigin = 'anonymous';
-      foeImg.src = foe.imageUrl;
-      foeImg.onload = () => {
-        foeImgRef.current = foeImg;
+    // 1. Mountain Summit Backdrop
+    if (spriteConfig.background.type === 'procedural') {
+      bgImgRef.current = null;
+    } else {
+      const bg = new Image();
+      bg.crossOrigin = 'anonymous';
+      const bgSrc = spriteConfig.background.path || LOCATION_2_ASSETS.SUMMIT_BACKDROP;
+      bg.onload = () => {
+        bgImgRef.current = bg;
       };
+      bg.onerror = () => {
+        bg.src = LOCATION_2_ASSETS.SUMMIT_BACKDROP;
+      };
+      bg.src = bgSrc;
     }
-  }, [character?.imageUrl, foe?.imageUrl]);
 
-  // Spawn runes & reset pedestals for the current round
-  // NOTE: Does NOT reset player position so owl stays where it was!
+    // 2. Sum Platform Sprite (∑ αᵢ)
+    if (spriteConfig.platformSum.type === 'procedural') {
+      sumPedestalCanvasRef.current = null;
+    } else {
+      const sumImg = new Image();
+      sumImg.crossOrigin = 'anonymous';
+      sumImg.onload = () => {
+        sumPedestalCanvasRef.current = createProcessedTransparentCanvas(sumImg, 'removeDark');
+      };
+      sumImg.src = spriteConfig.platformSum.path || LOCATION_2_ASSETS.PEDESTAL_SUM;
+    }
+
+    // 3. Product Platform Sprite (∏ αᵢ)
+    if (spriteConfig.platformProduct.type === 'procedural') {
+      prodPedestalCanvasRef.current = null;
+    } else {
+      const prodImg = new Image();
+      prodImg.crossOrigin = 'anonymous';
+      prodImg.onload = () => {
+        prodPedestalCanvasRef.current = createProcessedTransparentCanvas(prodImg, 'removeDark');
+      };
+      prodImg.src = spriteConfig.platformProduct.path || LOCATION_2_ASSETS.PEDESTAL_PRODUCT;
+    }
+
+    // 4. Step Dais Platform Sprite
+    if (spriteConfig.dais.type === 'procedural') {
+      stepDaisCanvasRef.current = null;
+    } else {
+      const daisImg = new Image();
+      daisImg.crossOrigin = 'anonymous';
+      daisImg.onload = () => {
+        stepDaisCanvasRef.current = createProcessedTransparentCanvas(daisImg, 'removeDark');
+      };
+      daisImg.src = spriteConfig.dais.path || LOCATION_2_ASSETS.STEP_DAIS;
+    }
+
+    // 5. Ancient Rune Tablet Sprite
+    const rImg = new Image();
+    rImg.crossOrigin = 'anonymous';
+    rImg.onload = () => {
+      runeCanvasRef.current = createProcessedTransparentCanvas(rImg, 'removeWhite');
+    };
+    rImg.src = LOCATION_2_ASSETS.RUNE_TABLET;
+
+    // 6. Player Owl Sprite (Defaults to 100% OPAQUE Emoji with solid backing)
+    if (spriteConfig.owl.type === 'emoji') {
+      const emojiChar = spriteConfig.owl.emoji || '🦉';
+      owlCanvasRef.current = createOpaqueEmojiCanvas(emojiChar, 128);
+      owlImgRef.current = null;
+    } else if (spriteConfig.owl.type === 'character' && character?.imageUrl) {
+      const charImg = new Image();
+      charImg.crossOrigin = 'anonymous';
+      charImg.onload = () => {
+        owlCanvasRef.current = null;
+        owlImgRef.current = charImg;
+      };
+      charImg.onerror = () => {
+        owlCanvasRef.current = createOpaqueEmojiCanvas('🦉', 128);
+      };
+      charImg.src = character.imageUrl;
+    } else {
+      // Asset or custom image path
+      const owl = new Image();
+      owl.crossOrigin = 'anonymous';
+      owl.onload = () => {
+        owlCanvasRef.current = createProcessedTransparentCanvas(owl, 'removeWhite');
+        owlImgRef.current = owl;
+      };
+      owl.onerror = () => {
+        owlCanvasRef.current = createOpaqueEmojiCanvas(spriteConfig.owl.emoji || '🦉', 128);
+      };
+      owl.src = spriteConfig.owl.path || LOCATION_2_ASSETS.OWL_SPRITE;
+    }
+
+    // 7. Boss Foe Sprite (Defaults to 100% OPAQUE Emoji)
+    if (spriteConfig.foe.type === 'emoji') {
+      const foeEmojiChar = spriteConfig.foe.emoji || foe?.emoji || '👹';
+      foeCanvasRef.current = createOpaqueEmojiCanvas(foeEmojiChar, 160);
+      foeImgRef.current = null;
+    } else {
+      const foeSrc = spriteConfig.foe.path || foe?.imageUrl;
+      if (foeSrc) {
+        const foeImg = new Image();
+        foeImg.crossOrigin = 'anonymous';
+        foeImg.onload = () => {
+          foeCanvasRef.current = null;
+          foeImgRef.current = foeImg;
+        };
+        foeImg.onerror = () => {
+          foeCanvasRef.current = createOpaqueEmojiCanvas(foe?.emoji || '👹', 160);
+        };
+        foeImg.src = foeSrc;
+      } else {
+        foeCanvasRef.current = createOpaqueEmojiCanvas(foe?.emoji || '👹', 160);
+        foeImgRef.current = null;
+      }
+    }
+  }, [spriteConfig, character?.imageUrl, foe?.imageUrl, foe?.emoji]);
+
+  // Spawn runes & reset platforms for the current round
   useEffect(() => {
     if (!currentRound) return;
 
@@ -450,20 +646,22 @@ export default function Loc2VietaScales({
     nextShootTimeRef.current = Date.now() + 2000;
     padTriggerCooldownRef.current = false;
 
-    // Reset pedestals firmly on dais
+    // Reset platforms
     setPedestals([
       {
         id: 'sum',
-        symbol: 'Σ',
+        symbol: '∑ αᵢ',
+        sublabel: 'SUM OF ROOTS',
         x: 230,
-        y: 335,
+        y: 340,
         placedRuneId: null,
       },
       {
         id: 'product',
-        symbol: '∏',
+        symbol: '∏ αᵢ',
+        sublabel: 'PRODUCT OF ROOTS',
         x: 570,
-        y: 335,
+        y: 340,
         placedRuneId: null,
       },
     ]);
@@ -479,15 +677,13 @@ export default function Loc2VietaScales({
     const chosenDistractors = distractors.slice(0, 4);
 
     const allValues = [...requiredValues, ...chosenDistractors];
-    // Shuffle values
     const shuffled = [...allValues].sort(() => Math.random() - 0.5);
 
-    // Place them scattered on the snowy summit floor
     const cols = 3;
     const startX = 170;
-    const startY = 360;
+    const startY = 370;
     const stepX = 230;
-    const stepY = 85;
+    const stepY = 80;
 
     const newRunes: RuneEntity[] = shuffled.map((val, idx) => {
       const col = idx % cols;
@@ -500,7 +696,7 @@ export default function Loc2VietaScales({
         id: `rune-${idx}-${fracToString(val)}-${Math.random().toString(36).substring(2, 6)}`,
         value: val,
         x: Math.min(680, Math.max(120, startX + col * stepX + jitterX)),
-        y: Math.min(480, Math.max(340, startY + row * stepY + jitterY)),
+        y: Math.min(480, Math.max(350, startY + row * stepY + jitterY)),
         color: palette.color,
         glowColor: palette.glow,
       };
@@ -532,13 +728,13 @@ export default function Loc2VietaScales({
   const handleInteractRef = useRef<() => void>(() => {});
 
   const handleInteract = useCallback(() => {
-    if (isShattering || isVictory || isGameOver) return;
+    if (isShattering || isGameOver || bossState !== 'normal') return;
 
     const px = playerRef.current.x;
     const py = playerRef.current.y;
 
-    // 1. Are we near a pedestal? (< 65px)
-    const nearPedestal = pedestals.find((p) => Math.hypot(p.x - px, p.y - py) < 65);
+    // 1. Near a platform? (< 70px)
+    const nearPedestal = pedestals.find((p) => Math.hypot(p.x - px, p.y - py) < 70);
 
     if (nearPedestal) {
       if (heldRuneId) {
@@ -571,7 +767,7 @@ export default function Loc2VietaScales({
       }
     }
 
-    // 2. Are we near a rune on the ground? (< 50px)
+    // 2. Near a rune on the ground? (< 50px)
     if (!heldRuneId) {
       const placedIds = new Set(pedestals.map((p) => p.placedRuneId).filter(Boolean));
       const unplacedRunes = runes.filter((r) => !placedIds.has(r.id));
@@ -601,7 +797,7 @@ export default function Loc2VietaScales({
       setHeldRuneId(null);
       createBurstParticles(px, py + 15, '#e0f2fe', 8);
     }
-  }, [pedestals, runes, heldRuneId, isShattering, isVictory, isGameOver]);
+  }, [pedestals, runes, heldRuneId, isShattering, isGameOver, bossState]);
 
   useEffect(() => {
     handleInteractRef.current = handleInteract;
@@ -634,14 +830,14 @@ export default function Loc2VietaScales({
     };
   }, []);
 
-  // Check if both pedestals are filled
+  // Check if both platforms are filled
   const bothPedestalsFilled = useMemo(() => {
     return pedestals.every((p) => p.placedRuneId !== null);
   }, [pedestals]);
 
-  // Evaluate the Viète Altars when stepping on the pressure pad
+  // Evaluate the Viète Altars when stepping on the pressure pad (3 Rounds)
   const evaluateAltar = useCallback(() => {
-    if (!bothPedestalsFilled || isShattering || isVictory || isGameOver || !currentRound) return;
+    if (!bothPedestalsFilled || isShattering || isGameOver || !currentRound || bossState !== 'normal') return;
 
     const sumPedestal = pedestals.find((p) => p.id === 'sum');
     const prodPedestal = pedestals.find((p) => p.id === 'product');
@@ -657,13 +853,13 @@ export default function Loc2VietaScales({
     if (isSumCorrect && isProductCorrect) {
       setIsShattering(true);
 
-      // Spawn celestial laser sparks from both pedestals
+      // Spawn celestial laser sparks from both platforms
       pedestals.forEach((p) => {
-        createBurstParticles(p.x, p.y - 25, '#38bdf8', 25);
+        createBurstParticles(p.x, p.y - 15, '#38bdf8', 25);
         for (let i = 0; i < 25; i++) {
           particlesRef.current.push({
-            x: p.x + (Math.random() - 0.5) * 20,
-            y: p.y - 25,
+            x: p.x + (Math.random() - 0.5) * 30,
+            y: p.y - 15,
             vx: (Math.random() - 0.5) * 2,
             vy: -4 - Math.random() * 5,
             size: 4 + Math.random() * 4,
@@ -687,15 +883,26 @@ export default function Loc2VietaScales({
           setIsShattering(false);
           setCurrentRoundIndex(1);
         }, 1500);
-      } else {
-        // Round 2 Complete: Last laser shoots directly at the foe, shattering final layer!
+      } else if (currentRoundIndex === 1) {
+        // Round 2 Complete: Break Inner Shield Layer (1 -> 0). Foe is now UNPROTECTED!
         setTimeout(() => {
+          createBurstParticles(400, 100, '#a855f7', 50);
+          createBurstParticles(400, 100, '#ec4899', 30);
           setShieldLayers(0);
+        }, 700);
+
+        setTimeout(() => {
+          setIsShattering(false);
+          setCurrentRoundIndex(2);
+        }, 1500);
+      } else {
+        // Round 3 Complete: Lasers strike the UNPROTECTED foe directly!
+        setTimeout(() => {
           // Blinding strike explosion right on the foe
           createBurstParticles(400, 95, '#f43f5e', 50);
           createBurstParticles(400, 95, '#fef08a', 40);
           createBurstParticles(400, 95, '#ffffff', 30);
-          // Foe takes direct unblocked laser strike and begins falling
+          // Foe takes direct laser strike and begins falling down
           projectilesRef.current = [];
           setBossState('falling');
         }, 700);
@@ -705,7 +912,7 @@ export default function Loc2VietaScales({
         }, 1600);
       }
     }
-  }, [bothPedestalsFilled, isShattering, isVictory, isGameOver, currentRound, pedestals, runes, currentRoundIndex]);
+  }, [bothPedestalsFilled, isShattering, isGameOver, currentRound, pedestals, runes, currentRoundIndex, bossState]);
 
   // Main 2D Canvas Game Loop
   useEffect(() => {
@@ -727,7 +934,7 @@ export default function Loc2VietaScales({
       let dx = 0;
       let dy = 0;
 
-      if (!isGameOver && !isVictory) {
+      if (!isGameOver && bossState === 'normal') {
         if (keys['arrowup'] || keys['w']) dy -= 1;
         if (keys['arrowdown'] || keys['s']) dy += 1;
         if (keys['arrowleft'] || keys['a']) dx -= 1;
@@ -781,7 +988,6 @@ export default function Loc2VietaScales({
           bothPedestalsFilled &&
           isOwlOnPad &&
           !isShattering &&
-          !isVictory &&
           !isGameOver &&
           !padTriggerCooldownRef.current
         ) {
@@ -792,9 +998,9 @@ export default function Loc2VietaScales({
         }
       }
 
-      // 2. Foe Monomial Projectile Spawner
+      // 2. Foe Monomial Projectile Spawner (only when normal)
       const now = Date.now();
-      if (!isGameOver && !isVictory && !isShattering && now >= nextShootTimeRef.current) {
+      if (!isGameOver && bossState === 'normal' && !isShattering && now >= nextShootTimeRef.current) {
         const bossX = 400;
         const bossY = 100;
         const angle = Math.atan2(p.y - bossY, p.x - bossX);
@@ -825,7 +1031,7 @@ export default function Loc2VietaScales({
         proj.y += proj.vy;
 
         const distToPlayer = Math.hypot(proj.x - p.x, proj.y - (p.y - 10));
-        if (distToPlayer < 24 && p.invulnerableFrames === 0 && !isGameOver && !isVictory) {
+        if (distToPlayer < 24 && p.invulnerableFrames === 0 && !isGameOver && bossState === 'normal') {
           p.invulnerableFrames = 75;
           p.shakeTime = 10;
           createBurstParticles(p.x, p.y - 10, '#f43f5e', 20);
@@ -847,7 +1053,7 @@ export default function Loc2VietaScales({
         }
       }
 
-      // 3. Clear Canvas & Apply Screen Shake (only on projectile hit)
+      // 3. Clear Canvas & Apply Screen Shake
       ctx.save();
       if (p.shakeTime > 0) {
         const shakeX = (Math.random() - 0.5) * 6;
@@ -857,63 +1063,33 @@ export default function Loc2VietaScales({
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 4. Render Mountain Sky & Summit Atmosphere (High-fidelity backdrop with procedural fallback)
+      // 4. Render Mountain Sky & Backdrop (Depicting the path to the summit)
       if (bgImgRef.current && bgImgRef.current.complete) {
         ctx.drawImage(bgImgRef.current, 0, 0, canvas.width, canvas.height);
       } else {
-        const skyGrad = ctx.createLinearGradient(0, 0, 0, 220);
-        skyGrad.addColorStop(0, '#0c1222');
-        skyGrad.addColorStop(0.6, '#1e293b');
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, 240);
+        skyGrad.addColorStop(0, '#090d16');
+        skyGrad.addColorStop(0.5, '#1e293b');
         skyGrad.addColorStop(1, '#334155');
         ctx.fillStyle = skyGrad;
-        ctx.fillRect(0, 0, canvas.width, 220);
+        ctx.fillRect(0, 0, canvas.width, 240);
 
-        // Distant snowy mountain peaks in silhouette
+        // Distant jagged mountains in background
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
-        ctx.moveTo(0, 220);
-        ctx.lineTo(80, 110);
-        ctx.lineTo(160, 160);
-        ctx.lineTo(260, 90);
-        ctx.lineTo(360, 170);
-        ctx.lineTo(480, 80);
-        ctx.lineTo(580, 160);
-        ctx.lineTo(690, 100);
-        ctx.lineTo(800, 220);
+        ctx.moveTo(0, 240);
+        ctx.lineTo(90, 120);
+        ctx.lineTo(180, 170);
+        ctx.lineTo(280, 95);
+        ctx.lineTo(380, 180);
+        ctx.lineTo(500, 85);
+        ctx.lineTo(620, 170);
+        ctx.lineTo(720, 110);
+        ctx.lineTo(800, 240);
         ctx.closePath();
         ctx.fill();
 
-        // Snowy peak caps on mountains
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-        ctx.beginPath();
-        ctx.moveTo(80, 110);
-        ctx.lineTo(105, 130);
-        ctx.lineTo(55, 130);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.moveTo(260, 90);
-        ctx.lineTo(290, 115);
-        ctx.lineTo(230, 115);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.moveTo(480, 80);
-        ctx.lineTo(510, 110);
-        ctx.lineTo(450, 110);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.moveTo(690, 100);
-        ctx.lineTo(720, 125);
-        ctx.lineTo(660, 125);
-        ctx.closePath();
-        ctx.fill();
-
-        // 5. Render Snowy Summit Ground (Peak Platform)
+        // Snowy ground plateau
         const groundGrad = ctx.createLinearGradient(0, 200, 0, 600);
         groundGrad.addColorStop(0, '#cbd5e1');
         groundGrad.addColorStop(0.3, '#f1f5f9');
@@ -921,54 +1097,9 @@ export default function Loc2VietaScales({
         groundGrad.addColorStop(1, '#94a3b8');
         ctx.fillStyle = groundGrad;
         ctx.fillRect(0, 200, canvas.width, 400);
-
-        // Snowy texture drifts
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        for (let i = 0; i < 8; i++) {
-          ctx.beginPath();
-          ctx.ellipse(80 + i * 90, 310 + (i % 3) * 60, 60, 14, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // Mountain rocks & snowy boulders on edges
-        ctx.fillStyle = '#475569';
-        ctx.beginPath();
-        ctx.moveTo(0, 240);
-        ctx.lineTo(50, 270);
-        ctx.lineTo(35, 340);
-        ctx.lineTo(55, 420);
-        ctx.lineTo(25, 520);
-        ctx.lineTo(0, 560);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.ellipse(35, 270, 20, 6, 0, 0, Math.PI * 2);
-        ctx.ellipse(40, 340, 18, 5, 0, 0, Math.PI * 2);
-        ctx.ellipse(30, 420, 22, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#475569';
-        ctx.beginPath();
-        ctx.moveTo(800, 240);
-        ctx.lineTo(750, 280);
-        ctx.lineTo(765, 360);
-        ctx.lineTo(745, 440);
-        ctx.lineTo(775, 520);
-        ctx.lineTo(800, 560);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.ellipse(765, 280, 20, 6, 0, 0, Math.PI * 2);
-        ctx.ellipse(755, 360, 18, 5, 0, 0, Math.PI * 2);
-        ctx.ellipse(770, 440, 22, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
       }
 
-      // 6. Falling Snowflakes
+      // 5. Falling Snowflakes
       ctx.fillStyle = '#ffffff';
       snowFlakesRef.current.forEach((flake) => {
         flake.y += flake.vy;
@@ -986,7 +1117,7 @@ export default function Loc2VietaScales({
         ctx.restore();
       });
 
-      // 7. Render Foe on the Summit Throne (Dynamic falling & defeat physics)
+      // 6. Foe Falling & Defeat Physics (Longer dramatic pause on the floor)
       const bossX = 400;
       if (bossState === 'falling') {
         if (bossYRef.current < 285) {
@@ -994,38 +1125,68 @@ export default function Loc2VietaScales({
           bossRotationRef.current = Math.min(Math.PI / 4, bossRotationRef.current + 0.04);
         } else {
           bossYRef.current = 285;
-          setBossState('fallen');
-          createBurstParticles(400, 290, '#cbd5e1', 35);
-          createBurstParticles(400, 290, '#38bdf8', 25);
-          setTimeout(() => {
-            setIsVictory(true);
-          }, 600);
+          if (!hasTriggeredFallenRef.current) {
+            hasTriggeredFallenRef.current = true;
+            setBossState('fallen');
+            createBurstParticles(400, 290, '#cbd5e1', 35);
+            createBurstParticles(400, 290, '#38bdf8', 25);
+
+            // Longer pause: Stay knocked down on the floor for 3.5 seconds before raging and talking
+            setTimeout(() => {
+              setBossState('raging');
+              // Speech bubble displayed for 2 seconds (2000ms), then start smooth faded transition back to battle
+              setTimeout(() => {
+                setIsExitingTransition(true);
+                setTimeout(() => {
+                  onCompleteRef.current({
+                    success: true,
+                    message: 'Function imp defeated!',
+                  });
+                  if (isTestModeRef.current && onCloseTestRef.current) {
+                    onCloseTestRef.current();
+                  }
+                }, 750);
+              }, 2000);
+            }, 3500);
+          }
         }
       }
 
       const currentBossY = bossYRef.current;
       const hoverOffset = bossState === 'normal' ? Math.sin(Date.now() / 320) * 5 : 0;
+      const rageOffset = bossState === 'raging' ? Math.sin(Date.now() / 25) * 4 : 0;
 
       // Foe Ground Contact Shadow
       ctx.save();
       ctx.beginPath();
-      ctx.ellipse(bossX, currentBossY + (bossState === 'fallen' ? 26 : 45), 55, 14, 0, 0, Math.PI * 2);
+      ctx.ellipse(
+        bossX + rageOffset,
+        currentBossY + (bossState === 'fallen' || bossState === 'raging' ? 26 : 45),
+        55,
+        14,
+        0,
+        0,
+        Math.PI * 2
+      );
       ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
       ctx.filter = 'blur(4px)';
       ctx.fill();
       ctx.restore();
 
-      // Draw Foe Sprite / Emoji (rotates and rests on the ground when fallen)
+      // Draw Foe Sprite / Emoji
       ctx.save();
-      ctx.translate(bossX, currentBossY + hoverOffset);
+      ctx.translate(bossX + rageOffset, currentBossY + hoverOffset);
       if (bossRotationRef.current !== 0) {
         ctx.rotate(bossRotationRef.current);
       }
-      if (bossState === 'fallen') {
+      if (bossState === 'fallen' || bossState === 'raging') {
         ctx.globalAlpha = 0.88;
       }
 
-      if (foeImgRef.current && foeImgRef.current.complete) {
+      if (foeCanvasRef.current) {
+        // 100% Opaque, crisp boss emoji sprite (no background transparency)
+        ctx.drawImage(foeCanvasRef.current, -44, -44, 88, 88);
+      } else if (foeImgRef.current && foeImgRef.current.complete) {
         ctx.drawImage(foeImgRef.current, -44, -44, 88, 88);
       } else {
         ctx.font = '52px sans-serif';
@@ -1035,11 +1196,14 @@ export default function Loc2VietaScales({
       }
       ctx.restore();
 
-      // 2-Layer Prismatic Crystalline Frost Barrier (Redesigned with ice facets & orbital crystals)
+      // Crystalline Frost Barriers:
+      // Round 1 (shieldLayers === 2): Inner + Outer Barrier
+      // Round 2 (shieldLayers === 1): Inner Barrier only
+      // Round 3 (shieldLayers === 0): UNPROTECTED! No shields!
       if (shieldLayers > 0 && bossState === 'normal') {
         const time = Date.now();
 
-        // Layer 1 (Inner Arcane Frost Barrier): Shown when shieldLayers >= 1
+        // Layer 1 (Inner Arcane Frost Barrier): shown when shieldLayers >= 1
         if (shieldLayers >= 1) {
           ctx.save();
           ctx.translate(bossX, currentBossY + hoverOffset);
@@ -1064,7 +1228,6 @@ export default function Loc2VietaScales({
           ctx.shadowBlur = 14;
           ctx.stroke();
 
-          // Vertex runic nodes
           for (let i = 0; i < 6; i++) {
             const angle = (i * Math.PI) / 3;
             const r = 58;
@@ -1076,7 +1239,7 @@ export default function Loc2VietaScales({
           ctx.restore();
         }
 
-        // Layer 2 (Outer Prismatic Hexagonal Crystal Aegis): Shown when shieldLayers >= 2
+        // Layer 2 (Outer Prismatic Hexagonal Aegis): shown when shieldLayers >= 2
         if (shieldLayers >= 2) {
           ctx.save();
           ctx.translate(bossX, currentBossY + hoverOffset);
@@ -1101,7 +1264,7 @@ export default function Loc2VietaScales({
           ctx.shadowBlur = 18;
           ctx.stroke();
 
-          // Orbiting Diamond Crystal Shards around outer shield
+          // Orbiting Diamond Crystal Shards
           for (let i = 0; i < 6; i++) {
             const angle = (i * Math.PI) / 3;
             const r = 76;
@@ -1128,23 +1291,24 @@ export default function Loc2VietaScales({
         }
       }
 
-      // Laser Beams: Round 1 hits outer barrier; Round 2 fires DIRECTLY into the foe!
+      // Laser Beams: Round 1 & 2 hit shields; Round 3 fires directly into the UNPROTECTED foe!
       if (isShattering) {
         pedestals.forEach((ped) => {
           ctx.save();
           ctx.beginPath();
-          ctx.moveTo(ped.x, ped.y - 30);
+          ctx.moveTo(ped.x, ped.y - 20);
           ctx.lineTo(bossX + (Math.random() - 0.5) * 10, currentBossY + hoverOffset);
-          ctx.strokeStyle = currentRoundIndex === 1 ? 'rgba(254, 240, 138, 0.95)' : 'rgba(56, 189, 248, 0.95)';
-          ctx.lineWidth = currentRoundIndex === 1 ? 8 + Math.random() * 5 : 6 + Math.random() * 4;
-          ctx.shadowColor = currentRoundIndex === 1 ? '#fef08a' : '#38bdf8';
-          ctx.shadowBlur = 22;
+          const isFinalStrike = currentRoundIndex === 2;
+          ctx.strokeStyle = isFinalStrike ? 'rgba(254, 240, 138, 0.95)' : 'rgba(56, 189, 248, 0.95)';
+          ctx.lineWidth = isFinalStrike ? 8 + Math.random() * 5 : 6 + Math.random() * 4;
+          ctx.shadowColor = isFinalStrike ? '#fef08a' : '#38bdf8';
+          ctx.shadowBlur = 24;
           ctx.stroke();
           ctx.restore();
         });
       }
 
-      // 8. Render Flying Monomial Projectiles (inactive if boss is falling/fallen)
+      // 9. Flying Monomial Projectiles
       if (bossState === 'normal') {
         projectilesRef.current.forEach((proj) => {
           ctx.save();
@@ -1169,11 +1333,12 @@ export default function Loc2VietaScales({
         });
       }
 
-      // 9. Render Firmly Grounded Pedestals: Sum (Left) and Product (Right)
-      // Symbols (Σ and ∏) are engraved directly in the stone sprites (NO painted text overlay!)
+      // 10. REDESIGNED FLAT WIDER ALTAR PLATFORMS (Sum Left, Product Right)
+      // Contains the full symbols: ∑ αᵢ and ∏ αᵢ
+      const sumPed = pedestals.find((pd) => pd.id === 'sum');
+      const prodPed = pedestals.find((pd) => pd.id === 'product');
+
       pedestals.forEach((ped) => {
-        const sumPed = pedestals.find((pd) => pd.id === 'sum');
-        const prodPed = pedestals.find((pd) => pd.id === 'product');
         const sumRune = runes.find((r) => r.id === sumPed?.placedRuneId);
         const prodRune = runes.find((r) => r.id === prodPed?.placedRuneId);
         const isSumCorrect = sumRune ? isFracEqual(sumRune.value, currentRound.sumOfRoots) : false;
@@ -1181,52 +1346,58 @@ export default function Loc2VietaScales({
 
         const distToPad = Math.hypot(p.x - PAD_X, p.y - PAD_Y);
         const isOwlOnPad = distToPad < PAD_RADIUS + 4;
-
         const isWrongOnPad =
           isOwlOnPad &&
           bothPedestalsFilled &&
           !isShattering &&
-          !isVictory &&
+          bossState === 'normal' &&
           ((ped.id === 'sum' && !isSumCorrect) || (ped.id === 'product' && !isProductCorrect));
-
-        // Ground Contact Shadow (solidly anchors the pillar on the stone dais rim)
-        ctx.beginPath();
-        ctx.ellipse(ped.x, ped.y + 20, 48, 15, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-        ctx.fill();
 
         const hasRune = ped.placedRuneId !== null;
 
-        // Render carved engraved pillar sprite (Sum or Product)
+        // Render Platform Sprite Asset if available
         const activePedCanvas = ped.id === 'sum' ? sumPedestalCanvasRef.current : prodPedestalCanvasRef.current;
-
         if (activePedCanvas) {
-          const pw = 84;
-          const ph = 104;
+          const pw = 144;
+          const ph = 80;
           ctx.drawImage(activePedCanvas, ped.x - pw / 2, ped.y - ph + 24, pw, ph);
-
-          // Glowing socket on altar top
-          ctx.beginPath();
-          ctx.ellipse(ped.x, ped.y - ph + 34, 26, 9, 0, 0, Math.PI * 2);
-          ctx.fillStyle = hasRune ? 'rgba(56, 189, 248, 0.85)' : 'rgba(14, 165, 233, 0.25)';
-          ctx.fill();
         } else {
-          // Procedural stone pillar fallback
-          ctx.fillStyle = '#334155';
-          ctx.fillRect(ped.x - 34, ped.y - 30, 68, 50);
+          // 3D Flat Stone Platform Base Procedural Fallback
+          const pw = 136;
+          const ph = 32;
 
-          ctx.fillStyle = '#f8fafc';
+          ctx.fillStyle = '#1e293b';
           ctx.beginPath();
-          ctx.ellipse(ped.x, ped.y - 30, 36, 12, 0, 0, Math.PI * 2);
+          ctx.roundRect(ped.x - pw / 2, ped.y - ph / 2 + 6, pw, ph, 8);
           ctx.fill();
-          ctx.strokeStyle = '#64748b';
-          ctx.lineWidth = 2.5;
+
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(ped.x - pw / 2 + 2, ped.y, pw - 4, ph / 2 + 6);
+
+          ctx.beginPath();
+          ctx.ellipse(ped.x, ped.y - 6, pw / 2, 16, 0, 0, Math.PI * 2);
+          ctx.fillStyle = hasRune ? '#475569' : '#334155';
+          ctx.fill();
+          ctx.strokeStyle = hasRune ? '#38bdf8' : '#64748b';
+          ctx.lineWidth = 2;
           ctx.stroke();
 
-          ctx.beginPath();
-          ctx.ellipse(ped.x, ped.y - 30, 24, 8, 0, 0, Math.PI * 2);
-          ctx.fillStyle = hasRune ? 'rgba(56, 189, 248, 0.85)' : 'rgba(71, 85, 105, 0.4)';
-          ctx.fill();
+          ctx.save();
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = 'bold 15px "Times New Roman", serif';
+          ctx.fillStyle = hasRune ? '#fef08a' : '#e2e8f0';
+          if (hasRune) {
+            ctx.shadowColor = '#fef08a';
+            ctx.shadowBlur = 8;
+          }
+          ctx.fillText(ped.symbol, ped.x, ped.y + 7);
+
+          ctx.shadowBlur = 0;
+          ctx.font = 'bold 8px monospace';
+          ctx.fillStyle = hasRune ? '#38bdf8' : '#94a3b8';
+          ctx.fillText(ped.id === 'sum' ? 'SUM' : 'PRODUCT', ped.x, ped.y + 19);
+          ctx.restore();
         }
 
         // Pulsate RED when altar has wrong rune and owl is on the platform
@@ -1234,11 +1405,11 @@ export default function Loc2VietaScales({
           const redPulse = (Math.sin(Date.now() / 110) + 1) / 2;
           ctx.save();
           ctx.beginPath();
-          ctx.ellipse(ped.x, ped.y - 10, 52 + redPulse * 8, 42 + redPulse * 6, 0, 0, Math.PI * 2);
+          ctx.ellipse(ped.x, ped.y + 4, 78 + redPulse * 6, 26 + redPulse * 4, 0, 0, Math.PI * 2);
           ctx.strokeStyle = `rgba(239, 68, 68, ${0.45 + redPulse * 0.55})`;
-          ctx.lineWidth = 3.5;
+          ctx.lineWidth = 3;
           ctx.shadowColor = '#ef4444';
-          ctx.shadowBlur = 22 + redPulse * 15;
+          ctx.shadowBlur = 20;
           ctx.stroke();
           ctx.restore();
         }
@@ -1247,75 +1418,132 @@ export default function Loc2VietaScales({
         if (hasRune) {
           const placedRune = runes.find((r) => r.id === ped.placedRuneId);
           if (placedRune) {
-            const floatY = ped.y - 68 + Math.sin(Date.now() / 250) * 3;
+            const floatY = ped.y - 44 + Math.sin(Date.now() / 250) * 3;
             drawRuneStone(ctx, placedRune, ped.x, floatY, true);
           }
         }
       });
 
-      // 10. Render Floor Pressure Pad when both pedestals are filled
-      if (bothPedestalsFilled && !isGameOver && !isVictory) {
-        ctx.save();
-        const pulse = Math.sin(Date.now() / 220) * 3;
+      // 11. ACTIVATION PLATFORM (FLOOR STEP DAIS AT PAD_X, PAD_Y)
+      // Render dedicated step dais asset with brilliant glow when two runes are set up
+      ctx.save();
 
-        // Outer glowing ring
-        ctx.beginPath();
-        ctx.arc(PAD_X, PAD_Y, PAD_RADIUS + pulse, 0, Math.PI * 2);
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 3;
-        ctx.shadowColor = '#38bdf8';
-        ctx.shadowBlur = 18;
-        ctx.stroke();
+      if (stepDaisCanvasRef.current) {
+        const dw = 88;
+        const dh = 88;
+        if (bothPedestalsFilled && bossState === 'normal') {
+          // Pulsing celestial cyan & amber glow
+          const pulse = Math.sin(Date.now() / 200) * 4;
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 24 + pulse * 2;
+          ctx.drawImage(stepDaisCanvasRef.current, PAD_X - dw / 2, PAD_Y - dh / 2, dw, dh);
 
-        // Inner glowing fill
-        ctx.beginPath();
-        ctx.arc(PAD_X, PAD_Y, PAD_RADIUS, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
-        ctx.fill();
+          // Center lightning icon
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#fef08a';
+          ctx.font = 'bold 16px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('⚡', PAD_X, PAD_Y);
 
-        // Rotating runic spokes
-        const spin = Date.now() / 800;
-        for (let i = 0; i < 4; i++) {
-          const a = spin + (i * Math.PI) / 2;
+          // Prompt banner above pad
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+          ctx.fillRect(PAD_X - 80, PAD_Y - 48, 160, 20);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(PAD_X - 80, PAD_Y - 48, 160, 20);
+          ctx.fillStyle = '#fef08a';
+          ctx.font = 'bold 9px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('⚡ STEP TO CHANNEL LASERS ⚡', PAD_X, PAD_Y - 37);
+        } else {
+          // Dormant step dais
+          ctx.globalAlpha = 0.85;
+          ctx.drawImage(stepDaisCanvasRef.current, PAD_X - dw / 2, PAD_Y - dh / 2, dw, dh);
+          ctx.globalAlpha = 1.0;
+
+          ctx.font = 'bold 8px monospace';
+          ctx.fillStyle = '#94a3b8';
+          ctx.textAlign = 'center';
+          ctx.fillText('CHANNEL DAIS (AWAITING 2 RUNES)', PAD_X, PAD_Y + 48);
+        }
+      } else {
+        // Procedural fallback
+        if (bothPedestalsFilled && bossState === 'normal') {
+          const pulse = Math.sin(Date.now() / 200) * 4;
+
           ctx.beginPath();
-          ctx.moveTo(PAD_X, PAD_Y);
-          ctx.lineTo(PAD_X + Math.cos(a) * PAD_RADIUS, PAD_Y + Math.sin(a) * PAD_RADIUS);
-          ctx.strokeStyle = 'rgba(254, 240, 138, 0.6)';
+          ctx.ellipse(PAD_X, PAD_Y, PAD_RADIUS + pulse, (PAD_RADIUS + pulse) * 0.48, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 3.5;
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 24;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.ellipse(PAD_X, PAD_Y, PAD_RADIUS, PAD_RADIUS * 0.45, 0, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+          ctx.fill();
+
+          const spin = Date.now() / 800;
+          for (let i = 0; i < 4; i++) {
+            const a = spin + (i * Math.PI) / 2;
+            ctx.beginPath();
+            ctx.moveTo(PAD_X, PAD_Y);
+            ctx.lineTo(PAD_X + Math.cos(a) * PAD_RADIUS, PAD_Y + Math.sin(a) * (PAD_RADIUS * 0.45));
+            ctx.strokeStyle = 'rgba(254, 240, 138, 0.7)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#fef08a';
+          ctx.font = 'bold 16px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('⚡', PAD_X, PAD_Y);
+
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+          ctx.fillRect(PAD_X - 80, PAD_Y - 44, 160, 20);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(PAD_X - 80, PAD_Y - 44, 160, 20);
+          ctx.fillStyle = '#fef08a';
+          ctx.font = 'bold 9px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('⚡ STEP TO CHANNEL LASERS ⚡', PAD_X, PAD_Y - 33);
+        } else {
+          ctx.beginPath();
+          ctx.ellipse(PAD_X, PAD_Y, PAD_RADIUS, PAD_RADIUS * 0.45, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#1e293b';
+          ctx.fill();
+          ctx.strokeStyle = '#475569';
           ctx.lineWidth = 2;
           ctx.stroke();
+
+          ctx.fillStyle = '#64748b';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('⚡', PAD_X, PAD_Y);
+
+          ctx.font = 'bold 8px monospace';
+          ctx.fillStyle = '#64748b';
+          ctx.fillText('CHANNEL DAIS (AWAITING 2 RUNES)', PAD_X, PAD_Y + 16);
         }
-
-        // Center symbol
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = '#fef08a';
-        ctx.font = 'bold 15px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('⚡', PAD_X, PAD_Y);
-
-        // Text prompt above pad
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(PAD_X - 70, PAD_Y - 48, 140, 18);
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(PAD_X - 70, PAD_Y - 48, 140, 18);
-        ctx.fillStyle = '#38bdf8';
-        ctx.font = 'bold 9px monospace';
-        ctx.fillText('STEP TO CHANNEL ALTAR', PAD_X, PAD_Y - 36);
-
-        ctx.restore();
       }
+      ctx.restore();
 
-      // 11. Render Scattered Runes on the Snowy Summit
+      // 12. Render Scattered Runes on the Snowy Summit
       const placedIds = new Set(pedestals.map((p) => p.placedRuneId).filter(Boolean));
       runes.forEach((rune) => {
         if (placedIds.has(rune.id) || rune.id === heldRuneId) return;
 
         drawRuneStone(ctx, rune, rune.x, rune.y, false);
 
-        // Highlight proximity
+        // Proximity highlight
         const dist = Math.hypot(rune.x - p.x, rune.y - p.y);
-        if (dist < 50 && !heldRuneId && !isGameOver && !isVictory) {
+        if (dist < 50 && !heldRuneId && !isGameOver && bossState === 'normal') {
           ctx.save();
           ctx.beginPath();
           ctx.arc(rune.x, rune.y, 24, 0, Math.PI * 2);
@@ -1336,7 +1564,7 @@ export default function Loc2VietaScales({
         }
       });
 
-      // 12. Render Particles
+      // 13. Render Particles
       for (let i = particlesRef.current.length - 1; i >= 0; i--) {
         const pt = particlesRef.current[i];
         pt.x += pt.vx;
@@ -1357,20 +1585,14 @@ export default function Loc2VietaScales({
         }
       }
 
-      // 13. Render Player (The Owl) - Fully Opaque & High Contrast
+      // 14. Render Player (The Owl) - 100% Opaque, Zero Transparency, No Artificial Shadow
       ctx.save();
       ctx.globalAlpha = 1.0;
 
       const bob = p.isMoving ? Math.sin(p.walkCycle) * 3 : 0;
       const playerY = p.y + bob;
 
-      // Solid Ground Contact Shadow
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y + 16, 22, 8, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-      ctx.fill();
-
-      // Damage blinking: pulse a red shield ring instead of disappearing
+      // Damage blinking ring
       const isDamaged = p.invulnerableFrames > 0;
       if (isDamaged) {
         ctx.save();
@@ -1380,8 +1602,6 @@ export default function Loc2VietaScales({
         ctx.fill();
         ctx.strokeStyle = '#ef4444';
         ctx.lineWidth = 2.5;
-        ctx.shadowColor = '#ef4444';
-        ctx.shadowBlur = 10;
         ctx.stroke();
         ctx.restore();
       }
@@ -1392,26 +1612,15 @@ export default function Loc2VietaScales({
         ctx.scale(-1, 1);
       }
 
-      if (owlImgRef.current && owlImgRef.current.complete) {
+      if (owlCanvasRef.current) {
+        // 100% Opaque, crisp RPG owl sprite or emoji with solid backing (completely solid)
+        ctx.drawImage(owlCanvasRef.current, -28, -38, 56, 56);
+      } else if (owlImgRef.current && owlImgRef.current.complete) {
         ctx.drawImage(owlImgRef.current, -26, -38, 52, 52);
       } else {
-        // Opaque backing disc with subtle glowing cyan rim so the 🦉 emoji is NEVER transparent or washed out
-        ctx.beginPath();
-        ctx.arc(0, -10, 22, 0, Math.PI * 2);
-        ctx.fillStyle = '#0f172a'; // solid deep slate backing
-        ctx.fill();
-        ctx.strokeStyle = '#38bdf8'; // bright cyan rim
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = '#38bdf8';
-        ctx.shadowBlur = 8;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        // Opaque crisp emoji text
-        ctx.font = '34px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🦉', 0, -9);
+        // 100% Opaque fallback emoji
+        const fallbackCanvas = createOpaqueEmojiCanvas(spriteConfig.owl.emoji || '🦉', 128);
+        ctx.drawImage(fallbackCanvas, -28, -38, 56, 56);
       }
       ctx.restore();
       ctx.restore();
@@ -1433,23 +1642,23 @@ export default function Loc2VietaScales({
         }
       }
 
-      // Pedestal proximity prompt
-      const nearPed = pedestals.find((ped) => Math.hypot(ped.x - p.x, ped.y - p.y) < 65);
-      if (nearPed && !isGameOver && !isVictory) {
+      // Platform proximity prompt
+      const nearPed = pedestals.find((ped) => Math.hypot(ped.x - p.x, ped.y - p.y) < 70);
+      if (nearPed && !isGameOver && bossState === 'normal') {
         ctx.save();
         ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-        ctx.fillRect(nearPed.x - 44, nearPed.y - 82, 88, 20);
+        ctx.fillRect(nearPed.x - 48, nearPed.y - 70, 96, 20);
         ctx.strokeStyle = '#38bdf8';
-        ctx.strokeRect(nearPed.x - 44, nearPed.y - 82, 88, 20);
+        ctx.strokeRect(nearPed.x - 48, nearPed.y - 70, 96, 20);
         ctx.fillStyle = '#38bdf8';
         ctx.font = 'bold 9px monospace';
         ctx.textAlign = 'center';
         if (heldRuneId) {
-          ctx.fillText('[E] PLACE RUNE', nearPed.x, nearPed.y - 68);
+          ctx.fillText('[E] PLACE RUNE', nearPed.x, nearPed.y - 56);
         } else if (nearPed.placedRuneId) {
-          ctx.fillText('[E] RETRIEVE', nearPed.x, nearPed.y - 68);
+          ctx.fillText('[E] RETRIEVE', nearPed.x, nearPed.y - 56);
         } else {
-          ctx.fillText('EMPTY SOCKET', nearPed.x, nearPed.y - 68);
+          ctx.fillText('EMPTY SOCKET', nearPed.x, nearPed.y - 56);
         }
         ctx.restore();
       }
@@ -1465,7 +1674,21 @@ export default function Loc2VietaScales({
       running = false;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [pedestals, runes, heldRuneId, shieldLayers, isShattering, isGameOver, isVictory, foe, currentRound, bothPedestalsFilled, evaluateAltar, bossState, currentRoundIndex]);
+  }, [
+    pedestals,
+    runes,
+    heldRuneId,
+    shieldLayers,
+    isShattering,
+    isGameOver,
+    foe,
+    currentRound,
+    bothPedestalsFilled,
+    evaluateAltar,
+    bossState,
+    currentRoundIndex,
+    spriteConfig,
+  ]);
 
   // Helper: Draw Rune Stone on Canvas (Supports fractions!)
   const drawRuneStone = (
@@ -1492,20 +1715,17 @@ export default function Loc2VietaScales({
     if (runeCanvasRef.current) {
       ctx.drawImage(runeCanvasRef.current, x - rSize / 2, y - rSize / 2, rSize, rSize);
 
-      // Inner glowing core
       ctx.shadowBlur = 0;
       ctx.beginPath();
       ctx.arc(x, y, 13, 0, Math.PI * 2);
       ctx.fillStyle = rune.glowColor;
       ctx.fill();
 
-      // Readability contrast backing badge for fraction text
       ctx.beginPath();
       ctx.arc(x, y, 11, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
       ctx.fill();
     } else {
-      // Hexagonal procedural fallback
       const size = 19;
       ctx.beginPath();
       for (let i = 0; i < 6; i++) {
@@ -1529,7 +1749,6 @@ export default function Loc2VietaScales({
       ctx.fill();
     }
 
-    // Fraction or integer text
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#ffffff';
     const text = fracToDisplay(rune.value);
@@ -1553,30 +1772,24 @@ export default function Loc2VietaScales({
     touchDirRef.current = { dx: 0, dy: 0 };
   };
 
-  // Close / Skip controls for GM test mode
+  // GM Test Skip controls
   const handleSkipRound = () => {
-    if (currentRoundIndex < 1) {
+    if (currentRoundIndex === 0) {
       setShieldLayers(1);
       setCurrentRoundIndex(1);
-    } else {
+    } else if (currentRoundIndex === 1) {
       setShieldLayers(0);
-      setBossState('fallen');
-      setIsVictory(true);
+      setCurrentRoundIndex(2);
+    } else {
+      projectilesRef.current = [];
+      setBossState('falling');
     }
   };
 
-  // Exit transition handler with cinematic curtain sweep back to battle
-  const handleTriggerExitTransition = () => {
-    setIsExitingTransition(true);
-    setTimeout(() => {
-      onComplete({
-        success: true,
-        message: 'Function imp defeated!',
-      });
-      if (isTestMode && onCloseTest) {
-        onCloseTest();
-      }
-    }, 750);
+  const handleInstantWin = () => {
+    setShieldLayers(0);
+    projectilesRef.current = [];
+    setBossState('falling');
   };
 
   const handleRetryAfterGameOver = () => {
@@ -1602,94 +1815,76 @@ export default function Loc2VietaScales({
   return (
     <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-between p-2 sm:p-4 select-none overflow-hidden">
       {/* 1. TOP HEADER & HUD */}
-      <div className="w-full max-w-4xl flex flex-col items-center gap-1.5 shrink-0 z-20">
-        <div className="w-full flex items-center justify-between text-xs sm:text-sm text-gray-300 px-2">
-          {/* Left: Round & Shield Indicator (2 Rounds, 2 Layers) */}
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-1 rounded-full bg-slate-800/90 border border-cyan-500/40 text-cyan-300 font-bold tracking-wider text-[11px] sm:text-xs uppercase flex items-center gap-1.5 shadow-md">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
-              Round {currentRoundIndex + 1} / 2
+      <div className="w-full max-w-4xl flex items-center justify-between text-xs sm:text-sm text-gray-300 px-2 shrink-0 z-20">
+        {/* Left: 3 Rounds & Shield Indicator */}
+        <div className="flex items-center gap-2">
+          <span className="px-2.5 py-1 rounded-full bg-slate-800/90 border border-cyan-500/40 text-cyan-300 font-bold tracking-wider text-[11px] sm:text-xs uppercase flex items-center gap-1.5 shadow-md">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+            Round {currentRoundIndex + 1} / 3
+          </span>
+          <div className="flex items-center gap-1 bg-black/60 px-2.5 py-1 rounded-full border border-cyan-500/30">
+            <ShieldAlert className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-cyan-300 text-xs font-mono font-bold">
+              {shieldLayers > 0 ? `Shields: ${shieldLayers}/2` : 'UNPROTECTED!'}
             </span>
-            <div className="flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded-full border border-cyan-500/30">
-              <ShieldAlert className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-cyan-300 text-xs font-mono font-bold">
-                Shields: {shieldLayers}/2
-              </span>
-            </div>
-          </div>
-
-          {/* Center: 3 Player Hearts (Lives) */}
-          <div className="flex items-center gap-1.5 bg-black/80 px-3 py-1 rounded-full border border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.3)]">
-            <span className="text-[10px] uppercase font-bold text-gray-400 mr-1">Lives:</span>
-            {[1, 2, 3].map((heartIndex) => (
-              <Heart
-                key={heartIndex}
-                className={`w-4 h-4 transition-transform ${
-                  heartIndex <= lives
-                    ? 'text-rose-500 fill-rose-500 scale-110 drop-shadow-[0_0_6px_rgba(244,63,94,0.8)]'
-                    : 'text-gray-600 scale-90 opacity-40'
-                }`}
-              />
-            ))}
-          </div>
-
-          {/* Right: GM tools / Help / Close */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setShowHowToPlay((prev) => !prev)}
-              className="p-1.5 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-300 transition-colors"
-              title="How to Play"
-            >
-              <HelpCircle className="w-4 h-4 text-cyan-400" />
-            </button>
-
-            {isTestMode && (
-              <>
-                <button
-                  onClick={handleSkipRound}
-                  className="px-2 py-1 rounded-lg bg-amber-600/80 hover:bg-amber-500 text-white text-[11px] font-bold flex items-center gap-1"
-                >
-                  <Zap className="w-3 h-3" /> Skip Round
-                </button>
-                <button
-                  onClick={() => {
-                    setShieldLayers(0);
-                    setBossState('fallen');
-                    setIsVictory(true);
-                  }}
-                  className="px-2 py-1 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-white text-[11px] font-bold"
-                >
-                  Instant Win
-                </button>
-              </>
-            )}
-
-            {isTestMode && onCloseTest && (
-              <button
-                onClick={onCloseTest}
-                className="p-1.5 rounded-lg bg-red-900/60 hover:bg-red-800 text-red-200 transition-colors"
-                title="Exit Test Lab"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
           </div>
         </div>
 
-        {/* ELEGANT TOP RUNIC OBJECTIVE BANNER (REPLACES FLOATING OVER-THE-HEAD POLYNOMIAL) */}
-        <div className="w-full flex items-center justify-center">
-          <div className="bg-slate-900/95 border border-amber-400/50 backdrop-blur-md px-4 sm:px-6 py-1.5 rounded-2xl shadow-[0_0_20px_rgba(245,158,11,0.25)] flex items-center gap-2 sm:gap-3">
-            <span className="text-[11px] sm:text-xs uppercase font-black tracking-wider text-amber-300 flex items-center gap-1.5 shrink-0">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Harmonize Viète Altar:
-            </span>
-            <div className="text-sm sm:text-base md:text-lg text-yellow-300 font-black tracking-wide drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">
-              <InlineMath math={currentRound?.latex || ''} />
-            </div>
-          </div>
+        {/* Center: 3 Player Hearts (Lives) */}
+        <div className="flex items-center gap-1.5 bg-black/80 px-3 py-1 rounded-full border border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.3)]">
+          <span className="text-[10px] uppercase font-bold text-gray-400 mr-1">Lives:</span>
+          {[1, 2, 3].map((heartIndex) => (
+            <Heart
+              key={heartIndex}
+              className={`w-4 h-4 transition-transform ${
+                heartIndex <= lives
+                  ? 'text-rose-500 fill-rose-500 scale-110 drop-shadow-[0_0_6px_rgba(244,63,94,0.8)]'
+                  : 'text-gray-600 scale-90 opacity-40'
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Right: GM tools / Help / Close */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setShowHowToPlay((prev) => !prev)}
+            className="p-1.5 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-300 transition-colors"
+            title="How to Play"
+          >
+            <HelpCircle className="w-4 h-4 text-cyan-400" />
+          </button>
+
+          {isTestMode && (
+            <>
+              <button
+                onClick={handleSkipRound}
+                className="px-2 py-1 rounded-lg bg-amber-600/80 hover:bg-amber-500 text-white text-[11px] font-bold flex items-center gap-1"
+              >
+                <Zap className="w-3 h-3" /> Skip Round
+              </button>
+              <button
+                onClick={handleInstantWin}
+                className="px-2 py-1 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-white text-[11px] font-bold"
+              >
+                Instant Win
+              </button>
+            </>
+          )}
+
+          {isTestMode && onCloseTest && (
+            <button
+              onClick={onCloseTest}
+              className="p-1.5 rounded-lg bg-red-900/60 hover:bg-red-800 text-red-200 transition-colors"
+              title="Exit Test Lab"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 2. THE 2D CANVAS ARENA (800x600 coordinate space) - FOE IS FULLY UNOBSTRUCTED */}
+      {/* 2. THE 2D CANVAS ARENA (800x600 coordinate space) */}
       <div className="relative w-full max-w-4xl flex-1 flex items-center justify-center my-1 overflow-hidden">
         <canvas
           ref={canvasRef}
@@ -1699,6 +1894,25 @@ export default function Loc2VietaScales({
           className="w-full h-full max-h-[66vh] object-contain rounded-2xl border-2 border-slate-700/60 shadow-[0_15px_40px_rgba(0,0,0,0.9)] cursor-pointer"
         />
 
+        {/* 3. SHINING EQUATION DIRECTLY IN FRONT OF THE FOE (NO BACKGROUND BOX, HIGHER Z-AXIS) */}
+        {bossState === 'normal' && currentRound && (
+          <div className="absolute top-[14%] sm:top-[15%] left-1/2 -translate-x-1/2 pointer-events-none z-30 flex flex-col items-center select-none">
+            <div className="text-yellow-200 text-xs sm:text-sm font-black tracking-wide drop-shadow-[0_0_8px_rgba(250,204,21,1)] filter drop-shadow-[0_0_18px_rgba(245,158,11,0.85)] animate-pulse">
+              <InlineMath math={currentRound.latex} />
+            </div>
+          </div>
+        )}
+
+        {/* 4. RAGE SPEECH BUBBLE WHEN FOE IS ON THE FLOOR */}
+        {bossState === 'raging' && (
+          <div className="absolute top-[38%] left-1/2 -translate-x-1/2 pointer-events-none z-40 flex flex-col items-center animate-in zoom-in-90 duration-200">
+            <div className="bg-black text-white text-xs sm:text-sm font-black px-3.5 py-1.5 rounded-xl border border-white/60 shadow-[0_0_20px_rgba(0,0,0,0.95)] tracking-wider">
+              It&apos;s not over!
+            </div>
+            <div className="w-0 h-0 border-x-[5px] border-x-transparent border-t-[7px] border-t-black -mt-px" />
+          </div>
+        )}
+
         {/* Controls Legend overlay */}
         <div className="absolute top-2 left-2 pointer-events-none hidden sm:flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[11px] text-gray-300">
           <span className="font-mono text-cyan-300 font-bold">WASD / Arrows:</span> Move
@@ -1707,7 +1921,7 @@ export default function Loc2VietaScales({
         </div>
       </div>
 
-      {/* 3. MOBILE CONTROLS & DESKTOP FOOTER */}
+      {/* 3. MOBILE CONTROLS & STATUS FOOTER */}
       <div className="w-full max-w-4xl flex items-center justify-between gap-3 shrink-0 px-2 py-1 z-20">
         {/* Mobile D-Pad (Left) */}
         <div className="sm:hidden grid grid-cols-3 gap-1 w-28 h-28 touch-none">
@@ -1796,24 +2010,30 @@ export default function Loc2VietaScales({
             </button>
             <h3 className="text-lg font-black text-white flex items-center gap-2 mb-3">
               <Sparkles className="w-5 h-5 text-cyan-400" />
-              Viète&apos;s Mountain Trial: Rules
+              Viète&apos;s Mountain Trial: 3 Rounds
             </h3>
             <div className="space-y-3 text-xs sm:text-sm text-gray-300 leading-relaxed">
               <p>
-                1. <strong className="text-rose-400">Dodge Projectiles:</strong> The mountain boss periodically launches <strong className="text-yellow-300">monomial fireballs</strong> (e.g. <InlineMath math="2x^2, -5x, +3" />). You have <strong className="text-rose-400">3 Lives</strong> in total. Avoid them using <strong className="text-white">WASD / Arrow Keys</strong>!
+                1. <strong className="text-rose-400">Dodge Projectiles:</strong> The mountain boss periodically launches <strong className="text-yellow-300">monomial fireballs</strong>. You have <strong className="text-rose-400">3 Lives</strong>.
               </p>
               <p>
-                2. <strong className="text-cyan-300">Viète Altars:</strong>
+                2. <strong className="text-cyan-300">Viète Platforms:</strong>
                 <br />
-                • Left Altar <strong className="text-yellow-300">Σ αᵢ</strong> = Sum of all roots (<InlineMath math="=-\frac{a_{n-1}}{a_n}" />).
+                • Left Platform <strong className="text-yellow-300">∑ αᵢ</strong> = Sum of roots (<InlineMath math="=-\frac{a_{n-1}}{a_n}" />).
                 <br />
-                • Right Altar <strong className="text-yellow-300">∏ αᵢ</strong> = Product of all roots (<InlineMath math="=(-1)^n \frac{a_0}{a_n}" />).
+                • Right Platform <strong className="text-yellow-300">∏ αᵢ</strong> = Product of roots (<InlineMath math="=(-1)^n \frac{a_0}{a_n}" />).
               </p>
               <p>
-                3. <strong className="text-indigo-300">Fraction Runes:</strong> Results can be fractional (e.g. <InlineMath math="5/2, -7/3" />). Place the corresponding fractional rune onto the pedestal.
+                3. <strong className="text-yellow-300">3 Rounds & Shields:</strong>
+                <br />
+                • Round 1: Shatter outer seal.
+                <br />
+                • Round 2: Shatter inner seal (foe becomes unprotected!).
+                <br />
+                • Round 3: Lasers hit unprotected foe directly, clearing the path to the summit!
               </p>
               <p>
-                4. <strong className="text-yellow-300">Channel Altar:</strong> Once both altars are socketed, a glowing floor pad appears at the bottom. <strong className="text-white">Step onto it</strong> to fire the rays at the boss!
+                4. <strong className="text-cyan-300">Activation Dais:</strong> Once both platforms are socketed, the center step dais glows. Step onto it to fire the celestial lasers!
               </p>
             </div>
             <button
@@ -1861,57 +2081,11 @@ export default function Loc2VietaScales({
         </div>
       )}
 
-      {/* 6. VICTORY OVERLAY MODAL */}
-      {isVictory && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-300">
-          <div className="bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-950 border-2 border-yellow-400/60 rounded-3xl p-6 sm:p-8 max-w-lg w-full text-center shadow-[0_0_50px_rgba(234,179,8,0.35)] relative overflow-hidden">
-            <div className="absolute -top-12 -left-12 w-32 h-32 bg-yellow-500/20 rounded-full blur-2xl" />
-            <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-cyan-500/20 rounded-full blur-2xl" />
-
-            <div className="w-16 h-16 rounded-2xl bg-yellow-500/20 border-2 border-yellow-400 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(234,179,8,0.5)]">
-              <Award className="w-9 h-9 text-yellow-300" />
-            </div>
-
-            <div className="inline-block px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-bold uppercase tracking-wider mb-2">
-              Altar Trial Victory
-            </div>
-
-            <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wider mb-2">
-              Function imp
-            </h2>
-
-            <p className="text-sm text-gray-300 mb-6 leading-relaxed">
-              The dual celestial lasers of Sum and Product pierced the barrier and struck down the Function imp!
-            </p>
-
-            <div className="bg-black/60 rounded-xl p-3 mb-6 border border-white/10 flex items-center justify-around text-xs">
-              <div>
-                <span className="text-gray-400 block">Seals Harmonized</span>
-                <span className="text-base font-black text-yellow-300">2 / 2</span>
-              </div>
-              <div className="w-px h-8 bg-white/10" />
-              <div>
-                <span className="text-gray-400 block">Lives Left</span>
-                <span className="text-base font-black text-rose-400">{lives} / 3</span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleTriggerExitTransition}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-yellow-500 via-amber-500 to-orange-500 text-black font-black text-base uppercase tracking-wider shadow-[0_0_25px_rgba(245,158,11,0.6)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
-            >
-              <Zap className="w-5 h-5 text-black" />
-              {isTestMode ? 'Back to Test Lab' : 'Resume Battle ⚔️'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 7. CINEMATIC EXIT TRANSITION (Right to Left Wipe Back to Battle) */}
+      {/* 6. CINEMATIC EXIT FADE TRANSITION (Smooth fade back to battle after defeat rage) */}
       {isExitingTransition && (
-        <div className="fixed inset-0 z-50 pointer-events-auto bg-black animate-black-wipe-in flex items-center justify-center">
-          <div className="text-cyan-400 font-mono font-bold text-sm tracking-widest uppercase flex items-center gap-2 animate-pulse">
-            <Sparkles className="w-5 h-5 text-cyan-300" /> Returning to Battle...
+        <div className="fixed inset-0 z-50 pointer-events-auto bg-black transition-opacity duration-700 opacity-100 flex items-center justify-center">
+          <div className="text-cyan-400 font-mono font-bold text-xs sm:text-sm tracking-widest uppercase flex items-center gap-2 animate-pulse">
+            <Sparkles className="w-4 h-4 text-cyan-300" /> Returning to Battle...
           </div>
         </div>
       )}

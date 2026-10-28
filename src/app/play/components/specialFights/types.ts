@@ -13,6 +13,7 @@ export interface SpecialFightProps {
   onComplete: (result: SpecialFightCompleteResult) => void;
   isTestMode?: boolean;
   onCloseTest?: () => void;
+  spriteConfig?: any;
 }
 
 export interface SpecialFightDefinition {

@@ -5,6 +5,7 @@ import { SPECIAL_FIGHTS_LIST, getSpecialFightById } from './registry';
 import { FoeDoc } from '@/types/game';
 import { SpecialFightCompleteResult } from './types';
 import { X, Swords, RefreshCw, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { getLoc2SpriteConfig } from '@/config/specialFightSprites';
 
 interface SpecialFightModalProps {
   isOpen: boolean;
@@ -280,7 +281,9 @@ export default function SpecialFightModal({
                   unlockedContinents: [],
                   encounterWins: {},
                   imageUrl:
-                    'https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=bae93c5e-92ed-4958-9274-fb67a3f5f8c9',
+                    getLoc2SpriteConfig().owl.type === 'character'
+                      ? 'https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=bae93c5e-92ed-4958-9274-fb67a3f5f8c9'
+                      : undefined,
                 }}
                 onComplete={(res) => {
                   setTestResult(res);
@@ -310,25 +313,42 @@ export default function SpecialFightModal({
                   {/* Trembling Foe in upper-right stage */}
                   <div className="absolute top-[10%] right-[12%] flex flex-col items-center">
                     <div className="relative animate-boss-tremble">
-                      <img
-                        src={activeFoe.imageUrl}
-                        alt={activeFoe.name}
-                        className="w-48 h-48 sm:w-60 sm:h-60 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]"
-                      />
+                      {getLoc2SpriteConfig().foe.type === 'emoji' ? (
+                        <span className="text-7xl sm:text-8xl select-none filter drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]">
+                          {getLoc2SpriteConfig().foe.emoji || activeFoe.emoji || '👹'}
+                        </span>
+                      ) : activeFoe.imageUrl ? (
+                        <img
+                          src={activeFoe.imageUrl}
+                          alt={activeFoe.name}
+                          className="w-48 h-48 sm:w-60 sm:h-60 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]"
+                        />
+                      ) : (
+                        <span className="text-7xl sm:text-8xl select-none">
+                          {activeFoe.emoji || '👹'}
+                        </span>
+                      )}
                       <div className="absolute -inset-6 rounded-full bg-red-600/35 blur-2xl animate-ping pointer-events-none" />
                       <div className="absolute -inset-10 rounded-full bg-purple-600/30 blur-3xl animate-pulse pointer-events-none" />
                     </div>
-                    <div className="w-44 h-6 -mt-2 bg-black/60 rounded-[100%] blur-[2px] shadow-[0_0_20px_rgba(239,68,68,0.5)] border border-red-500/30" />
                   </div>
 
                   {/* Player Owl in lower-left */}
-                  <div className="absolute bottom-[8%] left-[10%] flex flex-col items-center opacity-90">
-                    <img
-                      src="https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=bae93c5e-92ed-4958-9274-fb67a3f5f8c9"
-                      alt="Player Owl"
-                      className="w-36 h-36 sm:w-44 sm:h-44 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]"
-                    />
-                    <div className="w-36 h-5 -mt-2 bg-black/60 rounded-[100%] blur-[2px] shadow-[0_0_20px_rgba(59,130,246,0.5)] border border-blue-500/30" />
+                  <div className="absolute bottom-[8%] left-[10%] flex flex-col items-center">
+                    {getLoc2SpriteConfig().owl.type === 'emoji' ? (
+                      <span className="text-7xl sm:text-8xl select-none filter drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]">
+                        {getLoc2SpriteConfig().owl.emoji || '🦉'}
+                      </span>
+                    ) : (
+                      <img
+                        src={
+                          getLoc2SpriteConfig().owl.path ||
+                          'https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=bae93c5e-92ed-4958-9274-fb67a3f5f8c9'
+                        }
+                        alt="Player Owl"
+                        className="w-36 h-36 sm:w-44 sm:h-44 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]"
+                      />
+                    )}
                   </div>
                 </div>
 
