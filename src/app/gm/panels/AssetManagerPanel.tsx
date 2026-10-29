@@ -541,49 +541,105 @@ export function AssetManagerPanel() {
           </div>
 
           {selectedUploadFile && (
-            <div className="flex flex-col sm:flex-row items-center gap-3 bg-gray-50 dark:bg-gray-800/60 p-3 rounded-xl border border-gray-200 dark:border-gray-700">
-              <div className="flex-1 w-full">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                  Custom File Name (Optional):
-                </label>
-                <div className="flex items-center">
+            <div className="space-y-3 bg-gray-50 dark:bg-gray-800/60 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Destination Folder Selector */}
+                <div>
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Target Destination Folder:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value as 'locations' | 'general')}
+                      className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 text-xs text-gray-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="locations">Location Specific</option>
+                      <option value="general">General</option>
+                    </select>
+
+                    {category === 'locations' ? (
+                      <select
+                        value={selectedLocation}
+                        onChange={(e) => setSelectedLocation(Number(e.target.value))}
+                        className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 text-xs text-gray-900 dark:text-white font-bold font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        {Array.from({ length: 16 }, (_, i) => i + 1).map((loc) => (
+                          <option key={loc} value={loc}>
+                            Location {loc}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        value={selectedGeneral}
+                        onChange={(e) => setSelectedGeneral(e.target.value as 'gear' | 'consumables' | 'others')}
+                        className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 text-xs text-gray-900 dark:text-white font-medium capitalize focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="gear">Gear</option>
+                        <option value="consumables">Consumables</option>
+                        <option value="others">Others</option>
+                      </select>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom File Name */}
+                <div>
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Custom File Name (Optional):
+                  </label>
                   <input
                     type="text"
                     value={customFileName}
                     onChange={(e) => setCustomFileName(e.target.value)}
-                    placeholder="e.g. boss_sprite, potion_heal"
+                    placeholder="e.g. boss_sprite, new_summit"
                     className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-xs text-gray-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedUploadFile(null);
-                    setPreviewDataUrl(null);
-                    setCustomFileName('');
-                  }}
-                  className="px-3 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUploading}
-                  className="flex-1 sm:flex-none px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
-                >
-                  {isUploading ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-3.5 h-3.5" /> Save Asset
-                    </>
-                  )}
-                </button>
+              {/* Exact Path Destination Preview */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-gray-200 dark:border-gray-700/60">
+                <div className="text-xs">
+                  <span className="text-gray-400 font-medium">Will be saved to: </span>
+                  <code className="bg-black/30 dark:bg-black/60 text-cyan-300 px-2 py-0.5 rounded font-mono text-[11px] border border-cyan-500/20 break-all">
+                    /public/{activeFolder}/
+                    {customFileName.trim()
+                      ? customFileName.trim().replace(/[^a-zA-Z0-9_\-\s]/g, '') +
+                        (selectedUploadFile.name.substring(selectedUploadFile.name.lastIndexOf('.')) || '.png')
+                      : selectedUploadFile.name}
+                  </code>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedUploadFile(null);
+                      setPreviewDataUrl(null);
+                      setCustomFileName('');
+                    }}
+                    className="px-3 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isUploading}
+                    className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
+                  >
+                    {isUploading ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5" /> Save Asset to Folder
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           )}
