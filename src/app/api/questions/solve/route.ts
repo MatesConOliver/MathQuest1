@@ -89,14 +89,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Priority 2: Return cached AI solution if it exists AND matches requested curriculum location
+    // 3. Priority 2: Return cached AI solution if it exists (0 tokens, instant response)
     const cachedLocationOrder = questionData.aiSolution?.locationOrder ?? null;
-    const isLocationMatch = !reqLocationOrder || cachedLocationOrder === reqLocationOrder;
-
-    if (questionData.aiSolution && questionData.aiSolution.text && !forceRefresh && isLocationMatch) {
+    if (questionData.aiSolution && questionData.aiSolution.text && questionData.aiSolution.text.trim() && !forceRefresh) {
       return NextResponse.json({
         source: "cached_ai",
-        solutionText: questionData.aiSolution.text,
+        solutionText: questionData.aiSolution.text.trim(),
         solutionUrl: questionData.solutionUrl || null,
         verifiedCorrectIndex: questionData.aiSolution.verifiedCorrectIndex ?? questionData.correctIndex,
         isDiscrepancy: !!questionData.aiSolution.isDiscrepancy,

@@ -394,12 +394,9 @@ export function SolutionModal({
       return;
     }
 
-    // 2. If cached AI solution exists and matches curriculum location, use it immediately (0 tokens)
-    const cachedLoc = question.aiSolution?.locationOrder ?? null;
-    const isMatchingLoc = !effectiveLoc || cachedLoc === effectiveLoc;
-
-    if (question.aiSolution && question.aiSolution.text && isMatchingLoc) {
-      setSolutionText(question.aiSolution.text);
+    // 2. If cached AI solution exists, use it immediately (0 tokens, instant 0ms retrieval)
+    if (question.aiSolution && question.aiSolution.text && question.aiSolution.text.trim()) {
+      setSolutionText(question.aiSolution.text.trim());
       setSource("cached_ai");
       setIsDiscrepancy(Boolean(question.aiSolution.isDiscrepancy));
       setDiscrepancyNote(question.aiSolution.discrepancyNote || null);
