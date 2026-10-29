@@ -603,7 +603,6 @@ export default function MapPage() {
                     </button>
                   </form>
                   <Link href="/character" className={topActionClass}>🦉 Character</Link>
-                  <Link href="/shop" className={topActionClass}>🔮 Store</Link>
                   <Link href="/" className={topActionClass}>🏠 Home</Link>
                 </div>
                 {codeMessage && <p role="status" aria-live="polite" className="text-sm font-medium text-yellow-300">{codeMessage}</p>}
@@ -761,7 +760,6 @@ export default function MapPage() {
               {/* Quick Nav Links */}
               <div className="flex items-center gap-2 shrink-0">
                 <Link href="/character" className={topActionClass}>🦉 Character</Link>
-                <Link href="/shop" className={topActionClass}>🔮 Store</Link>
                 <Link href="/" className={topActionClass}>🏠 Home</Link>
               </div>
             </div>

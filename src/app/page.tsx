@@ -245,21 +245,13 @@ export default function HomePage() {
             {needsToName && <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center text-white font-bold">Start here!</div>}
           </Link>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <Link
               href="/character"
               className={`p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl transition ${needsToName ? 'opacity-50 pointer-events-none' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
             >
               <div className="text-2xl mb-1">🦉</div>
               <div className="font-bold text-gray-900 dark:text-gray-200">Character</div>
-            </Link>
-
-            <Link
-              href="/shop"
-              className={`p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl transition ${needsToName ? 'opacity-50 pointer-events-none' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-            >
-              <div className="text-2xl mb-1">🔮</div>
-              <div className="font-bold text-gray-900 dark:text-gray-200">Store</div>
             </Link>
           </div>
 

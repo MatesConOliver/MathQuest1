@@ -5,7 +5,7 @@ import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { 
   doc, getDoc, getDocs, collection, 
-  updateDoc, increment, arrayUnion, setDoc 
+  updateDoc, increment, arrayUnion 
 } from "firebase/firestore";
 import { Character, GameItem, EncounterDoc } from "@/types/game";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -32,6 +32,12 @@ function ShopContent() {
 
   // 1. Load User, Character, and Items (filtered if store encounter)
   useEffect(() => {
+    // The general store is closed; only sub-area store encounters are accessible
+    if (!encounterId) {
+      router.replace("/map");
+      return;
+    }
+
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
         router.push("/login");
@@ -125,67 +131,6 @@ function ShopContent() {
     } catch (error) {
       console.error(error);
       setMsg("❌ Error buying item.");
-    }
-  };
-
-  // 3. Secret Admin Function to Seed the Database
-  const restockShop = async () => {
-    if(!confirm("This will overwrite/add default items. Continue?")) return;
-    
-    const initialItems: GameItem[] = [
-      {
-        id: 'sword-wood',
-        name: 'Wooden Sword',
-        description: 'A basic practice sword.',
-        type: 'weapon',
-        slot: 'mainHand',
-        price: 50,
-        stats: { d: 1 },
-        maxDurability: 50,
-        inShop: true
-      },
-      {
-        id: 'armor-cloth',
-        name: 'Apprentice Robe',
-        description: 'Offers warmth and vitality.',
-        type: 'armor',
-        slot: 'armor',
-        price: 30,
-        // Changed Defense -> Max HP
-        stats: { maxHp: { flat: 10 } }, 
-        inShop: true
-      },
-      {
-        id: 'potion-small',
-        name: 'Small Potion',
-        description: 'Restores 10 HP.',
-        type: 'potion',
-        price: 15,
-        stats: { heal: { flat: 10 } },
-        inShop: true
-      },
-      {
-        id: 'shield-calc',
-        name: 'Calculator Shield',
-        description: 'A heavy slate that adds life.',
-        type: 'armor',
-        slot: 'offHand',
-        price: 100,
-        // Changed Defense -> Max HP
-        stats: { maxHp: { flat: 25 } },
-        maxDurability: 50,
-        inShop: true
-      }
-    ];
-
-    try {
-      for (const item of initialItems) {
-        await setDoc(doc(db, "items", item.id), item);
-      }
-      alert("Store restocked! Refresh the page.");
-      window.location.reload();
-    } catch (e) {
-      alert("Error restocking store.");
     }
   };
 
@@ -391,13 +336,6 @@ function ShopContent() {
             <p className="text-gray-600 dark:text-gray-400">No items available right now.</p>
           </div>
       )}
-
-      {/* DEV TOOLS (Hidden unless you scroll down) */}
-      <div className="mt-20 border-t dark:border-gray-700 pt-10 text-center">
-        <button onClick={restockShop} className="text-xs text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-300">
-            [Dev] Restock Default Items
-        </button>
-      </div>
 
     </main>
   );

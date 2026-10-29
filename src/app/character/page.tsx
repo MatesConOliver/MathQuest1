@@ -1077,12 +1077,6 @@ export default function CharacterPage() {
             <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 h-fit transition-colors">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-bold">Backpack ({char.inventory.length})</h2>
-                    <Link 
-                    href="/shop" 
-                    className="text-xs bg-black text-white dark:bg-white dark:text-black px-3 py-1 rounded-lg hover:opacity-80 transition-opacity"
-                    >
-                    Visit Store
-                    </Link>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
