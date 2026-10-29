@@ -52,8 +52,8 @@ export function AssetManagerPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Storage Target: 'cloud' (Firebase Storage) or 'local' (/public)
-  const [storageDestination, setStorageDestination] = useState<'cloud' | 'local'>('cloud');
+  // Storage Target: 'local' (/public) or 'cloud' (Firebase Storage)
+  const [storageDestination, setStorageDestination] = useState<'cloud' | 'local'>('local');
 
   // Upload State
   const [isUploading, setIsUploading] = useState(false);
@@ -77,11 +77,22 @@ export function AssetManagerPanel() {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
   };
 
-  // Upload to Firebase Storage helper
+  // Upload to Firebase Storage helper with strict timeout to prevent endless hanging
   const uploadToFirebaseStorage = async (file: File, filename: string): Promise<string> => {
     const cloudPath = `${activeFolder}/${filename}`;
     const fileRef = storageRef(storage, cloudPath);
-    await uploadBytes(fileRef, file);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(
+        () =>
+          reject(
+            new Error(
+              'Firebase Cloud Storage upload timed out (10s). Use the "Local Filesystem" option or verify Firebase Storage bucket configuration.'
+            )
+          ),
+        10000
+      )
+    );
+    await Promise.race([uploadBytes(fileRef, file), timeoutPromise]);
     return await getDownloadURL(fileRef);
   };
 

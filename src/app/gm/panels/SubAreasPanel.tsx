@@ -2,10 +2,11 @@
 import { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, where, orderBy, addDoc, updateDoc } from 'firebase/firestore';
-import { GameLocation, SubArea, CharacterSkills, SubAreaNodeType } from '@/types/game';
+import { GameLocation, SubArea, CharacterSkills, SubAreaNodeType, FlagLogic, FlagLogicGroup } from '@/types/game';
 import { Input } from '@/app/gm/components/Input';
 import { TabButton } from '@/app/gm/components/TabButton';
 import { buildMapPath } from '@/lib/mapPath';
+import { formatFlagLogic, parseFlagExpression } from '@/lib/flagLogic';
 
 export default function SubAreasPanel() {
   const [locations, setLocations] = useState<GameLocation[]>([]);
@@ -13,8 +14,15 @@ export default function SubAreasPanel() {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
 
   const [editingSubArea, setEditingSubArea] = useState<Partial<SubArea> | null>(null);
-  const [storyFlagsInput, setStoryFlagsInput] = useState('');
   const [isCreating, setIsCreating] = useState(true);
+
+  // Boolean Flag Logic State
+  const [flagLogicState, setFlagLogicState] = useState<FlagLogic>({
+    rootOperator: 'AND',
+    groups: [],
+  });
+  const [flagExpressionInput, setFlagExpressionInput] = useState('');
+  const [newFlagInputs, setNewFlagInputs] = useState<Record<string, string>>({});
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const colorSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -74,27 +82,139 @@ export default function SubAreasPanel() {
   const selectSubAreaToEdit = (sa: SubArea) => {
     setIsCreating(false);
     setEditingSubArea(JSON.parse(JSON.stringify(sa)));
-    setStoryFlagsInput(sa.unlockRequirements?.storyFlags?.join(', ') ?? '');
+
+    const existingLogic = sa.unlockRequirements?.flagLogic;
+    const existingExpr = sa.unlockRequirements?.flagExpression;
+    const existingFlags = sa.unlockRequirements?.storyFlags || [];
+
+    if (existingLogic && Array.isArray(existingLogic.groups) && existingLogic.groups.length > 0) {
+      setFlagLogicState(existingLogic);
+      setFlagExpressionInput(existingExpr || formatFlagLogic(existingLogic));
+    } else if (existingExpr && existingExpr.trim()) {
+      const parsed = parseFlagExpression(existingExpr);
+      setFlagLogicState(parsed);
+      setFlagExpressionInput(existingExpr);
+    } else if (existingFlags.length > 0) {
+      const defaultLogic: FlagLogic = {
+        rootOperator: 'AND',
+        groups: [{ id: 'g1', operator: 'AND', flags: [...existingFlags] }],
+      };
+      setFlagLogicState(defaultLogic);
+      setFlagExpressionInput(existingFlags.join(' AND '));
+    } else {
+      setFlagLogicState({ rootOperator: 'AND', groups: [] });
+      setFlagExpressionInput('');
+    }
   };
 
   const startNewSubArea = () => {
     setIsCreating(true);
     setEditingSubArea({
-        id: '',
-        name: '',
-        description: '',
-        order: subAreas.length + 1,
-        imageUrl: '',
-        x: 50,
-        y: 50,
-        nodeType: 'encounter',
-        unlockRequirements: { skills: {} }
+      id: '',
+      name: '',
+      description: '',
+      order: subAreas.length + 1,
+      imageUrl: '',
+      x: 50,
+      y: 50,
+      nodeType: 'encounter',
+      previousSubAreaIds: [],
+      unlockRequirements: { skills: {} }
     });
-    setStoryFlagsInput('');
+    setFlagLogicState({ rootOperator: 'AND', groups: [] });
+    setFlagExpressionInput('');
   };
 
   const handleFormChange = (field: keyof SubArea, value: any) => {
     setEditingSubArea(prev => prev ? { ...prev, [field]: value } : null);
+  };
+
+  const togglePreviousSubAreaLink = (targetId: string) => {
+    if (!editingSubArea) return;
+    const current = editingSubArea.previousSubAreaIds || [];
+    const updated = current.includes(targetId)
+      ? current.filter(id => id !== targetId)
+      : [...current, targetId];
+    handleFormChange('previousSubAreaIds', updated);
+  };
+
+  // Flag Logic Builder Helpers
+  const handleAddFlagGroup = () => {
+    const newGroup: FlagLogicGroup = {
+      id: `group_${Date.now()}`,
+      operator: 'OR',
+      flags: [],
+    };
+    const nextLogic: FlagLogic = {
+      ...flagLogicState,
+      groups: [...flagLogicState.groups, newGroup],
+    };
+    setFlagLogicState(nextLogic);
+    setFlagExpressionInput(formatFlagLogic(nextLogic));
+  };
+
+  const handleRemoveFlagGroup = (groupId: string) => {
+    const nextLogic: FlagLogic = {
+      ...flagLogicState,
+      groups: flagLogicState.groups.filter(g => g.id !== groupId),
+    };
+    setFlagLogicState(nextLogic);
+    setFlagExpressionInput(formatFlagLogic(nextLogic));
+  };
+
+  const handleGroupOperatorChange = (groupId: string, op: 'AND' | 'OR') => {
+    const nextLogic: FlagLogic = {
+      ...flagLogicState,
+      groups: flagLogicState.groups.map(g => g.id === groupId ? { ...g, operator: op } : g),
+    };
+    setFlagLogicState(nextLogic);
+    setFlagExpressionInput(formatFlagLogic(nextLogic));
+  };
+
+  const handleAddFlagToGroup = (groupId: string) => {
+    const flagVal = (newFlagInputs[groupId] || '').trim().toUpperCase();
+    if (!flagVal) return;
+    const nextLogic: FlagLogic = {
+      ...flagLogicState,
+      groups: flagLogicState.groups.map(g => {
+        if (g.id !== groupId) return g;
+        if (g.flags.includes(flagVal)) return g;
+        return { ...g, flags: [...g.flags, flagVal] };
+      }),
+    };
+    setFlagLogicState(nextLogic);
+    setFlagExpressionInput(formatFlagLogic(nextLogic));
+    setNewFlagInputs(prev => ({ ...prev, [groupId]: '' }));
+  };
+
+  const handleRemoveFlagFromGroup = (groupId: string, flagIndex: number) => {
+    const nextLogic: FlagLogic = {
+      ...flagLogicState,
+      groups: flagLogicState.groups.map(g => {
+        if (g.id !== groupId) return g;
+        return { ...g, flags: g.flags.filter((_, idx) => idx !== flagIndex) };
+      }),
+    };
+    setFlagLogicState(nextLogic);
+    setFlagExpressionInput(formatFlagLogic(nextLogic));
+  };
+
+  const handleRootOperatorChange = (op: 'AND' | 'OR') => {
+    const nextLogic: FlagLogic = {
+      ...flagLogicState,
+      rootOperator: op,
+    };
+    setFlagLogicState(nextLogic);
+    setFlagExpressionInput(formatFlagLogic(nextLogic));
+  };
+
+  const handleExpressionInputBlur = () => {
+    if (!flagExpressionInput.trim()) {
+      setFlagLogicState({ rootOperator: 'AND', groups: [] });
+      return;
+    }
+    const parsed = parseFlagExpression(flagExpressionInput);
+    setFlagLogicState(parsed);
   };
   
   const handleSkillChange = (skill: keyof CharacterSkills, value: string) => {
@@ -125,14 +245,32 @@ export default function SubAreasPanel() {
 
     const subAreaToSave: Partial<SubArea> = JSON.parse(JSON.stringify(editingSubArea));
 
-    const flags = storyFlagsInput.split(',').map((s: string) => s.trim()).filter(Boolean);
-    if (flags.length > 0) {
-        subAreaToSave.unlockRequirements = {
-            ...(subAreaToSave.unlockRequirements || {}),
-            storyFlags: flags
-        };
+    // Resolve Boolean Flag Logic
+    let finalLogic = flagLogicState;
+    if (flagExpressionInput.trim()) {
+      try {
+        finalLogic = parseFlagExpression(flagExpressionInput.trim());
+      } catch {
+        finalLogic = flagLogicState;
+      }
+    }
+
+    const allDistinctFlags = Array.from(
+      new Set(finalLogic.groups.flatMap(g => g.flags.map(f => f.trim().toUpperCase())).filter(Boolean))
+    );
+
+    if (finalLogic.groups.length > 0 && allDistinctFlags.length > 0) {
+      const expr = formatFlagLogic(finalLogic);
+      subAreaToSave.unlockRequirements = {
+        ...(subAreaToSave.unlockRequirements || {}),
+        flagLogic: finalLogic,
+        flagExpression: expr,
+        storyFlags: allDistinctFlags, // Backward compatibility
+      };
     } else if (subAreaToSave.unlockRequirements) {
-        delete subAreaToSave.unlockRequirements.storyFlags;
+      delete subAreaToSave.unlockRequirements.flagLogic;
+      delete subAreaToSave.unlockRequirements.flagExpression;
+      delete subAreaToSave.unlockRequirements.storyFlags;
     }
     
     if (subAreaToSave.unlockRequirements?.skills && Object.keys(subAreaToSave.unlockRequirements.skills).length === 0) {
@@ -147,6 +285,7 @@ export default function SubAreasPanel() {
     subAreaToSave.x = typeof subAreaToSave.x === 'number' ? Math.round(subAreaToSave.x) : 50;
     subAreaToSave.y = typeof subAreaToSave.y === 'number' ? Math.round(subAreaToSave.y) : 50;
     subAreaToSave.nodeType = subAreaToSave.nodeType || 'encounter';
+    subAreaToSave.previousSubAreaIds = subAreaToSave.previousSubAreaIds || [];
 
     const { id, ...data } = subAreaToSave;
 
@@ -162,6 +301,7 @@ export default function SubAreasPanel() {
         alert("Failed to save sub-area. Check console for details.");
     }
   };
+
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this sub-area? This action cannot be undone.')) {
@@ -648,15 +788,217 @@ export default function SubAreasPanel() {
                           </div>
                         </div>
                         
-                        <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
-                        <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200">Unlock Requirements (Optional)</h4>
+                        {/* Branching Sub-Area Links */}
+                        <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                              🔗 Linked Previous Sub-Areas (Branching Paths)
+                            </label>
+                            <span className="text-[10px] font-mono text-gray-500 dark:text-gray-400">
+                              {editingSubArea.previousSubAreaIds && editingSubArea.previousSubAreaIds.length > 0
+                                ? `${editingSubArea.previousSubAreaIds.length} custom link(s)`
+                                : 'Sequential by Order'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                            Select which previous sub-area(s) lead into this node. If none are selected, it defaults to the previous sub-area by Order number.
+                          </p>
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {subAreas
+                              .filter(sa => sa.id !== editingSubArea.id)
+                              .map(sa => {
+                                const isLinked = (editingSubArea.previousSubAreaIds || []).includes(sa.id);
+                                return (
+                                  <button
+                                    key={sa.id}
+                                    type="button"
+                                    onClick={() => togglePreviousSubAreaLink(sa.id)}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                                      isLinked
+                                        ? 'bg-amber-500 text-gray-950 border-amber-400 shadow-sm'
+                                        : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-amber-400'
+                                    }`}
+                                  >
+                                    <span>{isLinked ? '✓' : '+'}</span>
+                                    <span>#{sa.order} {sa.name}</span>
+                                  </button>
+                                );
+                              })}
+                            {subAreas.filter(sa => sa.id !== editingSubArea.id).length === 0 && (
+                              <span className="text-xs text-gray-400 italic">No other sub-areas available to link.</span>
+                            )}
+                          </div>
+                        </div>
                         
-                        <Input 
-                            label="Story Flags (comma-separated)" 
-                            value={storyFlagsInput} 
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => setStoryFlagsInput(e.target.value)} 
-                            placeholder="DEFEATED_GOBLIN_KING, FOUND_KEY"
-                        />
+                        <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                        
+                        {/* BOOLEAN FLAG LOGIC SECTION */}
+                        <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <h4 className="font-bold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                <span>🚩</span> Required Story Flags & Boolean Logic
+                              </h4>
+                              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                Group required flags with AND / OR logic, e.g. <span className="font-mono text-amber-500">(A OR B) AND C</span> or <span className="font-mono text-amber-500">(A AND B) OR D</span>.
+                              </p>
+                            </div>
+
+                            {/* Root Operator Switch */}
+                            <div className="flex items-center gap-1 bg-gray-200 dark:bg-gray-900 p-1 rounded-lg border border-gray-300 dark:border-gray-700 self-start sm:self-auto">
+                              <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 px-1 uppercase">Root:</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRootOperatorChange('AND')}
+                                className={`px-2 py-0.5 rounded text-xs font-bold transition-all ${
+                                  flagLogicState.rootOperator === 'AND'
+                                    ? 'bg-blue-600 text-white shadow-xs'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-white'
+                                }`}
+                              >
+                                ALL (AND)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRootOperatorChange('OR')}
+                                className={`px-2 py-0.5 rounded text-xs font-bold transition-all ${
+                                  flagLogicState.rootOperator === 'OR'
+                                    ? 'bg-purple-600 text-white shadow-xs'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-white'
+                                }`}
+                              >
+                                ANY (OR)
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Live Formula Badge Preview */}
+                          <div className="flex items-center gap-2 bg-gray-950 p-2.5 rounded-lg border border-gray-700 text-xs font-mono">
+                            <span className="text-gray-400 shrink-0 font-bold">Live Formula:</span>
+                            <span className="text-yellow-400 font-bold overflow-x-auto truncate">
+                              {flagExpressionInput.trim() || 'No flag requirements (Open to all)'}
+                            </span>
+                          </div>
+
+                          {/* Direct Formula Editor */}
+                          <div>
+                            <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
+                              Direct Expression (Editable String):
+                            </label>
+                            <input
+                              type="text"
+                              value={flagExpressionInput}
+                              onChange={(e) => setFlagExpressionInput(e.target.value)}
+                              onBlur={handleExpressionInputBlur}
+                              placeholder="e.g. (FOUND_KEY OR TALKED_TO_ELDER) AND DEFEATED_GOBLIN"
+                              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            />
+                          </div>
+
+                          {/* Groups List */}
+                          <div className="space-y-2.5 pt-1">
+                            {flagLogicState.groups.map((group, gIdx) => (
+                              <div
+                                key={group.id || gIdx}
+                                className="p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 shadow-xs space-y-2"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 font-mono">Group #{gIdx + 1}</span>
+                                    <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-0.5 rounded border border-gray-300 dark:border-gray-600 text-[10px]">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleGroupOperatorChange(group.id!, 'OR')}
+                                        className={`px-1.5 py-0.5 rounded font-bold ${
+                                          group.operator === 'OR' ? 'bg-purple-600 text-white' : 'text-gray-400'
+                                        }`}
+                                      >
+                                        OR
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleGroupOperatorChange(group.id!, 'AND')}
+                                        className={`px-1.5 py-0.5 rounded font-bold ${
+                                          group.operator === 'AND' ? 'bg-blue-600 text-white' : 'text-gray-400'
+                                        }`}
+                                      >
+                                        AND
+                                      </button>
+                                    </div>
+                                    <span className="text-[10px] text-gray-400">
+                                      ({group.operator === 'OR' ? 'Requires ANY of these' : 'Requires ALL of these'})
+                                    </span>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveFlagGroup(group.id!)}
+                                    className="text-xs text-red-500 hover:text-red-700 font-bold"
+                                  >
+                                    ✕ Remove Group
+                                  </button>
+                                </div>
+
+                                {/* Flag Pills in this group */}
+                                <div className="flex flex-wrap gap-1.5">
+                                  {group.flags.map((flag, fIdx) => (
+                                    <span
+                                      key={`${flag}-${fIdx}`}
+                                      className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/60 font-mono text-xs flex items-center gap-1.5"
+                                    >
+                                      <span>{flag}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveFlagFromGroup(group.id!, fIdx)}
+                                        className="text-amber-600 hover:text-red-500 font-bold"
+                                      >
+                                        ×
+                                      </button>
+                                    </span>
+                                  ))}
+                                  {group.flags.length === 0 && (
+                                    <span className="text-xs text-gray-400 italic">No flags in this group yet.</span>
+                                  )}
+                                </div>
+
+                                {/* Add flag to this group input */}
+                                <div className="flex gap-2 pt-1">
+                                  <input
+                                    type="text"
+                                    value={newFlagInputs[group.id!] || ''}
+                                    onChange={(e) => setNewFlagInputs(prev => ({ ...prev, [group.id!]: e.target.value }))}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddFlagToGroup(group.id!);
+                                      }
+                                    }}
+                                    placeholder="Type flag and press Enter (e.g. HAS_SUMMIT_KEY)"
+                                    className="flex-1 px-2.5 py-1 text-xs font-mono rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddFlagToGroup(group.id!)}
+                                    className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold text-xs rounded transition-colors"
+                                  >
+                                    + Add Flag
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleAddFlagGroup}
+                            className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-amber-400 dark:hover:border-amber-400 rounded-lg text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-amber-500 transition-colors flex items-center justify-center gap-1.5"
+                          >
+                            <span>➕</span> Add Flag Group
+                          </button>
+                        </div>
+
+                        <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                        <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200">Skill Requirements (Optional)</h4>
 
                         <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                             {allPossibleSkills.map(skillName => (

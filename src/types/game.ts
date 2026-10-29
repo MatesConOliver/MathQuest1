@@ -180,11 +180,28 @@ export type GameLocation = {
   pathColor?: string; // Hex color for the connecting path in aerial map view (e.g. #fbbf24)
   unlockRequirements?: {
     storyFlags?: string[];
+    flagLogic?: FlagLogic;
+    flagExpression?: string;
     skills?: Partial<CharacterSkills>;
   };
 };
 
-export type SubAreaNodeType = 'encounter' | 'boss' | 'puzzle' | 'lore';
+export type SubAreaNodeType = 'encounter' | 'boss' | 'puzzle' | 'lore' | 'shop';
+
+export interface FlagLogicGroup {
+  id?: string;
+  op?: 'AND' | 'OR';
+  operator?: 'AND' | 'OR';
+  flags: string[];
+}
+
+export interface FlagLogic {
+  rootOp?: 'AND' | 'OR';
+  rootOperator?: 'AND' | 'OR';
+  groups: FlagLogicGroup[];
+  expressionText?: string;
+}
+
 
 export type SubArea = {
   id: string;
@@ -197,8 +214,11 @@ export type SubArea = {
   y?: number; // 0 to 100 (percentage vertical position on aerial background)
   nodeType?: SubAreaNodeType; // defaults to 'encounter'
   waypoints?: { x: number; y: number }[]; // Path bend points (0-100%) on the segment leading from the previous sub-area to this one
+  previousSubAreaIds?: string[]; // IDs of previous sub-areas this node connects from (takes precedence over 'order')
   unlockRequirements?: {
     storyFlags?: string[]; // e.g., ["DEFEATED_GOBLIN_KING"]
+    flagLogic?: FlagLogic; // (a OR b) AND c structured grouping
+    flagExpression?: string; // string expression for boolean flags
     skills?: Partial<CharacterSkills>; // e.g., { algebra: 10 }
   };
 };
@@ -226,6 +246,10 @@ export type EncounterDoc = {
   emoji?: string;
   specialFightId?: string; // Optional ID of registered special fight (e.g. 'loc2_vieta_scales')
   phase2TimeSpeedPercent?: number; // % faster timer in Phase 2 after clearing special fight (default 25)
+  // Store encounter fields
+  encounterType?: 'battle' | 'shop'; // 'battle' (default) or 'shop'
+  shopItemIds?: string[]; // Specific item IDs sold in this store encounter
+  shopGreeting?: string; // Merchant dialogue
 };
 
 export type UnlockedSubArea = {

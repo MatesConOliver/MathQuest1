@@ -965,34 +965,51 @@ export default function MapPage() {
                                           )}
                                         </div>
 
-                                        {/* Rewards Badges */}
-                                        <div className="flex flex-wrap gap-1 mt-1 text-[9px] sm:text-[10px]">
-                                          {enc.winRewardXp ? (
-                                            <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-purple-300 font-bold">
-                                              +{enc.winRewardXp} XP
+                                        {/* Rewards Badges or Store Tag */}
+                                        {enc.encounterType === 'shop' ? (
+                                          <div className="flex flex-wrap gap-1 mt-1 text-[9px] sm:text-[10px]">
+                                            <span className="px-1.5 py-0.5 rounded bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 font-bold">
+                                              🏪 Merchant Shop ({enc.shopItemIds?.length ?? 'All'} items)
                                             </span>
-                                          ) : null}
-                                          {enc.winRewardGold ? (
-                                            <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/30 text-yellow-300 font-bold">
-                                              +{enc.winRewardGold} G
-                                            </span>
-                                          ) : null}
-                                          {skillRewards.map(([skill, val]) => (
-                                            <span key={skill} className="px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-500/30 text-blue-300 font-bold">
-                                              +{val as number} {formatSkillName(skill)}
-                                            </span>
-                                          ))}
-                                        </div>
+                                          </div>
+                                        ) : (
+                                          <div className="flex flex-wrap gap-1 mt-1 text-[9px] sm:text-[10px]">
+                                            {enc.winRewardXp ? (
+                                              <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-purple-300 font-bold">
+                                                +{enc.winRewardXp} XP
+                                              </span>
+                                            ) : null}
+                                            {enc.winRewardGold ? (
+                                              <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/30 text-yellow-300 font-bold">
+                                                +{enc.winRewardGold} G
+                                              </span>
+                                            ) : null}
+                                            {skillRewards.map(([skill, val]) => (
+                                              <span key={skill} className="px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-500/30 text-blue-300 font-bold">
+                                                +{val as number} {formatSkillName(skill)}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
 
-                                    {/* FIGHT CTA BUTTON */}
-                                    <Link
-                                      href={`/play?id=${enc.id}`}
-                                      className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black text-xs uppercase tracking-wider rounded-lg shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-1"
-                                    >
-                                      <span>⚔️</span> FIGHT
-                                    </Link>
+                                    {/* ACTION CTA BUTTON */}
+                                    {enc.encounterType === 'shop' ? (
+                                      <Link
+                                        href={`/shop?encounterId=${enc.id}`}
+                                        className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-black text-xs uppercase tracking-wider rounded-lg shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-1.5"
+                                      >
+                                        <span>🏪</span> VISIT STORE
+                                      </Link>
+                                    ) : (
+                                      <Link
+                                        href={`/play?id=${enc.id}`}
+                                        className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black text-xs uppercase tracking-wider rounded-lg shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-1"
+                                      >
+                                        <span>⚔️</span> FIGHT
+                                      </Link>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -1082,9 +1099,15 @@ export default function MapPage() {
                             <span className="text-xl">{enc.emoji || '⚔️'}</span>
                             <span className="text-sm font-bold text-white">{enc.title}</span>
                           </div>
-                          <Link href={`/play?id=${enc.id}`} className="px-4 py-2 bg-yellow-400 text-gray-950 font-bold text-xs rounded-lg">
-                            FIGHT
-                          </Link>
+                          {enc.encounterType === 'shop' ? (
+                            <Link href={`/shop?encounterId=${enc.id}`} className="px-3.5 py-2 bg-emerald-500 text-gray-950 font-bold text-xs rounded-lg flex items-center gap-1">
+                              <span>🏪</span> VISIT STORE
+                            </Link>
+                          ) : (
+                            <Link href={`/play?id=${enc.id}`} className="px-4 py-2 bg-yellow-400 text-gray-950 font-bold text-xs rounded-lg">
+                              FIGHT
+                            </Link>
+                          )}
                         </div>
                       ))}
                     </div>

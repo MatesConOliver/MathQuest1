@@ -20,6 +20,10 @@ import {
   ChevronUp,
   Image as ImageIcon,
   Sparkles,
+  Folder,
+  Search,
+  X,
+  ExternalLink,
 } from 'lucide-react';
 import {
   getLoc2SpriteConfig,
@@ -41,6 +45,76 @@ export function SpecialFightsPanel() {
   const [spriteConfig, setSpriteConfig] = useState<Loc2SpriteConfig>(() => getLoc2SpriteConfig());
   const [isCustomizerOpen, setIsCustomizerOpen] = useState<boolean>(true);
   const [savedFeedback, setSavedFeedback] = useState<string | null>(null);
+
+  // Universal Asset Browser Modal State
+  const [assetBrowserOpen, setAssetBrowserOpen] = useState(false);
+  const [assetSlotTarget, setAssetSlotTarget] = useState<keyof Loc2SpriteConfig | null>(null);
+  const [browserCategory, setBrowserCategory] = useState<'locations' | 'general'>('locations');
+  const [browserLocationId, setBrowserLocationId] = useState<number>(2);
+  const [browserGeneralFolder, setBrowserGeneralFolder] = useState<'gear' | 'consumables' | 'others'>('gear');
+  const [browserFiles, setBrowserFiles] = useState<{ name: string; path: string; sizeFormatted: string }[]>([]);
+  const [browserLoading, setBrowserLoading] = useState(false);
+  const [browserSearch, setBrowserSearch] = useState('');
+  const [directAssetUrlInput, setDirectAssetUrlInput] = useState('');
+
+  const activeBrowserFolder =
+    browserCategory === 'locations'
+      ? `Assets/Location specific/location ${browserLocationId}`
+      : `Assets/General/${browserGeneralFolder}`;
+
+  const loadBrowserFiles = async () => {
+    setBrowserLoading(true);
+    try {
+      const res = await fetch(`/api/gm/assets?folder=${encodeURIComponent(activeBrowserFolder)}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.files)) {
+        setBrowserFiles(data.files);
+      } else {
+        setBrowserFiles([]);
+      }
+    } catch (err) {
+      console.error('Error fetching assets for browser:', err);
+      setBrowserFiles([]);
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (assetBrowserOpen) {
+      loadBrowserFiles();
+    }
+  }, [assetBrowserOpen, activeBrowserFolder]);
+
+  const openAssetBrowser = (slotKey: keyof Loc2SpriteConfig) => {
+    setAssetSlotTarget(slotKey);
+    setDirectAssetUrlInput(spriteConfig[slotKey]?.path || spriteConfig[slotKey]?.emoji || '');
+    setAssetBrowserOpen(true);
+  };
+
+  const selectAssetForSlot = (filePath: string, fileName: string) => {
+    if (!assetSlotTarget) return;
+    const isEmoji = !filePath.includes('/') && !filePath.startsWith('http') && filePath.length <= 4;
+    const choice: SpriteChoice = {
+      id: `custom_${Date.now()}`,
+      name: fileName,
+      type: isEmoji ? 'emoji' : 'custom',
+      path: filePath,
+      previewUrl: filePath,
+      emoji: isEmoji ? filePath : undefined,
+      description: `Asset: ${fileName}`,
+    };
+    const updated = {
+      ...spriteConfig,
+      [assetSlotTarget]: choice,
+    };
+    setSpriteConfig(updated);
+    saveLoc2SpriteConfig(updated);
+    setSavedFeedback(`Assigned ${fileName} to ${String(assetSlotTarget)}!`);
+    setTimeout(() => setSavedFeedback(null), 2500);
+    setAssetBrowserOpen(false);
+  };
+
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'foes'), (snap) => {
@@ -317,19 +391,29 @@ export function SpecialFightsPanel() {
                           )}
                         </div>
 
-                        {/* Selector */}
-                        <select
-                          value={spriteConfig.background.id}
-                          onChange={(e) => handleSpriteChoice('background', e.target.value)}
-                          className="w-full bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
-                        >
-                          {LOC2_AVAILABLE_SPRITES.background.map((opt) => (
-                            <option key={opt.id} value={opt.id}>
-                              {opt.name}
-                            </option>
-                          ))}
-                          <option value="custom">Custom Asset Path / URL...</option>
-                        </select>
+                        {/* Selector with Browse Button */}
+                        <div className="flex gap-1.5">
+                          <select
+                            value={spriteConfig.background.id}
+                            onChange={(e) => handleSpriteChoice('background', e.target.value)}
+                            className="flex-1 bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                          >
+                            {LOC2_AVAILABLE_SPRITES.background.map((opt) => (
+                              <option key={opt.id} value={opt.id}>
+                                {opt.name}
+                              </option>
+                            ))}
+                            <option value="custom">Custom Asset Path / URL...</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => openAssetBrowser('background')}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shrink-0 flex items-center gap-1 shadow-sm transition-transform active:scale-95"
+                            title="Browse all game assets"
+                          >
+                            <Folder className="w-3 h-3 text-amber-300" /> Browse
+                          </button>
+                        </div>
 
                         {spriteConfig.background.id === 'custom' && (
                           <input
@@ -372,19 +456,29 @@ export function SpecialFightsPanel() {
                           )}
                         </div>
 
-                        {/* Selector */}
-                        <select
-                          value={spriteConfig.dais.id}
-                          onChange={(e) => handleSpriteChoice('dais', e.target.value)}
-                          className="w-full bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-amber-400"
-                        >
-                          {LOC2_AVAILABLE_SPRITES.dais.map((opt) => (
-                            <option key={opt.id} value={opt.id}>
-                              {opt.name}
-                            </option>
-                          ))}
-                          <option value="custom">Custom Asset Path / URL...</option>
-                        </select>
+                        {/* Selector with Browse Button */}
+                        <div className="flex gap-1.5">
+                          <select
+                            value={spriteConfig.dais.id}
+                            onChange={(e) => handleSpriteChoice('dais', e.target.value)}
+                            className="flex-1 bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                          >
+                            {LOC2_AVAILABLE_SPRITES.dais.map((opt) => (
+                              <option key={opt.id} value={opt.id}>
+                                {opt.name}
+                              </option>
+                            ))}
+                            <option value="custom">Custom Asset Path / URL...</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => openAssetBrowser('dais')}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shrink-0 flex items-center gap-1 shadow-sm transition-transform active:scale-95"
+                            title="Browse all game assets"
+                          >
+                            <Folder className="w-3 h-3 text-amber-300" /> Browse
+                          </button>
+                        </div>
 
                         {spriteConfig.dais.id === 'custom' && (
                           <input
@@ -428,19 +522,29 @@ export function SpecialFightsPanel() {
                           )}
                         </div>
 
-                        {/* Selector */}
-                        <select
-                          value={spriteConfig.platformSum.id}
-                          onChange={(e) => handleSpriteChoice('platformSum', e.target.value)}
-                          className="w-full bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-400"
-                        >
-                          {LOC2_AVAILABLE_SPRITES.platformSum.map((opt) => (
-                            <option key={opt.id} value={opt.id}>
-                              {opt.name}
-                            </option>
-                          ))}
-                          <option value="custom">Custom Asset Path / URL...</option>
-                        </select>
+                        {/* Selector with Browse Button */}
+                        <div className="flex gap-1.5">
+                          <select
+                            value={spriteConfig.platformSum.id}
+                            onChange={(e) => handleSpriteChoice('platformSum', e.target.value)}
+                            className="flex-1 bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-400"
+                          >
+                            {LOC2_AVAILABLE_SPRITES.platformSum.map((opt) => (
+                              <option key={opt.id} value={opt.id}>
+                                {opt.name}
+                              </option>
+                            ))}
+                            <option value="custom">Custom Asset Path / URL...</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => openAssetBrowser('platformSum')}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shrink-0 flex items-center gap-1 shadow-sm transition-transform active:scale-95"
+                            title="Browse all game assets"
+                          >
+                            <Folder className="w-3 h-3 text-amber-300" /> Browse
+                          </button>
+                        </div>
 
                         {spriteConfig.platformSum.id === 'custom' && (
                           <input
@@ -484,19 +588,29 @@ export function SpecialFightsPanel() {
                           )}
                         </div>
 
-                        {/* Selector */}
-                        <select
-                          value={spriteConfig.platformProduct.id}
-                          onChange={(e) => handleSpriteChoice('platformProduct', e.target.value)}
-                          className="w-full bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-400"
-                        >
-                          {LOC2_AVAILABLE_SPRITES.platformProduct.map((opt) => (
-                            <option key={opt.id} value={opt.id}>
-                              {opt.name}
-                            </option>
-                          ))}
-                          <option value="custom">Custom Asset Path / URL...</option>
-                        </select>
+                        {/* Selector with Browse Button */}
+                        <div className="flex gap-1.5">
+                          <select
+                            value={spriteConfig.platformProduct.id}
+                            onChange={(e) => handleSpriteChoice('platformProduct', e.target.value)}
+                            className="flex-1 bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-400"
+                          >
+                            {LOC2_AVAILABLE_SPRITES.platformProduct.map((opt) => (
+                              <option key={opt.id} value={opt.id}>
+                                {opt.name}
+                              </option>
+                            ))}
+                            <option value="custom">Custom Asset Path / URL...</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => openAssetBrowser('platformProduct')}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shrink-0 flex items-center gap-1 shadow-sm transition-transform active:scale-95"
+                            title="Browse all game assets"
+                          >
+                            <Folder className="w-3 h-3 text-amber-300" /> Browse
+                          </button>
+                        </div>
 
                         {spriteConfig.platformProduct.id === 'custom' && (
                           <input
@@ -541,19 +655,29 @@ export function SpecialFightsPanel() {
                           )}
                         </div>
 
-                        {/* Selector */}
-                        <select
-                          value={spriteConfig.owl.id}
-                          onChange={(e) => handleSpriteChoice('owl', e.target.value)}
-                          className="w-full bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
-                        >
-                          {LOC2_AVAILABLE_SPRITES.owl.map((opt) => (
-                            <option key={opt.id} value={opt.id}>
-                              {opt.name}
-                            </option>
-                          ))}
-                          <option value="custom">Custom Emoji / Image URL...</option>
-                        </select>
+                        {/* Selector with Browse Button */}
+                        <div className="flex gap-1.5">
+                          <select
+                            value={spriteConfig.owl.id}
+                            onChange={(e) => handleSpriteChoice('owl', e.target.value)}
+                            className="flex-1 bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                          >
+                            {LOC2_AVAILABLE_SPRITES.owl.map((opt) => (
+                              <option key={opt.id} value={opt.id}>
+                                {opt.name}
+                              </option>
+                            ))}
+                            <option value="custom">Custom Emoji / Image URL...</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => openAssetBrowser('owl')}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shrink-0 flex items-center gap-1 shadow-sm transition-transform active:scale-95"
+                            title="Browse all game assets"
+                          >
+                            <Folder className="w-3 h-3 text-amber-300" /> Browse
+                          </button>
+                        </div>
 
                         {spriteConfig.owl.id === 'custom' && (
                           <input
@@ -600,19 +724,29 @@ export function SpecialFightsPanel() {
                           )}
                         </div>
 
-                        {/* Selector */}
-                        <select
-                          value={spriteConfig.foe.id}
-                          onChange={(e) => handleSpriteChoice('foe', e.target.value)}
-                          className="w-full bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-rose-400"
-                        >
-                          {LOC2_AVAILABLE_SPRITES.foe.map((opt) => (
-                            <option key={opt.id} value={opt.id}>
-                              {opt.name}
-                            </option>
-                          ))}
-                          <option value="custom">Custom Emoji / Image URL...</option>
-                        </select>
+                        {/* Selector with Browse Button */}
+                        <div className="flex gap-1.5">
+                          <select
+                            value={spriteConfig.foe.id}
+                            onChange={(e) => handleSpriteChoice('foe', e.target.value)}
+                            className="flex-1 bg-black/90 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-rose-400"
+                          >
+                            {LOC2_AVAILABLE_SPRITES.foe.map((opt) => (
+                              <option key={opt.id} value={opt.id}>
+                                {opt.name}
+                              </option>
+                            ))}
+                            <option value="custom">Custom Emoji / Image URL...</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => openAssetBrowser('foe')}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shrink-0 flex items-center gap-1 shadow-sm transition-transform active:scale-95"
+                            title="Browse all game assets"
+                          >
+                            <Folder className="w-3 h-3 text-amber-300" /> Browse
+                          </button>
+                        </div>
 
                         {spriteConfig.foe.id === 'custom' && (
                           <input
@@ -686,7 +820,165 @@ export function SpecialFightsPanel() {
         </div>
       </div>
 
-      {/* 5. Modal Runner */}
+      {/* 5. UNIVERSAL ASSET BROWSER MODAL */}
+      {assetBrowserOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border-2 border-indigo-500/50 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-slate-950">
+              <div className="flex items-center gap-2.5">
+                <Folder className="w-5 h-5 text-indigo-400" />
+                <div>
+                  <h3 className="font-black text-lg text-white">Universal Asset Library Browser</h3>
+                  <p className="text-xs text-gray-400">
+                    Assigning asset to slot: <span className="font-mono text-cyan-300 font-bold uppercase">{String(assetSlotTarget)}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAssetBrowserOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-gray-300 hover:text-white flex items-center justify-center font-bold text-sm transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Folder Navigation Tabs & Search */}
+            <div className="p-4 bg-slate-950/60 border-b border-white/10 space-y-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="flex rounded-lg bg-slate-800 p-0.5 border border-white/10 text-xs shrink-0">
+                  <button
+                    onClick={() => setBrowserCategory('locations')}
+                    className={`px-3 py-1 rounded-md font-bold transition-all ${
+                      browserCategory === 'locations' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Location Specific
+                  </button>
+                  <button
+                    onClick={() => setBrowserCategory('general')}
+                    className={`px-3 py-1 rounded-md font-bold transition-all ${
+                      browserCategory === 'general' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    General Assets
+                  </button>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Filter assets by name..."
+                    value={browserSearch}
+                    onChange={(e) => setBrowserSearch(e.target.value)}
+                    className="w-full bg-slate-800 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-indigo-400"
+                  />
+                </div>
+              </div>
+
+              {/* Location selector pills */}
+              {browserCategory === 'locations' ? (
+                <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto pr-1">
+                  {Array.from({ length: 16 }, (_, i) => i + 1).map((locNum) => (
+                    <button
+                      key={locNum}
+                      onClick={() => setBrowserLocationId(locNum)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
+                        browserLocationId === locNum
+                          ? 'bg-amber-500 text-gray-950 border-amber-400'
+                          : 'bg-slate-800 text-gray-300 border-white/10 hover:border-amber-400/50'
+                      }`}
+                    >
+                      Loc {locNum}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  {(['gear', 'consumables', 'others'] as const).map((genFolder) => (
+                    <button
+                      key={genFolder}
+                      onClick={() => setBrowserGeneralFolder(genFolder)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold capitalize transition-all border ${
+                        browserGeneralFolder === genFolder
+                          ? 'bg-amber-500 text-gray-950 border-amber-400'
+                          : 'bg-slate-800 text-gray-300 border-white/10 hover:border-amber-400/50'
+                      }`}
+                    >
+                      {genFolder}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Asset Grid */}
+            <div className="p-4 overflow-y-auto flex-1 min-h-[280px]">
+              {browserLoading ? (
+                <div className="py-16 text-center text-gray-400 italic text-sm">Loading assets from {activeBrowserFolder}...</div>
+              ) : browserFiles.filter(f => f.name.toLowerCase().includes(browserSearch.toLowerCase())).length === 0 ? (
+                <div className="py-16 text-center text-gray-400 space-y-2">
+                  <p className="text-sm">No assets found in <span className="font-mono text-cyan-300">{activeBrowserFolder}</span>.</p>
+                  <p className="text-xs text-gray-500">Upload new assets in the GM Asset Manager, or enter a custom path/URL below.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {browserFiles
+                    .filter(f => f.name.toLowerCase().includes(browserSearch.toLowerCase()))
+                    .map((file) => (
+                      <div
+                        key={file.path}
+                        onClick={() => selectAssetForSlot(file.path, file.name)}
+                        className="group bg-slate-950 border border-white/10 hover:border-cyan-400 rounded-xl p-2.5 cursor-pointer transition-all hover:scale-[1.02] flex flex-col justify-between shadow-md"
+                      >
+                        <div className="w-full h-24 rounded-lg bg-black/60 overflow-hidden flex items-center justify-center p-1 border border-white/5 relative">
+                          <img
+                            src={file.path}
+                            alt={file.name}
+                            className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform"
+                          />
+                        </div>
+                        <div className="mt-2 text-left">
+                          <h5 className="text-xs font-bold text-white truncate group-hover:text-cyan-300" title={file.name}>
+                            {file.name}
+                          </h5>
+                          <span className="text-[10px] font-mono text-gray-400">{file.sizeFormatted}</span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {/* Direct URL or Emoji Input Row */}
+            <div className="p-3 bg-slate-950 border-t border-white/10 flex flex-col sm:flex-row items-center gap-2 text-xs">
+              <span className="text-gray-400 font-bold shrink-0">Direct URL or Emoji:</span>
+              <input
+                type="text"
+                value={directAssetUrlInput}
+                onChange={(e) => setDirectAssetUrlInput(e.target.value)}
+                placeholder="https://... or /Assets/... or 🦉"
+                className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-1.5 text-white font-mono focus:outline-none focus:border-cyan-400"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (directAssetUrlInput.trim()) {
+                    selectAssetForSlot(directAssetUrlInput.trim(), directAssetUrlInput.trim());
+                  }
+                }}
+                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold shrink-0 transition-colors"
+              >
+                Use Direct Input
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Modal Runner */}
       <SpecialFightModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -698,3 +990,4 @@ export function SpecialFightsPanel() {
     </div>
   );
 }
+

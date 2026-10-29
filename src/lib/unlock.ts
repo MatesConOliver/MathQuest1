@@ -1,4 +1,5 @@
 import { Character, CharacterSkills, GameLocation, SubArea, UnlockedSubArea } from "@/types/game";
+import { evaluateFlagLogic } from "@/lib/flagLogic";
 
 export type UnlockStatus =
     | { locked: false }
@@ -8,14 +9,12 @@ export type UnlockStatus =
 export function getUnlockStatus(item: GameLocation | SubArea, character: Character, unlockedSubAreas?: { [key: string]: UnlockedSubArea }): UnlockStatus {
   const reqs = item.unlockRequirements;
 
-  // 1. Check Story Flags first (Story flags are authoritative - if GM adds or changes a flag, it must be locked)
-  if (reqs?.storyFlags && reqs.storyFlags.length > 0) {
+  // 1. Check Story Flags / Boolean Flag Logic (Authoritative: flagLogic, flagExpression, or storyFlags)
+  const targetLogic = reqs?.flagLogic || reqs?.flagExpression || reqs?.storyFlags;
+  if (targetLogic) {
     const playerFlags = (character.storyFlags || []).map(f => typeof f === 'string' ? f.trim() : f);
-    const hasAllFlags = reqs.storyFlags.every(flag => {
-      const clean = typeof flag === 'string' ? flag.trim() : flag;
-      return clean && playerFlags.includes(clean);
-    });
-    if (!hasAllFlags) {
+    const passesFlags = evaluateFlagLogic(targetLogic, playerFlags);
+    if (!passesFlags) {
       return { locked: true, reason: 'story' };
     }
   }

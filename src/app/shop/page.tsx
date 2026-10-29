@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { 
   doc, getDoc, getDocs, collection, 
   updateDoc, increment, arrayUnion, setDoc 
 } from "firebase/firestore";
-import { Character, GameItem } from "@/types/game";
-import { useRouter } from "next/navigation";
+import { Character, GameItem, EncounterDoc } from "@/types/game";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAudio } from "@/context/AudioContext";
 import Link from "next/link";
 
-export default function ShopPage() {
+function ShopContent() {
   const { playTrack } = useAudio()!; 
 
   useEffect(() => {
@@ -20,13 +20,17 @@ export default function ShopPage() {
   }, [playTrack]);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const encounterId = searchParams.get('encounterId');
+
   const [user, setUser] = useState<User | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
   const [items, setItems] = useState<GameItem[]>([]);
+  const [encounter, setEncounter] = useState<EncounterDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
 
-  // 1. Load User and Character
+  // 1. Load User, Character, and Items (filtered if store encounter)
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
@@ -42,21 +46,42 @@ export default function ShopPage() {
         setCharacter(charSnap.data() as Character);
       }
 
+      // Check if visiting a specific Store Encounter
+      let activeEncounter: EncounterDoc | null = null;
+      if (encounterId) {
+        try {
+          const encSnap = await getDoc(doc(db, "encounters", encounterId));
+          if (encSnap.exists()) {
+            activeEncounter = { ...encSnap.data(), id: encSnap.id } as EncounterDoc;
+            setEncounter(activeEncounter);
+          }
+        } catch (err) {
+          console.error("Error loading encounter:", err);
+        }
+      }
+
       // Fetch Items from the Shop
       const itemsSnap = await getDocs(collection(db, "items"));
       const loadedItems: GameItem[] = [];
-      itemsSnap.forEach((doc) => {
-          const itemData = doc.data() as GameItem;
+      itemsSnap.forEach((d) => {
+          const itemData = d.data() as GameItem;
           if (itemData.inShop !== false) {
               loadedItems.push(itemData);
           }
       });
-      setItems(loadedItems);
+
+      // If store encounter defines specific item IDs, filter strictly to those items
+      if (activeEncounter && Array.isArray(activeEncounter.shopItemIds) && activeEncounter.shopItemIds.length > 0) {
+        const allowedSet = new Set(activeEncounter.shopItemIds);
+        setItems(loadedItems.filter(item => allowedSet.has(item.id)));
+      } else {
+        setItems(loadedItems);
+      }
 
       setLoading(false);
     });
     return () => unsub();
-  }, [router]);
+  }, [router, encounterId]);
 
   // 2. Function to Buy an Item
   const handleBuy = async (item: GameItem) => {
@@ -178,16 +203,28 @@ export default function ShopPage() {
 
       <header className="flex flex-col md:flex-row justify-between items-center mb-8 border-b dark:border-gray-700 pb-4 gap-4">
         <div>
-          <h1 className="text-4xl font-bold">Item Store</h1>
-          <p className="text-gray-500 dark:text-gray-400">Spend your hard-earned gold!</p>
+          <div className="flex items-center gap-2.5">
+            <span className="text-3xl">{encounter?.emoji || "🏪"}</span>
+            <h1 className="text-3xl sm:text-4xl font-bold">
+              {encounter ? encounter.title : "Item Store"}
+            </h1>
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {encounter?.shopGreeting || (encounter ? "Curated wares selected for this outpost." : "Spend your hard-earned gold!")}
+          </p>
+          {encounter && (
+            <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-bold">
+              <span>📍 Sub-Area Outpost</span> • <span>{items.length} item(s) in stock</span>
+            </div>
+          )}
         </div>
         <div className="text-right flex flex-col items-end">
           <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
             🪙 {character ? character.gold : 0} G
           </div>
-          <nav aria-label="Page navigation" className="flex flex-wrap justify-end gap-2">
+          <nav aria-label="Page navigation" className="flex flex-wrap justify-end gap-2 mt-2">
+            <Link href="/map" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-yellow-500/50 bg-yellow-400/10 px-3 py-1.5 text-sm font-bold text-yellow-300 transition-colors hover:bg-yellow-400/20">🗺️ Return to Map</Link>
             <Link href="/character" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🦉 Character</Link>
-            <Link href="/map" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🗺️ Map</Link>
             <Link href="/" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🏠 Main menu</Link>
           </nav>
         </div>
@@ -363,5 +400,13 @@ export default function ShopPage() {
       </div>
 
     </main>
+  );
+}
+
+export default function ShopPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-300 font-bold">🏪 Loading Store...</div>}>
+      <ShopContent />
+    </Suspense>
   );
 }
