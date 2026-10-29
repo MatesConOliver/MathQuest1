@@ -9,6 +9,7 @@ import {
   setDoc,
   addDoc,
   deleteDoc,
+  deleteField,
   query,
   orderBy,
   onSnapshot,
@@ -183,13 +184,15 @@ export function EncountersPanel() {
         foes: foeIds, foeId: foesText.split(",")[0]?.trim() || "",
         imageUrl: imageUrl || "", emoji: emoji || (encounterType === 'shop' ? "🏪" : "👹"), shuffleQuestions: shuffle,
         questionTag: questionTag, //legacy
-        specialFightId: specialFightId || undefined,
+        ...(specialFightId && { specialFightId }),
         phase2TimeSpeedPercent: Number(phase2Speed) || 25,
       };
   
       try {
         const docRef = editingId ? doc(db, "encounters", editingId) : await addDoc(collection(db, "encounters"), {});
-        await setDoc(docRef, docData, { merge: true });
+        // Firestore rejects undefined; explicitly remove the field when cleared
+        const payload = specialFightId ? docData : { ...docData, specialFightId: deleteField() };
+        await setDoc(docRef, payload, { merge: true });
         
         setMsg(editingId ? "✅ Updated Encounter!" : "✅ Created New Encounter!");
         if (!editingId) resetForm();
