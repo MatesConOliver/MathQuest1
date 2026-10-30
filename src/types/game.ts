@@ -184,6 +184,7 @@ export type GameLocation = {
     flagExpression?: string;
     skills?: Partial<CharacterSkills>;
   };
+  assignedTags?: string[]; // Curriculum unit tags uniquely mapped to this location
 };
 
 export type SubAreaNodeType = 'encounter' | 'boss' | 'puzzle' | 'lore' | 'shop';

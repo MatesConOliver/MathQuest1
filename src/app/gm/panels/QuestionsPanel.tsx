@@ -13,10 +13,12 @@ import {
   where,
   serverTimestamp,
   updateDoc,
+  onSnapshot,
+  orderBy,
 } from "firebase/firestore";
 
 import { InlineMath, BlockMath } from 'react-katex';
-import { QuestionDoc, ContentBlock } from "@/types/game";
+import { QuestionDoc, ContentBlock, GameLocation } from "@/types/game";
 import { Input } from "@/app/gm/components/Input";
 import { QuestionBatchImporter } from "./QuestionBatchImporter";
 import { IB_MATH_AA_HL_SYLLABUS } from "@/lib/syllabus";
@@ -244,6 +246,7 @@ export function QuestionsPanel() {
     // BATCH SELECTION & GENERATION STATE
     const [selectedQIds, setSelectedQIds] = useState<Set<string>>(new Set());
     const [batchLocOrder, setBatchLocOrder] = useState<number | null>(null);
+    const [batchAutoDetectLoc, setBatchAutoDetectLoc] = useState(true);
     const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
     const [batchRunning, setBatchRunning] = useState(false);
     const [batchStats, setBatchStats] = useState({
@@ -257,6 +260,74 @@ export function QuestionsPanel() {
       isComplete: false,
     });
     const abortControllerRef = useRef<AbortController | null>(null);
+
+    // LOCATIONS & CURRICULUM TAG MAPPINGS
+    const [locations, setLocations] = useState<GameLocation[]>([]);
+
+    useEffect(() => {
+      const q = query(collection(db, "locations"), orderBy("order"));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const fetched = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as GameLocation));
+        setLocations(fetched);
+      });
+      return () => unsubscribe();
+    }, []);
+
+    // Global Mapping: Tag -> Location
+    const tagToLocationMap = useMemo(() => {
+      const map = new Map<string, { id: string; name: string; order: number }>();
+      locations.forEach((l) => {
+        (l.assignedTags || []).forEach((t) => {
+          const norm = t.trim().toLowerCase();
+          if (norm) {
+            map.set(norm, { id: l.id, name: l.name, order: l.order });
+          }
+        });
+      });
+      return map;
+    }, [locations]);
+
+    // Resolve location from question tags
+    const getQuestionLocation = useCallback(
+      (q: { tags?: string[] }) => {
+        const tags = q.tags || [];
+        if (tags.length === 0) {
+          return { locationOrder: null, locationName: null, isConflict: false, conflicts: [], matchedTags: [] };
+        }
+
+        const matches: { tag: string; loc: { id: string; name: string; order: number } }[] = [];
+        for (const rawTag of tags) {
+          const loc = tagToLocationMap.get(rawTag.trim().toLowerCase());
+          if (loc) {
+            matches.push({ tag: rawTag, loc });
+          }
+        }
+
+        if (matches.length === 0) {
+          return { locationOrder: null, locationName: null, isConflict: false, conflicts: [], matchedTags: [] };
+        }
+
+        const distinctOrders = Array.from(new Set(matches.map((m) => m.loc.order)));
+        if (distinctOrders.length > 1) {
+          return {
+            locationOrder: matches[0].loc.order,
+            locationName: matches[0].loc.name,
+            isConflict: true,
+            conflicts: matches.map((m) => `Loc ${m.loc.order} (${m.tag})`),
+            matchedTags: matches.map((m) => m.tag),
+          };
+        }
+
+        return {
+          locationOrder: matches[0].loc.order,
+          locationName: matches[0].loc.name,
+          isConflict: false,
+          conflicts: [],
+          matchedTags: matches.map((m) => m.tag),
+        };
+      },
+      [tagToLocationMap]
+    );
 
     // Memoized preview content
     const promptPreview = useMemo(() => stringToContentBlocks(promptString), [promptString]);
@@ -420,7 +491,8 @@ export function QuestionsPanel() {
       setSolutionUrl(q.solutionUrl || "");
       setSolutionText(q.solutionText || "");
       setCurrentAiSolution(q.aiSolution?.text || "");
-      setSingleLocOrder(q.aiSolution?.locationOrder ?? null);
+      const resolvedLoc = getQuestionLocation(q);
+      setSingleLocOrder(q.aiSolution?.locationOrder ?? resolvedLoc.locationOrder ?? null);
       const totalSecs = q.timeLimit || 30; 
       setQMinutes(Math.floor(totalSecs / 60));
       setQSeconds(totalSecs % 60);
@@ -688,16 +760,31 @@ export function QuestionsPanel() {
           continue;
         }
 
+        // Determine effective location order for curriculum constraint
+        let effectiveLocOrder = batchLocOrder;
+        let locSourceNote = batchLocOrder ? `Unit ${batchLocOrder}` : "Universal";
+        if (batchAutoDetectLoc) {
+          const locInfo = getQuestionLocation(q);
+          if (locInfo.locationOrder !== null) {
+            effectiveLocOrder = locInfo.locationOrder;
+            locSourceNote = `Tag Unit ${effectiveLocOrder} (${locInfo.locationName})`;
+          } else if (batchLocOrder !== null) {
+            locSourceNote = `Fallback Unit ${batchLocOrder}`;
+          } else {
+            locSourceNote = "Universal (Unassigned Tag)";
+          }
+        }
+
         // Generate AI solution for question with no existing answer
         setBatchStats((prev) => ({
           ...prev,
           processed: i + 1,
           currentTitle: qTitle,
-          currentStatus: `Generating AI answer (${i + 1}/${targetList.length})...`,
+          currentStatus: `Generating AI answer [${locSourceNote}] (${i + 1}/${targetList.length})...`,
         }));
 
         try {
-          const result = await generateAiSolutionForQuestion(q, batchLocOrder, signal);
+          const result = await generateAiSolutionForQuestion(q, effectiveLocOrder, signal);
           if (signal.aborted) break;
 
           const aiPayload = {
@@ -707,7 +794,7 @@ export function QuestionsPanel() {
             discrepancyNote: result.discrepancyNote || "",
             generatedAt: Date.now(),
             model: "gemini-3.8-flash",
-            locationOrder: batchLocOrder,
+            locationOrder: effectiveLocOrder,
           };
 
           if (q.id) {
@@ -869,10 +956,39 @@ export function QuestionsPanel() {
 
              {/* AI Solution (Editable + Generatable) */}
              <div className="pt-2 border-t border-indigo-200/60 dark:border-indigo-900/40 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-[10px] font-bold uppercase text-indigo-800 dark:text-indigo-300">
-                    🤖 AI Solution (Editable)
-                  </label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-bold uppercase text-indigo-800 dark:text-indigo-300">
+                      🤖 AI Solution (Editable)
+                    </label>
+                    {(() => {
+                      const curTags = tagsText.split(",").map((s) => s.trim()).filter(Boolean);
+                      const locInfo = getQuestionLocation({ tags: curTags });
+                      if (locInfo.isConflict) {
+                        return (
+                          <span
+                            className="text-[10px] bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full font-bold border border-red-300 dark:border-red-800"
+                            title={`Conflict: tags belong to different locations (${locInfo.conflicts.join(", ")})`}
+                          >
+                            ⚠️ Multi-Unit Conflict
+                          </span>
+                        );
+                      }
+                      if (locInfo.locationOrder !== null) {
+                        return (
+                          <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full font-bold">
+                            📍 Tag Unit: Loc {locInfo.locationOrder} ({locInfo.locationName})
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full font-bold">
+                          ⚪ Unassigned Unit (Universal)
+                        </span>
+                      );
+                    })()}
+                  </div>
+
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] text-gray-500 dark:text-gray-400">Curriculum Scope:</span>
                     <select
@@ -1064,7 +1180,9 @@ export function QuestionsPanel() {
 
                 {/* Batch Scope Selector */}
                 <div className="flex items-center gap-1">
-                  <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Scope:</span>
+                  <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">
+                    {batchAutoDetectLoc ? "Fallback Scope:" : "Scope:"}
+                  </span>
                   <select
                     value={batchLocOrder ?? ""}
                     onChange={(e) => setBatchLocOrder(e.target.value ? Number(e.target.value) : null)}
@@ -1078,6 +1196,22 @@ export function QuestionsPanel() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Tag Auto-detection Toggle */}
+              <div className="flex items-center justify-between pt-1 border-t border-indigo-200/60 dark:border-indigo-900/40">
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-900 dark:text-indigo-200 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={batchAutoDetectLoc}
+                    onChange={(e) => setBatchAutoDetectLoc(e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                  />
+                  <span>Auto-detect Unit per Question from Tags (Recommended)</span>
+                </label>
+                <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                  {batchAutoDetectLoc ? "Strict syllabus bounds per tag" : "Uniform syllabus bounds"}
+                </span>
               </div>
 
               {/* Batch Generate Button */}
@@ -1156,6 +1290,31 @@ export function QuestionsPanel() {
                     <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">{getQuestionDisplayText(q)}</div>
                     <div className="text-xs text-gray-400 flex flex-wrap items-center gap-1.5 mt-2">
                       <span className="bg-gray-100 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded-full font-mono text-[10px]">{q.tags?.join(", ")}</span>
+                      {(() => {
+                        const locInfo = getQuestionLocation(q);
+                        if (locInfo.isConflict) {
+                          return (
+                            <span
+                              className="bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800 px-1.5 py-0.2 rounded-full font-bold text-[10px]"
+                              title={`Multi-Unit conflict: ${locInfo.conflicts.join(", ")}`}
+                            >
+                              ⚠️ Loc Conflict
+                            </span>
+                          );
+                        }
+                        if (locInfo.locationOrder !== null) {
+                          return (
+                            <span className="bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
+                              📍 Loc {locInfo.locationOrder}: {locInfo.locationName}
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="bg-gray-100 dark:bg-gray-800 text-gray-400 px-1.5 py-0.2 rounded-full text-[10px]">
+                            ⚪ Unassigned Loc
+                          </span>
+                        );
+                      })()}
                       <span className="font-bold text-orange-400 text-[10px]">★{q.difficulty}</span>
                       {hasGm && (
                         <span className="bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 px-1.5 py-0.2 rounded-full font-bold text-[10px]">

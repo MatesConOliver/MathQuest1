@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan to map question tags to game locations in the GM Locations Panel, enforce one-location-per-tag uniqueness, list unassigned tags, and automatically bind question AI solutions to curriculum location constraints.",
+  "updatedAt":  "2026-10-30T07:26:07.450712769Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
