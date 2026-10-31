@@ -214,15 +214,14 @@ export function QuestionsPanel() {
     const [questions, setQuestions] = useState<QuestionDoc[]>([]);
     const [editingId, setEditingId] = useState("");
   
-    // Search & Tag Fetch State
+    // Live Questions & Strict Reactive Tag State
+    const [allQuestions, setAllQuestions] = useState<QuestionDoc[]>([]);
     const [dbTagSearch, setDbTagSearch] = useState("");
     const [selectedDropdownTag, setSelectedDropdownTag] = useState("");
-    const [availableTags, setAvailableTags] = useState<string[]>([]);
-    const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+    const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
     const [localFilter, setLocalFilter] = useState("");
     const [debouncedFilter, setDebouncedFilter] = useState("");
     const [hasLoadedAllQuestions, setHasLoadedAllQuestions] = useState(false);
-    const [allQuestionsCache, setAllQuestionsCache] = useState<QuestionDoc[]>([]);
   
     // UNIFIED FORM STATE
     const [title, setTitle] = useState("");
@@ -230,7 +229,7 @@ export function QuestionsPanel() {
     const [choices, setChoices] = useState(["", "", "", ""]);
     const [correctIndex, setCorrectIndex] = useState(0);
     const [difficulty, setDifficulty] = useState(1);
-    const [tagsText, setTagsText] = useState("level1");
+    const [tagsText, setTagsText] = useState("");
     const [order, setOrder] = useState("");
     const [groupId, setGroupId] = useState("");
     const [solutionUrl, setSolutionUrl] = useState("");
@@ -272,6 +271,81 @@ export function QuestionsPanel() {
       });
       return () => unsubscribe();
     }, []);
+
+    // 1. LIVE SUBSCRIPTION TO ALL QUESTIONS IN FIRESTORE
+    useEffect(() => {
+      setIsLoadingQuestions(true);
+      const unsub = onSnapshot(
+        collection(db, "questions"),
+        (snapshot) => {
+          const fetched = snapshot.docs.map(
+            (d) => ({ ...d.data(), id: d.id } as QuestionDoc)
+          );
+          setAllQuestions(fetched);
+          setQuestions(fetched);
+          setIsLoadingQuestions(false);
+          setHasLoadedAllQuestions(true);
+        },
+        (error) => {
+          console.error("Error subscribing to questions:", error);
+          setMsg("Error loading questions: " + error.message);
+          setIsLoadingQuestions(false);
+        }
+      );
+      return () => unsub();
+    }, []);
+
+    // 2. STRICT ACTIVE TAG DERIVATION (Only tags with >= 1 question exist in the list)
+    const tagCountMap = useMemo(() => {
+      const map = new Map<string, number>();
+      allQuestions.forEach((q) => {
+        (q.tags || []).forEach((t) => {
+          if (t && typeof t === "string") {
+            const clean = t.trim();
+            if (clean) {
+              map.set(clean, (map.get(clean) || 0) + 1);
+            }
+          }
+        });
+      });
+      return map;
+    }, [allQuestions]);
+
+    const availableTags = useMemo(() => {
+      return Array.from(tagCountMap.keys()).sort((a, b) => a.localeCompare(b));
+    }, [tagCountMap]);
+
+    // 3. AUTO-PRUNE DEAD TAGS FROM LOCATIONS IF THEIR QUESTION COUNT DROPPED TO 0
+    useEffect(() => {
+      if (!hasLoadedAllQuestions || locations.length === 0) return;
+      const validLowerTags = new Set(availableTags.map((t) => t.toLowerCase()));
+
+      locations.forEach(async (loc) => {
+        const assigned = loc.assignedTags || [];
+        const orphaned = assigned.filter((t) => !validLowerTags.has(t.trim().toLowerCase()));
+        if (orphaned.length > 0) {
+          const cleaned = assigned.filter((t) => validLowerTags.has(t.trim().toLowerCase()));
+          try {
+            await updateDoc(doc(db, "locations", loc.id), {
+              assignedTags: cleaned,
+            });
+            console.log(`[QuestionsPanel] Auto-pruned dead tag(s) from Location ${loc.order}:`, orphaned);
+          } catch (e) {
+            console.warn(`[QuestionsPanel] Error auto-cleaning orphaned tags on Loc ${loc.order}:`, e);
+          }
+        }
+      });
+    }, [availableTags, locations, hasLoadedAllQuestions]);
+
+    // 4. RESET ACTIVE FILTER IF ACTIVE TAG HAS 0 REMAINING QUESTIONS
+    useEffect(() => {
+      const activeTag = (dbTagSearch || selectedDropdownTag || "").trim().toLowerCase();
+      if (activeTag && !availableTags.some((t) => t.toLowerCase() === activeTag)) {
+        setSelectedDropdownTag("");
+        setDbTagSearch("");
+        setMsg(`ℹ️ Tag '${activeTag}' has no remaining questions and was removed from the tags list.`);
+      }
+    }, [availableTags, selectedDropdownTag, dbTagSearch]);
 
     // Global Mapping: Tag -> Location
     const tagToLocationMap = useMemo(() => {
@@ -332,119 +406,44 @@ export function QuestionsPanel() {
     // Memoized preview content
     const promptPreview = useMemo(() => stringToContentBlocks(promptString), [promptString]);
     const choicesPreview = useMemo(() => choices.map(c => stringToContentBlocks(c)), [choices]);
-  
-    // 1. GATHER KNOWN TAGS ALPHABETICALLY ON MOUNT
-    useEffect(() => {
-      async function loadKnownTags() {
-        try {
-          const defaultCurriculumTags = [
-            "algebra", "arithmetic", "boss", "calculus", "derivatives",
-            "equations", "fractions", "functions", "geometry", "integrals",
-            "level1", "level2", "level3", "limits", "matrices", "polynomials",
-            "probabilityAndStatistics", "statistics", "trigonometry", "vectors"
-          ];
-          const tagSet = new Set<string>(defaultCurriculumTags);
 
-          const encSnap = await getDocs(collection(db, "encounters"));
-          encSnap.docs.forEach((d) => {
-            const data = d.data();
-            if (data.questionTag && typeof data.questionTag === "string") {
-              tagSet.add(data.questionTag.trim());
-            }
-            if (Array.isArray(data.questionTags)) {
-              data.questionTags.forEach((t: string) => {
-                if (t && typeof t === "string") tagSet.add(t.trim());
-              });
-            }
-          });
+    // 5. FILTERING QUESTIONS BY TAG AND SEARCH
+    const filteredByTagQuestions = useMemo(() => {
+      const activeTag = (dbTagSearch || selectedDropdownTag || "").trim().toLowerCase();
+      if (!activeTag) return allQuestions;
+      return allQuestions.filter((q) =>
+        (q.tags || []).some((t) => t.trim().toLowerCase() === activeTag)
+      );
+    }, [allQuestions, dbTagSearch, selectedDropdownTag]);
 
-          const sortedTags = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
-          setAvailableTags(sortedTags);
-        } catch (e) {
-          console.error("Error gathering tags:", e);
-        }
-      }
-      loadKnownTags();
-    }, []);
-
-    // 2. FETCH ALL QUESTIONS (Cached in memory for session to minimize Firestore reads)
     const loadAllQuestions = useCallback(async () => {
-      if (hasLoadedAllQuestions && allQuestionsCache.length > 0) {
-        setQuestions(allQuestionsCache);
-        setMsg(`✅ Showing all ${allQuestionsCache.length} questions`);
-        return allQuestionsCache;
-      }
-      setIsLoadingQuestions(true);
-      try {
-        const snap = await getDocs(collection(db, "questions"));
-        const fetched = snap.docs.map(d => ({ ...d.data(), id: d.id } as QuestionDoc));
-        setQuestions(fetched);
-        setAllQuestionsCache(fetched);
-        setHasLoadedAllQuestions(true);
-        setMsg(`✅ Loaded all ${fetched.length} questions from database`);
-        return fetched;
-      } catch (e: any) {
-        setMsg("Error loading all questions: " + (e?.message || e));
-        return [];
-      } finally {
-        setIsLoadingQuestions(false);
-      }
-    }, [hasLoadedAllQuestions, allQuestionsCache]);
+      setSelectedDropdownTag("");
+      setDbTagSearch("");
+      setMsg(`✅ Showing all ${allQuestions.length} questions`);
+      return allQuestions;
+    }, [allQuestions]);
 
-    // 2b. FETCH QUESTIONS BY SPECIFIC TAG OR ALL
     const loadByTag = useCallback(async (tagToSearch?: string) => {
       const tag = (tagToSearch !== undefined ? tagToSearch : dbTagSearch).trim();
       if (!tag || tag === "__ALL__") {
         await loadAllQuestions();
         return;
       }
-      setIsLoadingQuestions(true);
-      try {
-        const q = query(collection(db, "questions"), where("tags", "array-contains", tag));
-        const snap = await getDocs(q);
-        const fetched = snap.docs.map(d => ({ ...d.data(), id: d.id } as QuestionDoc));
-        setQuestions(fetched);
-        setMsg(`✅ Loaded ${fetched.length} questions matching tag '${tag}'`);
-      } catch (e: any) {
-        setMsg("Error searching tag: " + (e?.message || e));
-      } finally {
-        setIsLoadingQuestions(false);
-      }
-    }, [dbTagSearch, loadAllQuestions]);
+      setSelectedDropdownTag(tag);
+      setDbTagSearch(tag);
+      const count = allQuestions.filter((q) =>
+        (q.tags || []).some((t) => t.trim().toLowerCase() === tag.toLowerCase())
+      ).length;
+      setMsg(`✅ Filtered to ${count} question${count === 1 ? "" : "s"} matching tag '${tag}'`);
+    }, [dbTagSearch, loadAllQuestions, allQuestions]);
 
-    // 3. DEBOUNCE FOR LOCAL FILTER (500ms / 0.5s to minimize Firestore reads)
+    // Debounce for local search filter (300ms)
     useEffect(() => {
       const timer = setTimeout(() => {
         setDebouncedFilter(localFilter);
-      }, 500);
+      }, 300);
       return () => clearTimeout(timer);
     }, [localFilter]);
-
-    // 3b. AUTOMATICALLY LOAD ALL QUESTIONS IF FILTERING WITHOUT A TAG
-    useEffect(() => {
-      const trimmed = debouncedFilter.trim();
-      if (!trimmed) return;
-
-      // If user is filtering and no tag is active, automatically load the whole list into memory
-      if (!dbTagSearch.trim()) {
-        if (!hasLoadedAllQuestions) {
-          loadAllQuestions();
-        } else if (questions.length !== allQuestionsCache.length) {
-          setQuestions(allQuestionsCache);
-        }
-      }
-    }, [debouncedFilter, dbTagSearch, hasLoadedAllQuestions, allQuestionsCache, questions.length, loadAllQuestions]);
-
-    // 4. DEBOUNCE FOR TAG SEARCH INPUT (500ms)
-    useEffect(() => {
-      const trimmed = dbTagSearch.trim();
-      if (!trimmed || trimmed.length < 2) return;
-
-      const timer = setTimeout(() => {
-        loadByTag(trimmed);
-      }, 500);
-      return () => clearTimeout(timer);
-    }, [dbTagSearch, loadByTag]);
 
     const getQuestionDisplayText = (q: QuestionDoc): string => {
         if (q.promptContent) return contentBlocksToString(q.promptContent);
@@ -485,7 +484,7 @@ export function QuestionsPanel() {
 
       setCorrectIndex(q.correctIndex || 0);
       setDifficulty(q.difficulty || 1);
-      setTagsText(q.tags ? q.tags.join(",") : "level1");
+      setTagsText(q.tags ? q.tags.join(", ") : "");
       setOrder(q.order ? String(q.order) : "");
       setGroupId(q.groupId || "");
       setSolutionUrl(q.solutionUrl || "");
@@ -504,7 +503,7 @@ export function QuestionsPanel() {
       setChoices(["", "", "", ""]);
       setCorrectIndex(0); 
       setQMinutes(0); setQSeconds(30);
-      setDifficulty(1); setTagsText("level1"); setOrder(""); setGroupId("");
+      setDifficulty(1); setTagsText(""); setOrder(""); setGroupId("");
       setSolutionUrl(""); setSolutionText(""); setCurrentAiSolution("");
       setSingleLocOrder(null);
       setMsg("");
@@ -533,7 +532,7 @@ export function QuestionsPanel() {
 
       // Preserve or update AI solution text if user edited it
       if (currentAiSolution.trim()) {
-        const existingAi = questions.find(q => q.id === editingId)?.aiSolution;
+        const existingAi = allQuestions.find(q => q.id === editingId)?.aiSolution;
         docData.aiSolution = {
           text: currentAiSolution.trim(),
           verifiedCorrectIndex: existingAi?.verifiedCorrectIndex ?? correctIndex,
@@ -548,23 +547,41 @@ export function QuestionsPanel() {
       }
     
       try {
+        const oldDoc = editingId ? allQuestions.find((q) => q.id === editingId) : null;
+        const oldTags = oldDoc?.tags || [];
+
         if (editingId) {
           await setDoc(doc(db, "questions", editingId), docData, { merge: true });
-          const updatedDoc = { ...docData, id: editingId } as QuestionDoc;
-          setQuestions((prev) => prev.map((q) => (q.id === editingId ? updatedDoc : q)));
-          setAllQuestionsCache((prev) => prev.map((q) => (q.id === editingId ? updatedDoc : q)));
           setMsg("✅ Updated & Saved Question!");
         } else {
           docData.createdAt = serverTimestamp();
-          const docRef = await addDoc(collection(db, "questions"), docData);
-          const newDoc = { ...docData, id: docRef.id } as QuestionDoc;
-          setQuestions((prev) => [newDoc, ...prev]);
-          setAllQuestionsCache((prev) => [newDoc, ...prev]);
+          await addDoc(collection(db, "questions"), docData);
           setMsg("✅ Created New Question!");
         }
 
-        if (tagsArray.length > 0) {
-          setAvailableTags((prev) => Array.from(new Set([...prev, ...tagsArray])).sort((a, b) => a.localeCompare(b)));
+        // If an old tag no longer belongs to any question, prune it from locations in Firestore
+        if (editingId && oldTags.length > 0) {
+          const newTagsLower = new Set(tagsArray.map((t) => t.toLowerCase()));
+          const removedTags = oldTags.filter((t) => !newTagsLower.has(t.trim().toLowerCase()));
+
+          removedTags.forEach(async (removedTag) => {
+            const norm = removedTag.trim().toLowerCase();
+            const stillHasQuestions = allQuestions.some(
+              (q) => q.id !== editingId && (q.tags || []).some((t) => t.trim().toLowerCase() === norm)
+            );
+            if (!stillHasQuestions) {
+              locations.forEach(async (loc) => {
+                if ((loc.assignedTags || []).some((t) => t.trim().toLowerCase() === norm)) {
+                  const cleaned = (loc.assignedTags || []).filter((t) => t.trim().toLowerCase() !== norm);
+                  try {
+                    await updateDoc(doc(db, "locations", loc.id), { assignedTags: cleaned });
+                  } catch (e) {
+                    console.warn(`Error pruning tag '${removedTag}' from loc ${loc.id}:`, e);
+                  }
+                }
+              });
+            }
+          });
         }
 
         if (!editingId) resetForm(); 
@@ -574,14 +591,36 @@ export function QuestionsPanel() {
     async function deleteQuestion(qId: string) {
       if (!confirm("Permanently delete this question?")) return;
       try {
+        const targetQ = allQuestions.find((q) => q.id === qId);
+        const tagsOfDeletedQ = targetQ?.tags || [];
+
         await deleteDoc(doc(db, "questions", qId));
-        setQuestions((prev) => prev.filter((q) => q.id !== qId));
-        setAllQuestionsCache((prev) => prev.filter((q) => q.id !== qId));
         setSelectedQIds((prev) => {
           const next = new Set(prev);
           next.delete(qId);
           return next;
         });
+
+        // Prune any tags that no longer have any questions from location assigned tags
+        tagsOfDeletedQ.forEach(async (tag) => {
+          const norm = tag.trim().toLowerCase();
+          const otherQuestionsWithTag = allQuestions.filter(
+            (q) => q.id !== qId && (q.tags || []).some((t) => t.trim().toLowerCase() === norm)
+          );
+          if (otherQuestionsWithTag.length === 0) {
+            locations.forEach(async (loc) => {
+              if ((loc.assignedTags || []).some((t) => t.trim().toLowerCase() === norm)) {
+                const cleaned = (loc.assignedTags || []).filter((t) => t.trim().toLowerCase() !== norm);
+                try {
+                  await updateDoc(doc(db, "locations", loc.id), { assignedTags: cleaned });
+                } catch (e) {
+                  console.warn(`Error pruning tag '${tag}' from loc ${loc.id}:`, e);
+                }
+              }
+            });
+          }
+        });
+
         setMsg("🗑️ Question deleted.");
         if (editingId === qId) resetForm();
       } catch (e: any) { setMsg("Error: " + e.message); }
@@ -634,10 +673,7 @@ export function QuestionsPanel() {
             aiSolution: aiPayload,
             updatedAt: serverTimestamp(),
           });
-          setQuestions((prev) =>
-            prev.map((q) => (q.id === editingId ? { ...q, aiSolution: aiPayload } : q))
-          );
-          setAllQuestionsCache((prev) =>
+          setAllQuestions((prev) =>
             prev.map((q) => (q.id === editingId ? { ...q, aiSolution: aiPayload } : q))
           );
         }
@@ -657,10 +693,7 @@ export function QuestionsPanel() {
             aiSolution: null,
             updatedAt: serverTimestamp(),
           });
-          setQuestions((prev) =>
-            prev.map((q) => (q.id === editingId ? { ...q, aiSolution: undefined } : q))
-          );
-          setAllQuestionsCache((prev) =>
+          setAllQuestions((prev) =>
             prev.map((q) => (q.id === editingId ? { ...q, aiSolution: undefined } : q))
           );
           setMsg("🗑️ AI Solution cleared. You can generate a new one now.");
@@ -694,7 +727,7 @@ export function QuestionsPanel() {
     }
 
     function startBatchGeneration() {
-      const targetQuestions = questions.filter((q) => q.id && selectedQIds.has(q.id));
+      const targetQuestions = allQuestions.filter((q) => q.id && selectedQIds.has(q.id));
       if (targetQuestions.length === 0) {
         setMsg("⚠️ No questions selected for batch AI generation.");
         return;
@@ -802,10 +835,7 @@ export function QuestionsPanel() {
               aiSolution: aiPayload,
               updatedAt: serverTimestamp(),
             });
-            setQuestions((prev) =>
-              prev.map((item) => (item.id === q.id ? { ...item, aiSolution: aiPayload } : item))
-            );
-            setAllQuestionsCache((prev) =>
+            setAllQuestions((prev) =>
               prev.map((item) => (item.id === q.id ? { ...item, aiSolution: aiPayload } : item))
             );
           }
@@ -904,8 +934,44 @@ export function QuestionsPanel() {
 
           <div className="grid grid-cols-2 gap-4">
             <Input type="number" label="Difficulty (1-5)" value={difficulty} onChange={(e:any) => setDifficulty(Number(e.target.value))} />
-            <Input label="Tags (comma sep)" value={tagsText} onChange={(e:any) => setTagsText(e.target.value)} />
+            <Input label="Tags (comma sep)" value={tagsText} onChange={(e:any) => setTagsText(e.target.value)} placeholder="e.g. algebra, functions" />
           </div>
+
+          {availableTags.length > 0 && (
+            <div className="-mt-1 bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-lg border dark:border-gray-700/80 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Active Question Tags ({availableTags.length}) — Click to toggle:
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar">
+                {availableTags.map((t) => {
+                  const active = tagsText.split(",").map(s => s.trim().toLowerCase()).includes(t.toLowerCase());
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => {
+                        const current = tagsText.split(",").map(s => s.trim()).filter(Boolean);
+                        if (active) {
+                          setTagsText(current.filter(x => x.toLowerCase() !== t.toLowerCase()).join(", "));
+                        } else {
+                          setTagsText([...current, t].join(", "));
+                        }
+                      }}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-mono transition-all ${
+                        active
+                          ? "bg-indigo-600 text-white font-bold shadow-xs"
+                          : "bg-white dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-gray-700 dark:text-gray-300 border dark:border-gray-700"
+                      }`}
+                    >
+                      {active ? "✓ " : "+ "}{t} ({tagCountMap.get(t)})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <Input type="number" label="Order" value={order} onChange={(e:any) => setOrder(e.target.value)} placeholder="1" />
@@ -1091,10 +1157,10 @@ export function QuestionsPanel() {
             <div className="flex justify-between items-center">
               <h3 className="font-bold text-xs uppercase text-gray-600 dark:text-gray-300 flex items-center gap-1.5">
                 <span>🏷️</span>
-                <span>Question Fetch & Search</span>
+                <span>Question Filter & Search</span>
               </h3>
               <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
-                {questions.length} loaded {hasLoadedAllQuestions && !dbTagSearch.trim() ? "(All Questions)" : ""}
+                {visibleQuestions.length} shown of {allQuestions.length} in DB
               </span>
             </div>
 
@@ -1107,45 +1173,49 @@ export function QuestionsPanel() {
                   const val = e.target.value;
                   setSelectedDropdownTag(val);
                   setDbTagSearch(val);
-                  loadByTag(val);
                 }}
               >
-                <option value="">-- All Questions (Entire Database) --</option>
+                <option value="">-- All Questions ({allQuestions.length} in Database) --</option>
                 {availableTags.map((tag) => (
                   <option key={tag} value={tag}>
-                    🏷️ {tag}
+                    🏷️ {tag} ({tagCountMap.get(tag) || 0} question{tagCountMap.get(tag) === 1 ? "" : "s"})
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Manual Tag Input */}
+            {/* Manual Tag Input with quick clear */}
             <div className="flex gap-2">
               <input
                 className="input flex-1 text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-                placeholder="Type custom tag (or empty for all)..."
+                placeholder="Type tag to filter (or empty for all)..."
                 value={dbTagSearch}
                 onChange={(e) => {
                   setDbTagSearch(e.target.value);
                   setSelectedDropdownTag(e.target.value);
                 }}
               />
-              <button
-                onClick={() => loadByTag(dbTagSearch)}
-                disabled={isLoadingQuestions}
-                className="bg-black text-white dark:bg-white dark:text-black px-3.5 py-1.5 rounded-lg text-xs font-bold hover:opacity-80 transition-opacity disabled:opacity-50 shrink-0 shadow-sm"
-              >
-                {isLoadingQuestions ? "Fetching..." : dbTagSearch.trim() ? "Fetch Tag" : "Fetch All"}
-              </button>
+              {dbTagSearch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDbTagSearch("");
+                    setSelectedDropdownTag("");
+                  }}
+                  className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-colors"
+                >
+                  Clear Tag
+                </button>
+              )}
             </div>
 
-            {/* Debounced filter (500ms delay to lessen Firestore reads) */}
+            {/* Debounced filter (300ms delay) */}
             <input
               className="input w-full text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white"
               placeholder={
                 dbTagSearch.trim()
-                  ? `🔍 Filter within '${dbTagSearch}'...`
-                  : "🔍 Search all questions (auto-loads list after 0.5s)..."
+                  ? `🔍 Search within tag '${dbTagSearch}'...`
+                  : "🔍 Search title, prompt text, or LaTeX..."
               }
               value={localFilter}
               onChange={(e) => setLocalFilter(e.target.value)}
@@ -1153,7 +1223,7 @@ export function QuestionsPanel() {
           </div>
 
           {/* BATCH SELECTION & ACTION TOOLBAR */}
-          {questions.length > 0 && (
+          {visibleQuestions.length > 0 && (
             <div className="bg-indigo-50/70 dark:bg-indigo-950/30 p-2.5 rounded-xl border border-indigo-200/80 dark:border-indigo-900/60 space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">

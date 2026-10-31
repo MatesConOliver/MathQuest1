@@ -7,22 +7,13 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  updateDoc,
   query,
   orderBy,
-  getDocs,
 } from 'firebase/firestore';
 import { GameLocation, CharacterSkills } from '@/types/game';
 import { Input } from '@/app/gm/components/Input';
 import { IB_MATH_AA_HL_SYLLABUS } from '@/lib/syllabus';
-
-const DEFAULT_SYLLABUS_TAGS = [
-  "algebra", "arithmetic", "boss", "calculus", "derivatives",
-  "equations", "fractions", "functions", "geometry", "integrals",
-  "level1", "level2", "level3", "limits", "matrices", "polynomials",
-  "probabilityAndStatistics", "statistics", "trigonometry", "vectors",
-  "sequences", "series", "logarithms", "exponentials", "proofs",
-  "complex-numbers", "differentiation", "integration", "quadratics"
-];
 
 export function LocationsPanel() {
     const [locs, setLocs] = useState<GameLocation[]>([]);
@@ -32,8 +23,10 @@ export function LocationsPanel() {
     const [msg, setMsg] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
 
-    // TAG MANAGEMENT STATE
-    const [allKnownTags, setAllKnownTags] = useState<string[]>(DEFAULT_SYLLABUS_TAGS);
+    // TAG MANAGEMENT STATE - Strictly driven by existing questions
+    const [allKnownTags, setAllKnownTags] = useState<string[]>([]);
+    const [tagCounts, setTagCounts] = useState<Map<string, number>>(new Map());
+    const [hasLoadedQuestions, setHasLoadedQuestions] = useState(false);
     const [tagInput, setTagInput] = useState("");
     const [tagError, setTagError] = useState("");
     const [unassignedSearch, setUnassignedSearch] = useState("");
@@ -49,44 +42,69 @@ export function LocationsPanel() {
         return () => unsubscribe();
     }, []);
 
-    // 2. Scan all known tags across Questions & Encounters
+    // 2. Real-time scan of tags strictly from Questions database (no phantom/default tags)
     useEffect(() => {
-        async function fetchGameTags() {
-            try {
-                const tagSet = new Set<string>(DEFAULT_SYLLABUS_TAGS);
-
-                // Collect from encounters
-                const encSnap = await getDocs(collection(db, 'encounters'));
-                encSnap.docs.forEach(d => {
-                    const data = d.data();
-                    if (data.questionTag && typeof data.questionTag === 'string') {
-                        tagSet.add(data.questionTag.trim());
-                    }
-                    if (Array.isArray(data.questionTags)) {
-                        data.questionTags.forEach((t: string) => {
-                            if (t && typeof t === 'string') tagSet.add(t.trim());
-                        });
-                    }
-                });
-
-                // Collect from questions
-                const qSnap = await getDocs(collection(db, 'questions'));
-                qSnap.docs.forEach(d => {
+        const unsubscribe = onSnapshot(
+            collection(db, 'questions'),
+            (snapshot) => {
+                const counts = new Map<string, number>();
+                snapshot.docs.forEach((d) => {
                     const data = d.data();
                     if (Array.isArray(data.tags)) {
                         data.tags.forEach((t: string) => {
-                            if (t && typeof t === 'string' && t.trim()) tagSet.add(t.trim());
+                            if (t && typeof t === 'string') {
+                                const clean = t.trim();
+                                if (clean) {
+                                    counts.set(clean, (counts.get(clean) || 0) + 1);
+                                }
+                            }
                         });
                     }
                 });
 
-                setAllKnownTags(Array.from(tagSet).sort((a, b) => a.localeCompare(b)));
-            } catch (err) {
-                console.error("Error gathering tags:", err);
+                setTagCounts(counts);
+                const validTags = Array.from(counts.keys()).sort((a, b) => a.localeCompare(b));
+                setAllKnownTags(validTags);
+                setHasLoadedQuestions(true);
+            },
+            (err) => {
+                console.error("Error subscribing to questions tags:", err);
             }
-        }
-        fetchGameTags();
+        );
+        return () => unsubscribe();
     }, []);
+
+    // 3. Auto-prune orphaned tags from Locations in Firestore if their question count dropped to 0
+    useEffect(() => {
+        if (!hasLoadedQuestions || locs.length === 0) return;
+        const validLowerTags = new Set(allKnownTags.map((t) => t.toLowerCase()));
+
+        locs.forEach(async (loc) => {
+            const assigned = loc.assignedTags || [];
+            const orphaned = assigned.filter((t) => !validLowerTags.has(t.trim().toLowerCase()));
+            if (orphaned.length > 0) {
+                const cleaned = assigned.filter((t) => validLowerTags.has(t.trim().toLowerCase()));
+                try {
+                    await updateDoc(doc(db, 'locations', loc.id), {
+                        assignedTags: cleaned,
+                    });
+                    console.log(`[LocationsPanel] Automatically pruned ${orphaned.length} dead tag(s) from Location ${loc.order}:`, orphaned);
+                } catch (e) {
+                    console.warn(`[LocationsPanel] Error auto-cleaning orphaned tags on Loc ${loc.order}:`, e);
+                }
+            }
+        });
+    }, [hasLoadedQuestions, allKnownTags, locs]);
+
+    // Keep editingLocation assignedTags in sync if an assigned tag is pruned
+    useEffect(() => {
+        if (!editingLocation || !editingLocation.assignedTags) return;
+        const validLowerTags = new Set(allKnownTags.map((t) => t.toLowerCase()));
+        const filtered = editingLocation.assignedTags.filter((t) => validLowerTags.has(t.trim().toLowerCase()));
+        if (filtered.length !== editingLocation.assignedTags.length) {
+            setEditingLocation((prev) => (prev ? { ...prev, assignedTags: filtered } : null));
+        }
+    }, [allKnownTags, editingLocation]);
 
     // Global Mapping: Tag -> Location (Normalized to lowercase)
     const tagToLocationMap = useMemo(() => {
@@ -172,7 +190,7 @@ export function LocationsPanel() {
         } : null);
     };
 
-    // TAG ASSIGNMENT WITH STRICT UNIQUENESS ENFORCEMENT
+    // TAG ASSIGNMENT WITH STRICT UNIQUENESS ENFORCEMENT & QUESTION EXISTENCE
     const handleAddTag = (rawTag: string) => {
         const tag = rawTag.trim();
         if (!tag) return;
@@ -180,7 +198,16 @@ export function LocationsPanel() {
 
         const normalized = tag.toLowerCase();
 
-        // 1. Check if already claimed by ANOTHER location
+        // 1. Tag must exist on at least one question in the database
+        const matchingKnownTag = allKnownTags.find(t => t.toLowerCase() === normalized);
+        if (!matchingKnownTag) {
+            setTagError(
+                `⛔ Denied: Tag '${tag}' does not belong to any existing question. Only tags that have at least one question in the database can be assigned.`
+            );
+            return;
+        }
+
+        // 2. Check if already claimed by ANOTHER location
         const existingClaim = tagToLocationMap.get(normalized);
         if (existingClaim && existingClaim.id !== editingLocation.id) {
             setTagError(
@@ -189,25 +216,20 @@ export function LocationsPanel() {
             return;
         }
 
-        // 2. Check if already in current location
+        // 3. Check if already in current location
         const currentTags = editingLocation.assignedTags || [];
         if (currentTags.some(t => t.toLowerCase() === normalized)) {
-            setTagError(`Tag '${tag}' is already added to this location.`);
+            setTagError(`Tag '${matchingKnownTag}' is already added to this location.`);
             return;
         }
 
-        // Add tag
+        // Add canonical question tag
         setTagError("");
         setEditingLocation(prev => prev ? {
             ...prev,
-            assignedTags: [...currentTags, tag]
+            assignedTags: [...currentTags, matchingKnownTag]
         } : null);
         setTagInput("");
-
-        // Also add to known tags if novel
-        if (!allKnownTags.includes(tag)) {
-            setAllKnownTags(prev => [...prev, tag].sort((a, b) => a.localeCompare(b)));
-        }
     };
 
     const handleRemoveTag = (tagToRemove: string) => {
@@ -547,16 +569,23 @@ export function LocationsPanel() {
                                         type="button"
                                         onClick={() => handleAddTag(tag)}
                                         disabled={!editingLocation}
-                                        title={editingLocation ? `Assign '${tag}' to ${editingLocation.name}` : "Select a location first"}
-                                        className="group inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-mono bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 transition-colors disabled:opacity-50"
+                                        title={editingLocation ? `Assign '${tag}' (${tagCounts.get(tag) || 0} questions) to ${editingLocation.name}` : "Select a location first"}
+                                        className="group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 transition-colors disabled:opacity-50"
                                     >
                                         <span className="text-amber-500 group-hover:text-white font-bold">+</span>
                                         <span>{tag}</span>
+                                        <span className="text-[10px] opacity-75 group-hover:text-indigo-100">
+                                            ({tagCounts.get(tag) || 0})
+                                        </span>
                                     </button>
                                 ))
+                            ) : allKnownTags.length === 0 ? (
+                                <div className="text-xs text-gray-500 dark:text-gray-400 italic py-3 text-center w-full">
+                                    No questions with tags found in the database. When questions are added with tags, they will automatically appear here.
+                                </div>
                             ) : (
                                 <div className="text-xs text-green-600 dark:text-green-400 font-medium py-3 text-center w-full">
-                                    🎉 All known curriculum tags are assigned to locations!
+                                    🎉 All active question tags ({allKnownTags.length}) are assigned to locations!
                                 </div>
                             )}
                         </div>
