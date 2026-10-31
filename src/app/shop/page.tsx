@@ -22,6 +22,8 @@ function ShopContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const encounterId = searchParams.get('encounterId');
+  const locationIdParam = searchParams.get('locationId');
+  const subAreaIdParam = searchParams.get('subAreaId');
 
   const [user, setUser] = useState<User | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
@@ -29,6 +31,10 @@ function ShopContent() {
   const [encounter, setEncounter] = useState<EncounterDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+
+  const returnMapUrl = locationIdParam 
+    ? `/map?locationId=${locationIdParam}`
+    : (encounter?.locationId ? `/map?locationId=${encounter.locationId}` : '/map');
 
   // 1. Load User, Character, and Items (filtered if store encounter)
   useEffect(() => {
@@ -137,43 +143,61 @@ function ShopContent() {
   if (loading) return <div className="p-8 dark:text-white">Loading Store...</div>;
 
   return (
-    <main className="min-h-screen p-6 max-w-6xl mx-auto dark:text-gray-100">
-      
-      {/* Toast Message */}
-      {msg && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-black text-white px-6 py-3 rounded-full shadow-xl z-50 font-bold animate-pulse">
-            {msg}
+    <main className="relative min-h-screen text-gray-900 dark:text-gray-100 overflow-x-hidden">
+      {/* Atmospheric Store Background Image (if configured in GM Encounters panel) */}
+      {encounter?.imageUrl && (
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <img
+            src={encounter.imageUrl}
+            alt="Store Encounter Background"
+            className="w-full h-full object-cover"
+          />
+          {/* Dark backdrop overlay to guarantee crisp readability */}
+          <div className="absolute inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-[2px]" />
         </div>
       )}
 
-      <header className="flex flex-col md:flex-row justify-between items-center mb-8 border-b dark:border-gray-700 pb-4 gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <span className="text-3xl">{encounter?.emoji || "🏪"}</span>
-            <h1 className="text-3xl sm:text-4xl font-bold">
-              {encounter ? encounter.title : "Item Store"}
-            </h1>
+      <div className="relative z-10 p-6 max-w-6xl mx-auto">
+        {/* Toast Message */}
+        {msg && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-black text-white px-6 py-3 rounded-full shadow-xl z-50 font-bold animate-pulse">
+              {msg}
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {encounter?.shopGreeting || (encounter ? "Curated wares selected for this outpost." : "Spend your hard-earned gold!")}
-          </p>
-          {encounter && (
-            <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-bold">
-              <span>📍 Sub-Area Outpost</span> • <span>{items.length} item(s) in stock</span>
+        )}
+
+        <header className="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-gray-200/60 dark:border-gray-700/60 pb-4 gap-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md p-4 rounded-2xl shadow-sm">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="text-3xl">{encounter?.emoji || "🏪"}</span>
+              <h1 className="text-3xl sm:text-4xl font-bold">
+                {encounter ? encounter.title : "Item Store"}
+              </h1>
             </div>
-          )}
-        </div>
-        <div className="text-right flex flex-col items-end">
-          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-            🪙 {character ? character.gold : 0} G
+            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+              {encounter?.shopGreeting || (encounter ? "Curated wares selected for this outpost." : "Spend your hard-earned gold!")}
+            </p>
+            {encounter && (
+              <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-bold">
+                <span>📍 Sub-Area Outpost</span> • <span>{items.length} item(s) in stock</span>
+              </div>
+            )}
           </div>
-          <nav aria-label="Page navigation" className="flex flex-wrap justify-end gap-2 mt-2">
-            <Link href="/map" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-yellow-500/50 bg-yellow-400/10 px-3 py-1.5 text-sm font-bold text-yellow-300 transition-colors hover:bg-yellow-400/20">🗺️ Return to Map</Link>
-            <Link href="/character" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🦉 Character</Link>
-            <Link href="/" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🏠 Main menu</Link>
-          </nav>
-        </div>
-      </header>
+          <div className="text-right flex flex-col items-end">
+            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+              🪙 {character ? character.gold : 0} G
+            </div>
+            <nav aria-label="Page navigation" className="flex flex-wrap justify-end gap-2 mt-2">
+              <Link 
+                href={returnMapUrl} 
+                className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-yellow-500/50 bg-yellow-400/10 px-3 py-1.5 text-sm font-bold text-yellow-300 transition-colors hover:bg-yellow-400/20 shadow-sm"
+              >
+                🗺️ Return to Location
+              </Link>
+              <Link href="/character" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🦉 Character</Link>
+              <Link href="/" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🏠 Main menu</Link>
+            </nav>
+          </div>
+        </header>
 
       {/* SHOP GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -337,6 +361,7 @@ function ShopContent() {
           </div>
       )}
 
+      </div>
     </main>
   );
 }

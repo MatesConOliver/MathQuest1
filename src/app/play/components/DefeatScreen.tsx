@@ -4,10 +4,20 @@ import { useRouter } from "next/navigation";
 interface DefeatScreenProps {
   msg: string;
   onTryAgain: () => void;
+  onReturnToMap?: () => void;
 }
 
-export function DefeatScreen({ msg, onTryAgain }: DefeatScreenProps) {
+export function DefeatScreen({ msg, onTryAgain, onReturnToMap }: DefeatScreenProps) {
   const router = useRouter();
+
+  const handleReturn = () => {
+    if (onReturnToMap) {
+      onReturnToMap();
+    } else {
+      const locId = typeof window !== 'undefined' ? sessionStorage.getItem('lastActiveLocationId') : null;
+      router.push(locId ? `/map?locationId=${locId}` : "/map");
+    }
+  };
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-red-50 dark:bg-gray-900 transition-colors">
@@ -23,10 +33,10 @@ export function DefeatScreen({ msg, onTryAgain }: DefeatScreenProps) {
         </div>
         <div className="pt-4 flex flex-col gap-2">
           <button 
-            onClick={() => router.push("/map")}
+            onClick={handleReturn}
             className="w-full bg-gray-900 text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-gray-200 py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
           >
-            Return to Map 🗺️
+            Return to Location 🗺️
           </button>
           <button 
             onClick={onTryAgain}

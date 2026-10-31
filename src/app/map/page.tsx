@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { auth, callApi, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { arrayRemove, arrayUnion, collection, getDocs, orderBy, query, doc, getDoc, where, updateDoc, onSnapshot } from "firebase/firestore";
@@ -109,7 +110,9 @@ function FourCloudsFog({ isAnimatingOut }: { isAnimatingOut: boolean }) {
   );
 }
 
-export default function MapPage() {
+function MapContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { playTrack } = useAudio()!;
 
   const [user, setUser] = useState<User | null>(null);
@@ -135,6 +138,8 @@ export default function MapPage() {
 
   const [animatingOutLocationIds, setAnimatingOutLocationIds] = useState<Set<string>>(new Set());
   const processingFlagRef = useRef<string | null>(null);
+  const restoredSubAreaParamRef = useRef<string | null>(null);
+  const hasExplicitlyClosedLocationRef = useRef(false);
   
   const selectedLocationMeta = selectedLocation ? getMapMetaForLocation(selectedLocation.id) : null;
 
@@ -522,15 +527,83 @@ export default function MapPage() {
     }
   }, [activeStory, finalizeProgression]);
 
+  // Restore location from URL query (e.g. returning from encounter battle or shop)
+  useEffect(() => {
+    if (locations.length === 0 || !character) return;
+    const locIdParam = searchParams.get('locationId');
+
+    // If user clicked "Return to World Map", ignore lingering query until URL updates
+    if (hasExplicitlyClosedLocationRef.current) {
+      if (!locIdParam) {
+        hasExplicitlyClosedLocationRef.current = false;
+      }
+      return;
+    }
+
+    if (locIdParam) {
+      if (selectedLocation?.id !== locIdParam) {
+        const matchLoc = locations.find(l => l.id === locIdParam);
+        if (matchLoc) {
+          const status = getUnlockStatus(matchLoc, character, unlockedSubAreas);
+          if (!status.locked) {
+            setSelectedLocation(matchLoc);
+          }
+        }
+      }
+    }
+  }, [locations, character, searchParams, unlockedSubAreas, selectedLocation]);
+
+  // If subAreaId is in search params, auto-select it ONCE when panelSubAreas are loaded
+  useEffect(() => {
+    const subAreaIdParam = searchParams.get('subAreaId');
+    if (!subAreaIdParam) return;
+    if (panelSubAreas.length === 0) return;
+    if (restoredSubAreaParamRef.current === subAreaIdParam) return;
+
+    const matchSub = panelSubAreas.find(s => s.id === subAreaIdParam);
+    if (matchSub) {
+      setSelectedSubArea(matchSub);
+      restoredSubAreaParamRef.current = subAreaIdParam;
+      // Strip subAreaId from URL so user closing or switching subareas never fights URL params
+      const locId = selectedLocation?.id || searchParams.get('locationId');
+      if (locId) {
+        router.replace(`/map?locationId=${locId}`, { scroll: false });
+      }
+    }
+  }, [panelSubAreas, searchParams, selectedLocation, router]);
+
+  const handleSelectSubArea = (sa: SubArea) => {
+    setSelectedSubArea(sa);
+  };
+
+  const handleCloseSubArea = () => {
+    setSelectedSubArea(null);
+    if (selectedLocation) {
+      router.replace(`/map?locationId=${selectedLocation.id}`, { scroll: false });
+    }
+  };
+
   const handleLocationClick = (loc: GameLocation, status: UnlockStatus) => {
     if (status.locked) return;
+    hasExplicitlyClosedLocationRef.current = false;
     setSelectedLocation(loc);
     setSelectedSubArea(null);
+    restoredSubAreaParamRef.current = null;
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('lastActiveLocationId', loc.id);
+    }
+    router.replace(`/map?locationId=${loc.id}`, { scroll: false });
   };
 
   const handleReturnToWorldMap = () => {
+    hasExplicitlyClosedLocationRef.current = true;
     setSelectedLocation(null);
     setSelectedSubArea(null);
+    restoredSubAreaParamRef.current = null;
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('lastActiveLocationId');
+    }
+    router.replace('/map', { scroll: false });
   };
 
   if (loading || !character) {
@@ -798,14 +871,16 @@ export default function MapPage() {
                   const unlockStatus = getUnlockStatus(sa, character, unlockedSubAreas);
                   const isLocked = unlockStatus.locked;
                   const isSelected = selectedSubArea?.id === sa.id;
-                  const icon = isLocked ? '🔒' : getNodeIcon(sa.nodeType, sa.order);
+                  const defaultIcon = getNodeIcon(sa.nodeType, sa.order);
+                  const icon = isLocked ? '🔒' : (sa.customEmoji?.trim() || defaultIcon);
                   const posX = sa.x ?? 50;
                   const posY = sa.y ?? 50;
+                  const customColor = sa.pinColor?.trim();
 
                   return (
                     <button
                       key={sa.id}
-                      onClick={() => setSelectedSubArea(sa)}
+                      onClick={() => handleSelectSubArea(sa)}
                       style={{
                         left: `${posX}%`,
                         top: `${posY}%`,
@@ -817,11 +892,17 @@ export default function MapPage() {
                     >
                       {/* Pin Circle */}
                       <div
+                        style={{
+                          backgroundColor: customColor && !isLocked && !isSelected ? customColor : undefined,
+                          borderColor: customColor && !isLocked && !isSelected ? 'rgba(255,255,255,0.7)' : undefined,
+                        }}
                         className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-sm sm:text-base font-black shadow-2xl transition-all border-2 ${
                           isLocked
                             ? 'bg-gray-900/90 text-gray-400 border-gray-600 ring-2 ring-black/60 opacity-80'
                             : isSelected
                             ? 'bg-yellow-400 text-gray-950 border-white ring-4 ring-yellow-400/80 shadow-[0_0_20px_rgba(250,204,21,0.8)]'
+                            : customColor
+                            ? 'text-white shadow-[0_0_15px_rgba(0,0,0,0.6)] ring-2 ring-white/30'
                             : sa.nodeType === 'boss'
                             ? 'bg-red-700 text-white border-red-300 ring-2 ring-red-500/70 shadow-[0_0_15px_rgba(220,38,38,0.6)]'
                             : sa.nodeType === 'puzzle'
@@ -835,7 +916,7 @@ export default function MapPage() {
                       </div>
 
                       {/* Sub-Area Name Pill */}
-                      <div className={`mt-1.5 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold whitespace-nowrap shadow-lg border transition-all ${
+                      <div className={`mt-1.5 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold whitespace-nowrap shadow-lg border transition-all text-center ${
                         isSelected
                           ? 'bg-yellow-400 text-gray-950 border-white'
                           : 'bg-black/80 text-white border-white/20 group-hover:border-yellow-400'
@@ -880,7 +961,7 @@ export default function MapPage() {
 
                       {/* Close Button */}
                       <button
-                        onClick={() => setSelectedSubArea(null)}
+                        onClick={handleCloseSubArea}
                         className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white flex items-center justify-center font-bold text-sm transition-all border border-white/10 shrink-0"
                         title="Close Dossier"
                       >
@@ -995,14 +1076,14 @@ export default function MapPage() {
                                     {/* ACTION CTA BUTTON */}
                                     {enc.encounterType === 'shop' ? (
                                       <Link
-                                        href={`/shop?encounterId=${enc.id}`}
+                                        href={`/shop?encounterId=${enc.id}&locationId=${selectedLocation.id}`}
                                         className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-black text-xs uppercase tracking-wider rounded-lg shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-1.5"
                                       >
                                         <span>🏪</span> VISIT STORE
                                       </Link>
                                     ) : (
                                       <Link
-                                        href={`/play?id=${enc.id}`}
+                                        href={`/play?id=${enc.id}&locationId=${selectedLocation.id}&subAreaId=${selectedSubArea.id}`}
                                         className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black text-xs uppercase tracking-wider rounded-lg shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-1"
                                       >
                                         <span>⚔️</span> FIGHT
@@ -1032,7 +1113,7 @@ export default function MapPage() {
                     return (
                       <button
                         key={sa.id}
-                        onClick={() => setSelectedSubArea(sa)}
+                        onClick={() => handleSelectSubArea(sa)}
                         className={`text-left p-4 rounded-2xl border-2 transition-all flex items-start gap-4 ${
                           isSelected
                             ? 'bg-gray-800 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.25)]'
@@ -1080,7 +1161,7 @@ export default function MapPage() {
                 {selectedSubArea && (
                   <div className="mt-4 bg-gray-900 border-2 border-yellow-500/50 rounded-2xl p-5 shadow-2xl relative animate-in slide-in-from-bottom duration-200">
                     <button
-                      onClick={() => setSelectedSubArea(null)}
+                      onClick={handleCloseSubArea}
                       className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center font-bold text-sm"
                     >
                       ✕
@@ -1098,11 +1179,11 @@ export default function MapPage() {
                             <span className="text-sm font-bold text-white">{enc.title}</span>
                           </div>
                           {enc.encounterType === 'shop' ? (
-                            <Link href={`/shop?encounterId=${enc.id}`} className="px-3.5 py-2 bg-emerald-500 text-gray-950 font-bold text-xs rounded-lg flex items-center gap-1">
+                            <Link href={`/shop?encounterId=${enc.id}&locationId=${selectedLocation.id}`} className="px-3.5 py-2 bg-emerald-500 text-gray-950 font-bold text-xs rounded-lg flex items-center gap-1">
                               <span>🏪</span> VISIT STORE
                             </Link>
                           ) : (
-                            <Link href={`/play?id=${enc.id}`} className="px-4 py-2 bg-yellow-400 text-gray-950 font-bold text-xs rounded-lg">
+                            <Link href={`/play?id=${enc.id}&locationId=${selectedLocation.id}&subAreaId=${selectedSubArea.id}`} className="px-4 py-2 bg-yellow-400 text-gray-950 font-bold text-xs rounded-lg">
                               FIGHT
                             </Link>
                           )}
@@ -1117,5 +1198,20 @@ export default function MapPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function MapPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900">
+        <div className="animate-pulse flex flex-col items-center gap-2">
+          <span className="text-4xl">🗺️</span>
+          <span className="text-gray-600 dark:text-gray-300 font-bold tracking-widest">LOADING MAP...</span>
+        </div>
+      </div>
+    }>
+      <MapContent />
+    </Suspense>
   );
 }

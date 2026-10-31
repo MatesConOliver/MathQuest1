@@ -123,7 +123,7 @@ export default function PlayClient() {
         />
       );
     case 'lose':
-      return <DefeatScreen msg={battle.msg} onTryAgain={battle.handleFightAgain} />;
+      return <DefeatScreen msg={battle.msg} onTryAgain={battle.handleFightAgain} onReturnToMap={battle.handleReturnToMap} />;
     default:
       return (
         <Lobby

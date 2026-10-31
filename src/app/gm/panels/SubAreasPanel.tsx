@@ -633,9 +633,11 @@ export default function SubAreasPanel() {
             const isBoss = sa.nodeType === 'boss';
             const isPuzzle = sa.nodeType === 'puzzle';
             const isLore = sa.nodeType === 'lore';
-            const icon = isBoss ? '💀' : isPuzzle ? '🧩' : isLore ? '📜' : '⚔️';
+            const defaultIcon = isBoss ? '💀' : isPuzzle ? '🧩' : isLore ? '📜' : '⚔️';
+            const icon = sa.customEmoji?.trim() || defaultIcon;
             const posX = sa.x ?? 50;
             const posY = sa.y ?? 50;
+            const customColor = sa.pinColor?.trim();
 
             return (
               <div
@@ -648,9 +650,16 @@ export default function SubAreasPanel() {
                 title={`${sa.name} (${posX}%, ${posY}%) - Drag to move`}
               >
                 {/* Pin Circle */}
-                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-black text-xs sm:text-sm shadow-xl border-2 transition-all ${
+                <div 
+                  style={{
+                    backgroundColor: customColor && !isEditing ? customColor : undefined,
+                    borderColor: customColor && !isEditing ? 'rgba(255,255,255,0.7)' : undefined,
+                  }}
+                  className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-black text-xs sm:text-sm shadow-xl border-2 transition-all ${
                   isEditing 
                     ? 'bg-yellow-400 text-gray-950 border-white ring-4 ring-yellow-400/60 animate-bounce' 
+                    : customColor
+                    ? 'text-white shadow-[0_0_15px_rgba(0,0,0,0.5)]'
                     : isBoss
                     ? 'bg-red-700 text-white border-red-300 ring-2 ring-red-500/50'
                     : isPuzzle
@@ -662,9 +671,9 @@ export default function SubAreasPanel() {
                   {icon}
                 </div>
 
-                {/* Pin Tooltip / Badge */}
-                <div className="absolute top-full mt-1 px-2 py-0.5 rounded bg-black/80 backdrop-blur-sm text-[10px] text-white font-bold whitespace-nowrap pointer-events-none shadow-md border border-white/20">
-                  #{sa.order} {sa.name} ({posX}%, {posY}%)
+                {/* Pin Name Badge */}
+                <div className="mt-1 px-2 py-0.5 rounded bg-black/80 backdrop-blur-sm text-[10px] text-white font-bold whitespace-nowrap shadow-md border border-white/20 text-center">
+                  #{sa.order} {sa.name}
                 </div>
               </div>
             );
@@ -734,10 +743,133 @@ export default function SubAreasPanel() {
                           onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('name', e.target.value)} 
                         />
                         <Input 
-                          label="Description" 
+                          label="Internal Description" 
                           value={editingSubArea.description ?? ''} 
                           onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('description', e.target.value)} 
                         />
+
+                        {/* CUSTOM PIN STYLING & MAP VISIBILITY */}
+                        <div className="p-3.5 bg-yellow-50/70 dark:bg-yellow-950/20 rounded-xl border border-yellow-200 dark:border-yellow-900/60 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-yellow-900 dark:text-yellow-300 uppercase flex items-center gap-1.5">
+                              <span>📍</span> Pin Visuals on Location Map
+                            </span>
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                              Fully customize color, icon, and map label
+                            </span>
+                          </div>
+
+                          {/* Custom Description in Dossier */}
+                          <div>
+                            <Input 
+                              label="Custom Description (Shown in Sub-Area Dossier)" 
+                              value={editingSubArea.customDescription ?? ''} 
+                              onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('customDescription', e.target.value)} 
+                              placeholder="e.g. Whispering Groves Outpost, Dragon's Lair..." 
+                            />
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                              This text is displayed when the sub-area is selected in the location expedition view.
+                            </p>
+                          </div>
+
+                          {/* Pin Emoji / Character & Pin Color Picker */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                            {/* Emoji / Character */}
+                            <div className="space-y-1.5">
+                              <Input 
+                                label="Custom Pin Emoji / Character" 
+                                value={editingSubArea.customEmoji ?? ''} 
+                                onChange={(e: ChangeEvent<HTMLInputElement>) => handleFormChange('customEmoji', e.target.value)} 
+                                placeholder="e.g. 🏪, ⚔️, 💀, 💎, or A" 
+                              />
+                              <div className="flex flex-wrap gap-1">
+                                {['⚔️', '🏪', '💀', '🧩', '📜', '🌲', '🏰', '💎', '🧙', '🐉', '⚖️', '⚓', '🎯', '⚡', '👑', '🛡️'].map(em => (
+                                  <button
+                                    key={em}
+                                    type="button"
+                                    onClick={() => handleFormChange('customEmoji', em)}
+                                    className="w-6 h-6 rounded bg-white dark:bg-gray-800 border dark:border-gray-600 text-xs hover:scale-110 transition-transform"
+                                    title={`Use ${em}`}
+                                  >
+                                    {em}
+                                  </button>
+                                ))}
+                                {editingSubArea.customEmoji && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleFormChange('customEmoji', '')}
+                                    className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-[10px] text-gray-700 dark:text-gray-300 hover:text-red-500"
+                                    title="Reset to default node type icon"
+                                  >
+                                    Clear
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Pin Color */}
+                            <div className="space-y-1.5">
+                              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                Custom Pin Colour
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="color"
+                                  value={editingSubArea.pinColor || '#f59e0b'}
+                                  onChange={(e) => handleFormChange('pinColor', e.target.value)}
+                                  className="w-8 h-8 rounded border border-gray-600 cursor-pointer bg-transparent shrink-0"
+                                  title="Choose custom pin color"
+                                />
+                                <input
+                                  type="text"
+                                  value={editingSubArea.pinColor ?? ''}
+                                  onChange={(e) => handleFormChange('pinColor', e.target.value)}
+                                  placeholder="#f59e0b (or default)"
+                                  className="input flex-1 text-xs font-mono dark:bg-gray-800"
+                                />
+                                {editingSubArea.pinColor && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleFormChange('pinColor', '')}
+                                    className="px-2 py-1.5 rounded bg-gray-200 dark:bg-gray-700 text-[10px] font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-300 shrink-0"
+                                    title="Reset to default node type color"
+                                  >
+                                    Default
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Preset Color Swatches */}
+                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                {[
+                                  { name: 'Amber Gold', color: '#f59e0b' },
+                                  { name: 'Ruby Red', color: '#ef4444' },
+                                  { name: 'Emerald Green', color: '#10b981' },
+                                  { name: 'Sapphire Blue', color: '#3b82f6' },
+                                  { name: 'Arcane Purple', color: '#8b5cf6' },
+                                  { name: 'Rose Pink', color: '#ec4899' },
+                                  { name: 'Sunset Orange', color: '#f97316' },
+                                  { name: 'Cyan Frost', color: '#06b6d4' },
+                                  { name: 'Obsidian Black', color: '#1f2937' },
+                                ].map(c => (
+                                  <button
+                                    key={c.color}
+                                    type="button"
+                                    onClick={() => handleFormChange('pinColor', c.color)}
+                                    title={c.name}
+                                    style={{ backgroundColor: c.color }}
+                                    className={`w-4 h-4 rounded-full border border-black/30 shadow-xs transition-transform hover:scale-125 ${
+                                      editingSubArea.pinColor?.toLowerCase() === c.color.toLowerCase()
+                                        ? 'ring-2 ring-white scale-110'
+                                        : 'opacity-80 hover:opacity-100'
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
                         <Input 
                           label="Sub-Area Image URL" 
                           value={editingSubArea.imageUrl ?? ''} 

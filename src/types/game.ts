@@ -216,6 +216,9 @@ export type SubArea = {
   nodeType?: SubAreaNodeType; // defaults to 'encounter'
   waypoints?: { x: number; y: number }[]; // Path bend points (0-100%) on the segment leading from the previous sub-area to this one
   previousSubAreaIds?: string[]; // IDs of previous sub-areas this node connects from (takes precedence over 'order')
+  customEmoji?: string; // Custom emoji or character for the map pin
+  pinColor?: string; // Custom color for the sub-area pin (hex code)
+  customDescription?: string; // Custom description displayed right under the pin on the location map
   unlockRequirements?: {
     storyFlags?: string[]; // e.g., ["DEFEATED_GOBLIN_KING"]
     flagLogic?: FlagLogic; // (a OR b) AND c structured grouping

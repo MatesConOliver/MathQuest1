@@ -380,6 +380,26 @@ export function EncountersPanel() {
                 </div>
               </div>
 
+              {/* Store Background Image */}
+              <div className="space-y-2 bg-emerald-100/40 dark:bg-emerald-950/20 p-3 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40">
+                <Input 
+                  label="Store Background Image URL" 
+                  value={imageUrl} 
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setImageUrl(e.target.value)} 
+                  placeholder="https://... (Atmospheric shop background art)" 
+                />
+                {imageUrl && (
+                  <div className="flex items-center gap-3 pt-1">
+                    <div className="w-16 h-10 rounded-lg overflow-hidden border border-emerald-300 dark:border-emerald-700 shrink-0 bg-black/40 shadow-xs">
+                      <img src={imageUrl} alt="Store Background Preview" className="w-full h-full object-cover" />
+                    </div>
+                    <span className="text-[11px] text-emerald-800 dark:text-emerald-300 font-medium truncate">
+                      Store background preview active
+                    </span>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <Input type="number" label="Order" value={order} onChange={(e: ChangeEvent<HTMLInputElement>) => setOrder(Number(e.target.value))} />
                 <Input label="Emoji" value={emoji} onChange={(e: ChangeEvent<HTMLInputElement>) => setEmoji(e.target.value)} placeholder="🏪" />

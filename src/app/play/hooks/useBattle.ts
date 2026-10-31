@@ -326,12 +326,40 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     }
   }, [user, character, currentEncounter, gameItems, playerHp, consumedPotionInstanceIds, battleInventory, setCharacter]);
 
+  const targetLocationId = useMemo(() => {
+    const fromQuery = searchParams.get('locationId');
+    if (fromQuery) return fromQuery;
+    if (currentEncounter?.locationId) return currentEncounter.locationId;
+    return null;
+  }, [searchParams, currentEncounter]);
+
+  const targetSubAreaId = useMemo(() => {
+    const fromQuery = searchParams.get('subAreaId');
+    if (fromQuery) return fromQuery;
+    if (currentEncounter?.subAreaId) return currentEncounter.subAreaId;
+    return null;
+  }, [searchParams, currentEncounter]);
+
+  const buildReturnMapUrl = useCallback(() => {
+    const locId = targetLocationId || (typeof window !== 'undefined' ? sessionStorage.getItem('lastActiveLocationId') : null);
+    if (!locId) return '/map';
+    const subId = targetSubAreaId;
+    return `/map?locationId=${locId}${subId ? `&subAreaId=${subId}` : ''}`;
+  }, [targetLocationId, targetSubAreaId]);
+
+  useEffect(() => {
+    if (targetLocationId && typeof window !== 'undefined') {
+      sessionStorage.setItem('lastActiveLocationId', targetLocationId);
+    }
+  }, [targetLocationId]);
+
   const handleReturnToMap = useCallback(() => {
     if (currentEncounter?.winRewardStoryFlag) {
       sessionStorage.setItem("pendingStoryFlag", currentEncounter.winRewardStoryFlag);
     }
-    router.push("/map");
-  }, [currentEncounter, router]);
+    const dest = buildReturnMapUrl();
+    router.push(dest);
+  }, [currentEncounter, buildReturnMapUrl, router]);
 
   const handleLoss = useCallback(async (reason: string) => {
     if (!user || !character) return;
@@ -854,7 +882,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       setIsBattleOver(true);
 
       setTimeout(() => {
-        router.push('/map');
+        const dest = buildReturnMapUrl();
+        router.push(dest);
       }, 2000);
     } catch (error) {
       console.error('Error saving escape:', error);
