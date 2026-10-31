@@ -211,7 +211,6 @@ async function generateAiSolutionForQuestion(
 
 export function QuestionsPanel() {
     const [msg, setMsg] = useState("");
-    const [questions, setQuestions] = useState<QuestionDoc[]>([]);
     const [editingId, setEditingId] = useState("");
   
     // Live Questions & Strict Reactive Tag State
@@ -282,7 +281,6 @@ export function QuestionsPanel() {
             (d) => ({ ...d.data(), id: d.id } as QuestionDoc)
           );
           setAllQuestions(fetched);
-          setQuestions(fetched);
           setIsLoadingQuestions(false);
           setHasLoadedAllQuestions(true);
         },
@@ -337,15 +335,19 @@ export function QuestionsPanel() {
       });
     }, [availableTags, locations, hasLoadedAllQuestions]);
 
-    // 4. RESET ACTIVE FILTER IF ACTIVE TAG HAS 0 REMAINING QUESTIONS
+    // 4. RESET ACTIVE TAG FILTER IF PREVIOUSLY SELECTED TAG HAS 0 REMAINING QUESTIONS
     useEffect(() => {
-      const activeTag = (dbTagSearch || selectedDropdownTag || "").trim().toLowerCase();
-      if (activeTag && !availableTags.some((t) => t.toLowerCase() === activeTag)) {
+      if (!hasLoadedAllQuestions || !selectedDropdownTag) return;
+      const tagLower = selectedDropdownTag.trim().toLowerCase();
+      const stillExists = availableTags.some((t) => t.toLowerCase() === tagLower);
+      if (!stillExists) {
         setSelectedDropdownTag("");
-        setDbTagSearch("");
-        setMsg(`ℹ️ Tag '${activeTag}' has no remaining questions and was removed from the tags list.`);
+        if (dbTagSearch.trim().toLowerCase() === tagLower) {
+          setDbTagSearch("");
+        }
+        setMsg(`ℹ️ Tag '${selectedDropdownTag}' has no remaining questions and was removed.`);
       }
-    }, [availableTags, selectedDropdownTag, dbTagSearch]);
+    }, [availableTags, selectedDropdownTag, dbTagSearch, hasLoadedAllQuestions]);
 
     // Global Mapping: Tag -> Location
     const tagToLocationMap = useMemo(() => {
@@ -407,18 +409,12 @@ export function QuestionsPanel() {
     const promptPreview = useMemo(() => stringToContentBlocks(promptString), [promptString]);
     const choicesPreview = useMemo(() => choices.map(c => stringToContentBlocks(c)), [choices]);
 
-    // 5. FILTERING QUESTIONS BY TAG AND SEARCH
-    const filteredByTagQuestions = useMemo(() => {
-      const activeTag = (dbTagSearch || selectedDropdownTag || "").trim().toLowerCase();
-      if (!activeTag) return allQuestions;
-      return allQuestions.filter((q) =>
-        (q.tags || []).some((t) => t.trim().toLowerCase() === activeTag)
-      );
-    }, [allQuestions, dbTagSearch, selectedDropdownTag]);
-
+    // 5. UNIFIED FILTERING: TAG FILTER + FULL TEXT & METADATA SEARCH
     const loadAllQuestions = useCallback(async () => {
       setSelectedDropdownTag("");
       setDbTagSearch("");
+      setLocalFilter("");
+      setDebouncedFilter("");
       setMsg(`✅ Showing all ${allQuestions.length} questions`);
       return allQuestions;
     }, [allQuestions]);
@@ -454,16 +450,52 @@ export function QuestionsPanel() {
     };
   
     const visibleQuestions = useMemo(() => {
-      return questions
-        .filter(q => {
-          if (!debouncedFilter.trim()) return true;
-          const mainText = getQuestionDisplayText(q);
-          const tags = q.tags ? q.tags.join(" ") : "";
-          const searchString = `${q.title || ""} ${mainText} ${tags}`.toLowerCase();
-          return searchString.includes(debouncedFilter.toLowerCase());
+      const activeTag = (selectedDropdownTag || dbTagSearch || "").trim().toLowerCase();
+      const searchTerms = debouncedFilter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+      return allQuestions
+        .filter((q) => {
+          // 1. Tag Filtering: Matches exact tag from dropdown or substring/exact from manual tag search
+          if (activeTag) {
+            const hasMatchingTag = (q.tags || []).some((t) => {
+              const clean = t.trim().toLowerCase();
+              return clean === activeTag || clean.includes(activeTag);
+            });
+            if (!hasMatchingTag) return false;
+          }
+
+          // 2. Text Search Filtering: Matches across title, prompt content, choices, tags, location, and solutions
+          if (searchTerms.length > 0) {
+            const promptStr = getQuestionDisplayText(q);
+            const choicesStr = (q.choicesContent || [])
+              .map((c) => contentBlocksToString(c.content))
+              .concat(q.choices || [])
+              .join(" ");
+            const tagsStr = (q.tags || []).join(" ");
+            const locInfo = getQuestionLocation(q);
+            const locStr = locInfo.locationOrder
+              ? `location ${locInfo.locationOrder} loc ${locInfo.locationOrder} ${locInfo.locationName || ""}`
+              : "unassigned";
+            const solutionsStr = `${q.solutionText || ""} ${q.aiSolution?.text || ""}`;
+
+            const haystack = `${q.title || ""} ${promptStr} ${choicesStr} ${tagsStr} ${q.groupId || ""} ${locStr} ${solutionsStr}`.toLowerCase();
+
+            const allTermsMatch = searchTerms.every((term) => haystack.includes(term));
+            if (!allTermsMatch) return false;
+          }
+
+          return true;
         })
-        .sort((a, b) => (b.title || "").localeCompare(a.title || ""));
-    }, [questions, debouncedFilter]);
+        .sort((a, b) => {
+          if (a.order != null && b.order != null && a.order !== b.order) {
+            return a.order - b.order;
+          }
+          return (a.title || "").localeCompare(b.title || "", undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+        });
+    }, [allQuestions, selectedDropdownTag, dbTagSearch, debouncedFilter, getQuestionLocation]);
   
     function loadQuestionToEdit(q: QuestionDoc) {
       if (!q.id) return;
@@ -1191,8 +1223,10 @@ export function QuestionsPanel() {
                 placeholder="Type tag to filter (or empty for all)..."
                 value={dbTagSearch}
                 onChange={(e) => {
-                  setDbTagSearch(e.target.value);
-                  setSelectedDropdownTag(e.target.value);
+                  const val = e.target.value;
+                  setDbTagSearch(val);
+                  const matched = availableTags.find((t) => t.toLowerCase() === val.trim().toLowerCase());
+                  setSelectedDropdownTag(matched || "");
                 }}
               />
               {dbTagSearch && (
@@ -1209,17 +1243,65 @@ export function QuestionsPanel() {
               )}
             </div>
 
-            {/* Debounced filter (300ms delay) */}
+            {/* Debounced search filter */}
             <input
               className="input w-full text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white"
               placeholder={
-                dbTagSearch.trim()
-                  ? `🔍 Search within tag '${dbTagSearch}'...`
-                  : "🔍 Search title, prompt text, or LaTeX..."
+                (selectedDropdownTag || dbTagSearch).trim()
+                  ? `🔍 Search within tag '${selectedDropdownTag || dbTagSearch}'...`
+                  : "🔍 Search title, prompt text, LaTeX, or solution..."
               }
               value={localFilter}
               onChange={(e) => setLocalFilter(e.target.value)}
             />
+
+            {/* Active Filters Bar */}
+            {(selectedDropdownTag || dbTagSearch || localFilter) && (
+              <div className="flex items-center justify-between bg-indigo-50/80 dark:bg-indigo-950/40 px-2.5 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-900/60 text-xs">
+                <div className="flex items-center gap-1.5 flex-wrap text-indigo-900 dark:text-indigo-200">
+                  <span className="font-bold text-[10px] uppercase text-indigo-800 dark:text-indigo-300">Active:</span>
+                  {(selectedDropdownTag || dbTagSearch) && (
+                    <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1">
+                      <span>🏷️ {selectedDropdownTag || dbTagSearch}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDropdownTag("");
+                          setDbTagSearch("");
+                        }}
+                        className="hover:text-red-200 text-xs font-bold ml-0.5"
+                        title="Remove tag filter"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
+                  {localFilter && (
+                    <span className="bg-purple-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1">
+                      <span>🔍 &ldquo;{localFilter}&rdquo;</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocalFilter("");
+                          setDebouncedFilter("");
+                        }}
+                        className="hover:text-red-200 text-xs font-bold ml-0.5"
+                        title="Clear search text"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={loadAllQuestions}
+                  className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 hover:underline shrink-0 ml-2"
+                >
+                  Clear All
+                </button>
+              </div>
+            )}
           </div>
 
           {/* BATCH SELECTION & ACTION TOOLBAR */}
@@ -1304,24 +1386,30 @@ export function QuestionsPanel() {
           <div className="space-y-2 overflow-y-auto pr-2 flex-1 custom-scrollbar">
             {isLoadingQuestions && (
               <div className="py-8 text-center text-xs text-gray-500 dark:text-gray-400 font-bold animate-pulse">
-                ⏳ Loading questions for tag &lsquo;{dbTagSearch}&rsquo;...
+                ⏳ Loading questions database...
               </div>
             )}
 
-            {questions.length === 0 && !isLoadingQuestions && (
+            {visibleQuestions.length === 0 && !isLoadingQuestions && (
               <div className="py-12 px-4 text-center text-gray-500 dark:text-gray-400 space-y-2 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 my-2">
                 <div className="text-3xl">📭</div>
-                <div className="font-bold text-sm text-gray-700 dark:text-gray-300">Question Pool is Empty</div>
+                <div className="font-bold text-sm text-gray-700 dark:text-gray-300">
+                  {allQuestions.length === 0 ? "Question Pool is Empty" : "No Questions Match Filter"}
+                </div>
                 <p className="text-xs max-w-xs mx-auto leading-relaxed">
-                  Type in the search box above to search across all questions (auto-loads after 0.5s), choose a tag, or load the whole pool directly.
+                  {allQuestions.length === 0
+                    ? "Create your first question using the form on the left or the batch importer above."
+                    : `No questions match tag '${selectedDropdownTag || dbTagSearch || "none"}' or search '${debouncedFilter}'. Click below to reset.`}
                 </p>
-                <button
-                  type="button"
-                  onClick={loadAllQuestions}
-                  className="mt-2 px-3 py-1.5 bg-black text-white dark:bg-white dark:text-black rounded-lg text-xs font-bold hover:opacity-80 transition-opacity"
-                >
-                  🌐 Load All Questions
-                </button>
+                {(selectedDropdownTag || dbTagSearch || debouncedFilter) && (
+                  <button
+                    type="button"
+                    onClick={loadAllQuestions}
+                    className="mt-2 px-3 py-1.5 bg-black text-white dark:bg-white dark:text-black rounded-lg text-xs font-bold hover:opacity-80 transition-opacity"
+                  >
+                    🌐 Clear Filters & Show All ({allQuestions.length})
+                  </button>
+                )}
               </div>
             )}
             {visibleQuestions.map((q) => {
@@ -1359,7 +1447,24 @@ export function QuestionsPanel() {
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">{getQuestionDisplayText(q)}</div>
                     <div className="text-xs text-gray-400 flex flex-wrap items-center gap-1.5 mt-2">
-                      <span className="bg-gray-100 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded-full font-mono text-[10px]">{q.tags?.join(", ")}</span>
+                      {/* Interactive Tag Badges */}
+                      {(q.tags || []).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            loadByTag(t);
+                          }}
+                          className="bg-gray-100 hover:bg-indigo-100 dark:bg-gray-700 dark:hover:bg-indigo-950/60 text-gray-700 dark:text-gray-300 hover:text-indigo-700 dark:hover:text-indigo-300 px-1.5 py-0.5 rounded-full font-mono text-[10px] transition-colors border border-transparent hover:border-indigo-300 dark:hover:border-indigo-700"
+                          title={`Click to filter by tag '${t}'`}
+                        >
+                          #{t}
+                        </button>
+                      ))}
+                      {(!q.tags || q.tags.length === 0) && (
+                        <span className="text-[10px] text-gray-400 italic">no tags</span>
+                      )}
                       {(() => {
                         const locInfo = getQuestionLocation(q);
                         if (locInfo.isConflict) {
