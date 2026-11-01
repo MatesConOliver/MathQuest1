@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+
 // Root directory for public assets
 const PUBLIC_DIR = path.join(process.cwd(), 'public');
 const ASSETS_ROOT = path.join(PUBLIC_DIR, 'Assets');

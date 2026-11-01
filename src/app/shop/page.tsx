@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useMemo } from "react";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { 
@@ -16,14 +16,13 @@ function ShopContent() {
   const { playTrack } = useAudio()!; 
 
   useEffect(() => {
-    playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3"); // 👈 Triggers the music
+    playTrack("/the-minstrels-return-loopable-fantasy-medieval-rpg-music-447849.mp3");
   }, [playTrack]);
 
   const router = useRouter();
   const searchParams = useSearchParams();
   const encounterId = searchParams.get('encounterId');
   const locationIdParam = searchParams.get('locationId');
-  const subAreaIdParam = searchParams.get('subAreaId');
 
   const [user, setUser] = useState<User | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
@@ -31,14 +30,14 @@ function ShopContent() {
   const [encounter, setEncounter] = useState<EncounterDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+  const [selectedItem, setSelectedItem] = useState<GameItem | null>(null);
 
   const returnMapUrl = locationIdParam 
     ? `/map?locationId=${locationIdParam}`
     : (encounter?.locationId ? `/map?locationId=${encounter.locationId}` : '/map');
 
-  // 1. Load User, Character, and Items (filtered if store encounter)
+  // Load User, Character, Encounter, and Items
   useEffect(() => {
-    // The general store is closed; only sub-area store encounters are accessible
     if (!encounterId) {
       router.replace("/map");
       return;
@@ -51,14 +50,12 @@ function ShopContent() {
       }
       setUser(u);
 
-      // Fetch Character to check Gold
       const charRef = doc(db, "characters", u.uid);
       const charSnap = await getDoc(charRef);
       if (charSnap.exists()) {
         setCharacter(charSnap.data() as Character);
       }
 
-      // Check if visiting a specific Store Encounter
       let activeEncounter: EncounterDoc | null = null;
       if (encounterId) {
         try {
@@ -72,22 +69,23 @@ function ShopContent() {
         }
       }
 
-      // Fetch Items from the Shop
       const itemsSnap = await getDocs(collection(db, "items"));
       const loadedItems: GameItem[] = [];
       itemsSnap.forEach((d) => {
-          const itemData = d.data() as GameItem;
-          if (itemData.inShop !== false) {
-              loadedItems.push(itemData);
-          }
+        const itemData = d.data() as GameItem;
+        if (itemData.inShop !== false) {
+          loadedItems.push(itemData);
+        }
       });
 
-      // If store encounter defines specific item IDs, filter strictly to those items
+      let finalItems = loadedItems;
       if (activeEncounter && Array.isArray(activeEncounter.shopItemIds) && activeEncounter.shopItemIds.length > 0) {
         const allowedSet = new Set(activeEncounter.shopItemIds);
-        setItems(loadedItems.filter(item => allowedSet.has(item.id)));
-      } else {
-        setItems(loadedItems);
+        finalItems = loadedItems.filter(item => allowedSet.has(item.id));
+      }
+      setItems(finalItems);
+      if (finalItems.length > 0) {
+        setSelectedItem(finalItems[0]);
       }
 
       setLoading(false);
@@ -95,28 +93,33 @@ function ShopContent() {
     return () => unsub();
   }, [router, encounterId]);
 
-  // 2. Function to Buy an Item
+  // Keep selectedItem valid if items change
+  useEffect(() => {
+    if (items.length > 0 && (!selectedItem || !items.some(i => i.id === selectedItem.id))) {
+      setSelectedItem(items[0]);
+    }
+  }, [items, selectedItem]);
+
+  // Buy Item Action
   const handleBuy = async (item: GameItem) => {
     if (!user || !character) return;
     if (character.gold < item.price) {
-      setMsg("❌ Not enough gold!");
-      setTimeout(() => setMsg(""), 2000);
+      setMsg("Insufficient gold");
+      setTimeout(() => setMsg(""), 2200);
       return;
     }
 
-    setMsg("Buying...");
+    setMsg("Purchasing...");
     try {
       const charRef = doc(db, "characters", user.uid);
-      
       const isWeapon = item.slot === "mainHand" || item.slot === "offHand" || item.type === "weapon";
-      // Create the inventory object (only weapons have durability)
       const newItem = {
         itemId: item.id,
         obtainedAt: Date.now(),
         instanceId: crypto.randomUUID(),
         ...(isWeapon && item.maxDurability ? { 
-            durability: item.maxDurability, 
-            maxDurability: item.maxDurability 
+          durability: item.maxDurability, 
+          maxDurability: item.maxDurability 
         } : {})
       };
 
@@ -125,250 +128,268 @@ function ShopContent() {
         inventory: arrayUnion(newItem)
       });
 
-      // Update local state so UI reflects changes immediately
       setCharacter(prev => prev ? ({
         ...prev,
         gold: prev.gold - item.price,
         inventory: [...(prev.inventory || []), newItem]
       }) : null);
 
-      setMsg(`✅ Bought ${item.name}!`);
-      setTimeout(() => setMsg(""), 2000);
+      setMsg(`Acquired ${item.name}`);
+      setTimeout(() => setMsg(""), 2200);
     } catch (error) {
       console.error(error);
-      setMsg("❌ Error buying item.");
+      setMsg("Purchase failed");
+      setTimeout(() => setMsg(""), 2200);
     }
   };
 
-  if (loading) return <div className="p-8 dark:text-white">Loading Store...</div>;
+  // Stat summary helper: clean, unboxed rows with no rainbow emojis
+  const getItemStats = (item: GameItem) => {
+    const s = item.stats || {};
+    const list: { label: string; value: string }[] = [];
+
+    if (s.a) list.push({ label: 'Stat A (Cubic)', value: `+${s.a}` });
+    if (s.b) list.push({ label: 'Stat B (Quad)', value: `+${s.b}` });
+    if (s.c) list.push({ label: 'Stat C (Linear)', value: `+${s.c}` });
+    if (s.d) list.push({ label: 'Stat D (Flat)', value: `+${s.d}` });
+    if (s.xBonus) list.push({ label: 'Variable Bonus', value: `X +${s.xBonus}` });
+    if (s.damage?.mult) list.push({ label: 'Damage Bonus', value: `${s.damage.mult > 0 ? '+' : ''}${Math.round(s.damage.mult * 100)}%` });
+    if (s.heal?.flat || s.heal?.mult) {
+      const val = [s.heal?.flat ? `+${s.heal.flat} HP` : '', s.heal?.mult ? `(+${Math.round(s.heal.mult * 100)}%)` : ''].filter(Boolean).join(' ');
+      list.push({ label: 'Health Restoration', value: val });
+    }
+    if (s.maxHp?.flat || s.maxHp?.mult) {
+      const val = [s.maxHp?.flat ? `+${s.maxHp.flat}` : '', s.maxHp?.mult ? `(+${Math.round(s.maxHp.mult * 100)}%)` : ''].filter(Boolean).join(' ');
+      list.push({ label: 'Max Health', value: `${val} HP` });
+    }
+    if (s.time?.flat || s.time?.mult) {
+      const val = [s.time?.flat ? `+${s.time.flat}s` : '', s.time?.mult ? `(+${Math.round((s.time.mult > 1 ? s.time.mult - 1 : s.time.mult) * 100)}%)` : ''].filter(Boolean).join(' ');
+      list.push({ label: 'Question Timer', value: val });
+    }
+    if ((item.slot === 'mainHand' || item.slot === 'offHand' || item.type === 'weapon') && item.maxDurability) {
+      list.push({ label: 'Durability', value: `${item.maxDurability} uses` });
+    }
+
+    return list;
+  };
+
+  const selectedItemStats = useMemo(() => {
+    return selectedItem ? getItemStats(selectedItem) : [];
+  }, [selectedItem]);
+
+  const canAffordSelected = character && selectedItem ? character.gold >= selectedItem.price : false;
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-3xl animate-pulse">🏪</span>
+          <span className="text-xs font-mono uppercase tracking-widest text-gray-400">Opening store...</span>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="relative min-h-screen text-gray-900 dark:text-gray-100 overflow-x-hidden">
-      {/* Atmospheric Store Background Image (if configured in GM Encounters panel) */}
-      {encounter?.imageUrl && (
-        <div className="fixed inset-0 pointer-events-none z-0">
+    <main className="relative min-h-screen w-full bg-gray-950 text-gray-100 overflow-x-hidden flex flex-col font-sans select-none">
+      
+      {/* =========================================================================
+          BACKGROUND ART (Crisp & clearly visible with subtle edge scrim)
+          ========================================================================= */}
+      {encounter?.imageUrl ? (
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
           <img
             src={encounter.imageUrl}
-            alt="Store Encounter Background"
-            className="w-full h-full object-cover"
+            alt={encounter.title || "Merchant Outpost"}
+            className="w-full h-full object-cover object-center"
           />
-          {/* Dark backdrop overlay to guarantee crisp readability */}
-          <div className="absolute inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-[2px]" />
+          {/* Subtle directional scrim to preserve rich art contrast without muddying colors */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-gray-950/85 via-gray-950/40 to-transparent" />
+        </div>
+      ) : (
+        <div className="fixed inset-0 pointer-events-none z-0 bg-gradient-to-b from-gray-900 to-gray-950" />
+      )}
+
+      {/* Floating Toast Notification */}
+      {msg && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-gray-900/95 text-amber-300 border border-amber-400/40 shadow-2xl text-xs font-mono font-bold tracking-wide animate-in fade-in duration-200">
+          {msg}
         </div>
       )}
 
-      <div className="relative z-10 p-6 max-w-6xl mx-auto">
-        {/* Toast Message */}
-        {msg && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-black text-white px-6 py-3 rounded-full shadow-xl z-50 font-bold animate-pulse">
-              {msg}
+      {/* =========================================================================
+          TOP BAR: Return Link, Store Name & Purse
+          ========================================================================= */}
+      <header className="relative z-20 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 bg-gray-950/70 backdrop-blur-md border-b border-white/10 shrink-0">
+        
+        {/* Left: Return Link & Store Title */}
+        <div className="flex items-center gap-3 min-w-0">
+          <Link
+            href={returnMapUrl}
+            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-medium border border-white/10 transition-colors flex items-center gap-1 shrink-0"
+          >
+            <span>‹</span> Return to Location
+          </Link>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xl">{encounter?.emoji || "🏪"}</span>
+            <h1 className="text-sm sm:text-base font-black tracking-tight text-white truncate">
+              {encounter?.title || "Outpost Merchant"}
+            </h1>
+            <span className="text-gray-500 hidden sm:inline">·</span>
+            <span className="text-xs text-gray-400 font-mono hidden sm:inline">
+              {encounter?.shopGreeting || "Curated Expedition Wares"}
+            </span>
           </div>
-        )}
+        </div>
 
-        <header className="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-gray-200/60 dark:border-gray-700/60 pb-4 gap-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md p-4 rounded-2xl shadow-sm">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <span className="text-3xl">{encounter?.emoji || "🏪"}</span>
-              <h1 className="text-3xl sm:text-4xl font-bold">
-                {encounter ? encounter.title : "Item Store"}
-              </h1>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-              {encounter?.shopGreeting || (encounter ? "Curated wares selected for this outpost." : "Spend your hard-earned gold!")}
-            </p>
-            {encounter && (
-              <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-bold">
-                <span>📍 Sub-Area Outpost</span> • <span>{items.length} item(s) in stock</span>
-              </div>
-            )}
+        {/* Right: Gold Purse & Character Link */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="px-3 py-1 rounded-lg bg-black/60 border border-amber-400/30 text-amber-300 font-mono text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-sm">
+            <span>🪙</span>
+            <span>{character?.gold ?? 0}</span>
+            <span className="text-[10px] text-amber-400/70 font-sans uppercase">Gold</span>
           </div>
-          <div className="text-right flex flex-col items-end">
-            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-              🪙 {character ? character.gold : 0} G
-            </div>
-            <nav aria-label="Page navigation" className="flex flex-wrap justify-end gap-2 mt-2">
-              <Link 
-                href={returnMapUrl} 
-                className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-yellow-500/50 bg-yellow-400/10 px-3 py-1.5 text-sm font-bold text-yellow-300 transition-colors hover:bg-yellow-400/20 shadow-sm"
-              >
-                🗺️ Return to Location
-              </Link>
-              <Link href="/character" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🦉 Character</Link>
-              <Link href="/" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🏠 Main menu</Link>
-            </nav>
-          </div>
-        </header>
+          <Link
+            href="/character"
+            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-medium border border-white/10 transition-colors"
+          >
+            🦉 Character
+          </Link>
+        </div>
+      </header>
 
-      {/* SHOP GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {items.map((item) => {
-            // Calculate dynamic visual things
-            const canAfford = (character?.gold || 0) >= item.price;
-            const isRare = item.price > 500; 
-            const s = item.stats || {}; // Short helper
-
-            return (
-            <div 
-              key={item.id} 
-              className={`
-                relative flex flex-col justify-between
-                p-5 rounded-2xl border shadow-sm transition-all duration-200
-                hover:shadow-lg hover:-translate-y-1
-                bg-white dark:bg-gray-800 dark:border-gray-700
-                ${isRare ? 'border-yellow-400 dark:border-yellow-600 ring-1 ring-yellow-400/20' : 'border-gray-200'}
-              `}
-            >
-              {/* CONTENT WRAPPER */}
-              <div>
-                
-                {/* 1. TOP ROW: Image + Name */}
-                <div className="flex gap-4 mb-4">
-                    {/* Image Box */}
-                    <div className="w-12 h-12 bg-gray-50 dark:bg-gray-700 rounded-xl border dark:border-gray-600 shrink-0 flex items-center justify-center overflow-hidden">
-                        {item.imageUrl ? (
-                            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
-                        ) : (
-                            <span className="text-3xl opacity-50">📦</span>
-                        )}
-                    </div>
-
-                    {/* Title & Type */}
-                    <div>
-                        <h3 className="font-bold text-lg leading-tight dark:text-white">{item.name}</h3>
-                        <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 text-[10px] uppercase font-bold tracking-wider rounded">
-                            {item.type} {item.slot ? `• ${item.slot}` : ''}
-                        </span>
-                    </div>
-                </div>
-
-                {/* 2. STATS BADGES */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                    
-                    {/* --- NEW DAMAGE VARIABLES (A, B, C, D) --- */}
-                    
-                    {/* Stat A (Cubic) */}
-                    {s.a && (
-                        <div className="px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 text-xs font-bold rounded flex items-center gap-1 border border-red-100 dark:border-red-900/30">
-                            <span>🟥</span> A +{s.a}
-                        </div>
-                    )}
-
-                    {/* Stat B (Quadratic) */}
-                    {s.b && (
-                        <div className="px-2 py-1 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-200 text-xs font-bold rounded flex items-center gap-1 border border-orange-100 dark:border-orange-900/30">
-                            <span>🟧</span> B +{s.b}
-                        </div>
-                    )}
-
-                    {/* Stat C (Linear) */}
-                    {s.c && (
-                        <div className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 text-xs font-bold rounded flex items-center gap-1 border border-blue-100 dark:border-blue-900/30">
-                            <span>🟦</span> C +{s.c}
-                        </div>
-                    )}
-
-                    {/* Stat D (Flat) */}
-                    {s.d && (
-                        <div className="px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 text-xs font-bold rounded flex items-center gap-1 border border-green-100 dark:border-green-900/30">
-                            <span>🟩</span> D +{s.d}
-                        </div>
-                    )}
-
-                    {/* --- MULTIPLIERS & SPECIALS --- */}
-
-                    {/* X Bonus (Flat modifier to x) */}
-                    {s.xBonus && (
-                        <div className="px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-200 text-xs font-bold rounded flex items-center gap-1 border border-indigo-100 dark:border-indigo-900/30">
-                            <span>✖️</span> X +{s.xBonus}
-                        </div>
-                    )}
-
-                    {/* Global Damage Mult (K) */}
-                    {s.damage?.mult && (
-                        <div className="px-2 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-200 text-xs font-bold rounded flex items-center gap-1 border border-purple-100 dark:border-purple-900/30">
-                            <span>💥</span> Dmg {s.damage.mult > 0 ? '+' : ''}{Math.round(s.damage.mult * 100)}%
-                        </div>
-                    )}
-
-                    {/* --- DEFENSE / SURVIVAL --- */}
-
-                    {/* HEAL */}
-                    {(s.heal?.flat || s.heal?.mult) && (
-                        <div className="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-200 text-xs font-bold rounded flex items-center gap-1 border border-emerald-100 dark:border-emerald-900/30">
-                            <span>🧪</span> 
-                            {s.heal.flat ? `+${s.heal.flat} HP ` : ''}
-                            {s.heal.mult ? `(+${Math.round(s.heal.mult * 100)}%)` : ''}
-                        </div>
-                    )}
-
-                    {/* MAX HP */}
-                    {(s.maxHp?.flat || s.maxHp?.mult) && (
-                        <div className="px-2 py-1 bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-200 text-xs font-bold rounded flex items-center gap-1 border border-pink-100 dark:border-pink-900/30">
-                            <span>❤️</span> 
-                            {s.maxHp.flat ? `+${s.maxHp.flat} ` : ''}
-                            {s.maxHp.mult ? `(+${Math.round(s.maxHp.mult * 100)}%)` : ''} HP
-                        </div>
-                    )}
-
-                    {/* TIME */}
-                    {(s.time?.flat || s.time?.mult) && (
-                        <div className="px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-200 text-xs font-bold rounded flex items-center gap-1 border border-yellow-100 dark:border-yellow-900/30">
-                            <span>⏳</span> 
-                            {s.time.flat ? `+${s.time.flat}s ` : ""}
-                            {s.time.mult ? `(+${Math.round((s.time.mult > 1 ? s.time.mult - 1 : s.time.mult) * 100)}%)` : ""}
-                        </div>
-                    )}
-
-                    {/* DURABILITY (Weapons only) */}
-                    {(item.slot === 'mainHand' || item.slot === 'offHand' || item.type === 'weapon') && item.maxDurability && (
-                        <div className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-bold rounded flex items-center gap-1 border border-gray-200 dark:border-gray-600">
-                            <span>🔨</span> {item.maxDurability} Dur
-                        </div>
-                    )}
-                </div>
-
-                {/* 3. DESCRIPTION */}
-                <p className="text-sm text-gray-500 dark:text-gray-400 italic mb-6 leading-relaxed border-t dark:border-gray-700 pt-3">
-                  &ldquo;{item.description || "A mysterious item found in the void..."}&rdquo;
-                </p>
-
-              </div>
-
-              {/* 4. BUY BUTTON */}
-              <button
-                onClick={() => handleBuy(item)}
-                disabled={!canAfford}
-                className={`w-full py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 ${
-                  canAfford
-                    ? "bg-black text-white hover:bg-gray-800 hover:shadow-md dark:bg-white dark:text-black dark:hover:bg-gray-200"
-                    : "bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500"
-                }`}
-              >
-                <span>🪙 {item.price}</span>
-                <span>{canAfford ? "Purchase" : "Too Expensive"}</span>
-              </button>
-
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Empty Shop State */}
-      {items.length === 0 && !loading && (
-          <div className="text-center mt-20">
-            <h2 className="text-2xl font-bold text-gray-700 dark:text-gray-300">Shop Closed</h2>
-            <p className="text-gray-600 dark:text-gray-400">No items available right now.</p>
-          </div>
+      {/* Empty Store State */}
+      {items.length === 0 && (
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-8 text-center">
+          <p className="text-sm font-medium text-gray-400">The merchant currently has no wares in stock.</p>
+          <Link href={returnMapUrl} className="mt-4 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-xs font-bold text-white">
+            ‹ Return to Location
+          </Link>
+        </div>
       )}
 
-      </div>
+      {/* =========================================================================
+          COMPACT GRID STORE (Option 3)
+          Tight, space-efficient item slots on the left, full inspector card on the right.
+          Atmospheric background art remains visible around the interface.
+          ========================================================================= */}
+      {items.length > 0 && (
+        <div className="relative z-10 flex-1 flex flex-col md:flex-row p-4 sm:p-6 gap-6 max-w-6xl mx-auto w-full items-center justify-center">
+          
+          {/* Left: Compact Slots Grid Frame */}
+          <div className="w-full md:w-[480px] bg-gray-950/85 backdrop-blur-md rounded-2xl border border-white/10 p-4 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10 text-xs font-mono text-gray-400 uppercase">
+              <span>Merchant Wares</span>
+              <span>{items.length} item(s)</span>
+            </div>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-3 max-h-[420px] overflow-y-auto custom-scrollbar pr-1">
+              {items.map((item) => {
+                const isSelected = selectedItem?.id === item.id;
+                const canAfford = (character?.gold || 0) >= item.price;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setSelectedItem(item)}
+                    className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-amber-400/20 border-amber-400 text-white shadow-inner scale-[1.02]'
+                        : 'bg-black/50 border-white/10 text-gray-300 hover:border-white/30 hover:bg-black/70'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-black/60 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-base">📦</span>
+                        )}
+                      </div>
+                      <span className={`text-[10px] font-mono font-bold ${canAfford ? 'text-amber-300' : 'text-gray-500'}`}>
+                        🪙 {item.price}
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold truncate text-white">{item.name}</p>
+                    <p className="text-[10px] text-gray-400 uppercase truncate mt-0.5">{item.type}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Full Lore & Attribute Inspector */}
+          {selectedItem && (
+            <div className="w-full md:w-[380px] bg-gray-950/90 backdrop-blur-md rounded-2xl border border-amber-400/30 p-5 shadow-2xl flex flex-col justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                  <div className="w-14 h-14 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                    {selectedItem.imageUrl ? (
+                      <img src={selectedItem.imageUrl} alt={selectedItem.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-2xl">📦</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-base font-black text-white truncate">{selectedItem.name}</h2>
+                    <p className="text-xs text-gray-400 uppercase font-mono mt-0.5">
+                      {selectedItem.type} {selectedItem.slot ? `· Slot: ${selectedItem.slot}` : ''}
+                    </p>
+                    <p className="text-xs font-mono font-bold text-amber-300 mt-1">
+                      🪙 {selectedItem.price} Gold
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-gray-300 italic leading-relaxed py-3 border-b border-white/10">
+                  &ldquo;{selectedItem.description || "A fine crafted item ready for your journey."}&rdquo;
+                </p>
+
+                {selectedItemStats.length > 0 && (
+                  <div className="space-y-1.5 pt-3">
+                    <span className="text-[10px] uppercase font-mono text-gray-400 tracking-wider">Attributes:</span>
+                    <div className="grid grid-cols-1 gap-1">
+                      {selectedItemStats.map((st, i) => (
+                        <div key={i} className="px-2 py-1 rounded bg-black/40 border border-white/10 text-xs flex justify-between">
+                          <span className="text-gray-400">{st.label}</span>
+                          <span className="font-mono font-bold text-amber-200">{st.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => handleBuy(selectedItem)}
+                disabled={!canAffordSelected}
+                className={`w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                  canAffordSelected
+                    ? 'bg-amber-400 hover:bg-amber-300 text-gray-950 shadow-md active:scale-98'
+                    : 'bg-white/5 text-gray-500 border border-white/10 cursor-not-allowed'
+                }`}
+              >
+                <span>🪙 {selectedItem.price} G</span>
+                <span>{canAffordSelected ? '— Acquire Ware' : '— Not Enough Gold'}</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
     </main>
   );
 }
 
 export default function ShopPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-gray-300 font-bold">🏪 Loading Store...</div>}>
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-3xl animate-pulse">🏪</span>
+          <span className="text-xs font-mono uppercase tracking-widest text-gray-400">Loading Store...</span>
+        </div>
+      </div>
+    }>
       <ShopContent />
     </Suspense>
   );
