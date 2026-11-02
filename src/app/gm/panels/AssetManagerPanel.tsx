@@ -153,22 +153,15 @@ export function AssetManagerPanel() {
           if (data.success) {
             iconPath = data.file.path;
           } else if (data.isReadOnly) {
-            // Container filesystem is read-only (Cloud Run); try Firebase Storage with fallback to Base64
-            try {
-              const cloudPath = `Assets/Icons/${filename}`;
-              const fileRef = storageRef(storage, cloudPath);
-              await uploadBytes(fileRef, optimizedFile);
-              iconPath = await getDownloadURL(fileRef);
-            } catch (cloudErr) {
-              console.warn('Firebase Storage fallback failed, using compact Data URL:', cloudErr);
-              iconPath = base64DataUrl;
-            }
+            // Container filesystem is read-only (e.g. Vercel or Cloud Run)
+            // Use compact 128×128 Base64 data URL directly — eliminates CORS issues and zero external storage dependencies
+            iconPath = base64DataUrl;
           } else {
             // Fallback to Data URL
             iconPath = base64DataUrl;
           }
         } catch (fetchErr) {
-          console.warn('Local asset API failed, using compact Data URL:', fetchErr);
+          console.warn('Local asset API unavailable, using compact Data URL:', fetchErr);
           iconPath = base64DataUrl;
         }
       }

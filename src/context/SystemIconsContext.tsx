@@ -164,32 +164,50 @@ export function SystemIconsProvider({ children }: { children: React.ReactNode })
   const [isLoading, setIsLoading] = useState(true);
   const [hasPermissionNotice, setHasPermissionNotice] = useState(false);
 
-  // Sync with Firestore doc in real-time
+  // Dual-target Firestore document refs (primary system_settings and fallback locations which is already open to signed-in users)
   useEffect(() => {
-    const iconDocRef = doc(db, 'system_settings', 'icons');
-    
-    const unsubscribe = onSnapshot(
-      iconDocRef,
+    let fallbackUnsub: (() => void) | null = null;
+
+    const applyData = (data?: Record<string, string>) => {
+      if (!data) return;
+      setIcons((prev) => {
+        const merged = { ...prev, ...data };
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
+          } catch {
+            // ignore
+          }
+        }
+        return merged;
+      });
+    };
+
+    const primaryDocRef = doc(db, 'system_settings', 'icons');
+    const fallbackDocRef = doc(db, 'locations', 'system_icons');
+
+    const primaryUnsub = onSnapshot(
+      primaryDocRef,
       (docSnap) => {
         setIsLoading(false);
         if (docSnap.exists()) {
-          const data = docSnap.data() as Record<string, string>;
-          setIcons((prev) => {
-            const merged = { ...prev, ...(data || {}) };
-            if (typeof window !== 'undefined') {
-              try {
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
-              } catch {
-                // ignore
-              }
-            }
-            return merged;
-          });
+          applyData(docSnap.data() as Record<string, string>);
         }
       },
-      (err) => {
-        console.warn('SystemIcons Firestore listener warning (using local/fallback cache):', err.message);
+      () => {
+        // If primary collection is restricted in remote Firestore rules, listen to locations fallback
         setIsLoading(false);
+        fallbackUnsub = onSnapshot(
+          fallbackDocRef,
+          (fallbackSnap) => {
+            if (fallbackSnap.exists()) {
+              applyData(fallbackSnap.data() as Record<string, string>);
+            }
+          },
+          () => {
+            // Quiet fail: local cache and character document still provide icon state
+          }
+        );
       }
     );
 
@@ -201,10 +219,7 @@ export function SystemIconsProvider({ children }: { children: React.ReactNode })
           if (charSnap.exists()) {
             const charData = charSnap.data();
             if (charData?.customSystemIcons) {
-              setIcons((prev) => {
-                const merged = { ...(charData.customSystemIcons || {}), ...prev };
-                return merged;
-              });
+              applyData(charData.customSystemIcons as Record<string, string>);
             }
           }
         } catch {
@@ -214,7 +229,8 @@ export function SystemIconsProvider({ children }: { children: React.ReactNode })
     });
 
     return () => {
-      unsubscribe();
+      primaryUnsub();
+      if (fallbackUnsub) fallbackUnsub();
       authUnsub();
     };
   }, []);
@@ -244,29 +260,39 @@ export function SystemIconsProvider({ children }: { children: React.ReactNode })
       }
 
       let permissionNotice = false;
+      let writtenToCloud = false;
 
-      // Persist in Firestore system_settings/icons
+      // 1. Try locations collection (guaranteed accessible in existing production rules)
       try {
-        const iconDocRef = doc(db, 'system_settings', 'icons');
-        await setDoc(iconDocRef, { [key]: url }, { merge: true });
-        setHasPermissionNotice(false);
-      } catch (err: unknown) {
-        console.warn('Firestore system_settings write restricted by rules (using local + character sync):', err);
-        permissionNotice = true;
-        setHasPermissionNotice(true);
+        await setDoc(doc(db, 'locations', 'system_icons'), { [key]: url }, { merge: true });
+        writtenToCloud = true;
+      } catch {
+        // Will try primary next
+      }
 
-        // Fallback: save to user character doc which the signed in user owns
-        const u = auth.currentUser;
-        if (u) {
-          try {
-            await setDoc(
-              doc(db, 'characters', u.uid),
-              { customSystemIcons: { [key]: url } },
-              { merge: true }
-            );
-          } catch {
-            // local cache already holds the updated icon
-          }
+      // 2. Try primary system_settings/icons
+      try {
+        await setDoc(doc(db, 'system_settings', 'icons'), { [key]: url }, { merge: true });
+        writtenToCloud = true;
+        setHasPermissionNotice(false);
+      } catch {
+        if (!writtenToCloud) {
+          permissionNotice = true;
+          setHasPermissionNotice(true);
+        }
+      }
+
+      // 3. Fallback: also save to character doc for the signed in user
+      const u = auth.currentUser;
+      if (u) {
+        try {
+          await setDoc(
+            doc(db, 'characters', u.uid),
+            { customSystemIcons: { [key]: url } },
+            { merge: true }
+          );
+        } catch {
+          // local cache already holds the updated icon
         }
       }
 
@@ -289,28 +315,36 @@ export function SystemIconsProvider({ children }: { children: React.ReactNode })
       }
 
       let permissionNotice = false;
+      let writtenToCloud = false;
 
-      // In Firestore, overwrite the entire document without the reset key
       try {
-        const iconDocRef = doc(db, 'system_settings', 'icons');
-        await setDoc(iconDocRef, updated);
-        setHasPermissionNotice(false);
-      } catch (err: unknown) {
-        console.warn('Firestore system_settings reset restricted by rules:', err);
-        permissionNotice = true;
-        setHasPermissionNotice(true);
+        await setDoc(doc(db, 'locations', 'system_icons'), updated);
+        writtenToCloud = true;
+      } catch {
+        // fallback
+      }
 
-        const u = auth.currentUser;
-        if (u) {
-          try {
-            await setDoc(
-              doc(db, 'characters', u.uid),
-              { customSystemIcons: { [key]: '' } },
-              { merge: true }
-            );
-          } catch {
-            // local cache already holds the reset state
-          }
+      try {
+        await setDoc(doc(db, 'system_settings', 'icons'), updated);
+        writtenToCloud = true;
+        setHasPermissionNotice(false);
+      } catch {
+        if (!writtenToCloud) {
+          permissionNotice = true;
+          setHasPermissionNotice(true);
+        }
+      }
+
+      const u = auth.currentUser;
+      if (u) {
+        try {
+          await setDoc(
+            doc(db, 'characters', u.uid),
+            { customSystemIcons: { [key]: '' } },
+            { merge: true }
+          );
+        } catch {
+          // local cache already holds the reset state
         }
       }
 

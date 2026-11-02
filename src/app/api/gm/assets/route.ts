@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
           error:
             'Serverless environment has a read-only filesystem (/var/task). Please upload directly to Firebase Storage using the Cloud storage option in the panel.',
         },
-        { status: 403 }
+        { status: 200 }
       );
     }
 
