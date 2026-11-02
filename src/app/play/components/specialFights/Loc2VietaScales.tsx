@@ -1827,7 +1827,7 @@ export default function Loc2VietaScales({
   return (
     <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-between p-2 sm:p-4 select-none overflow-hidden">
       {/* 1. TOP HEADER & HUD */}
-      <div className="w-full max-w-4xl flex items-center justify-between text-xs sm:text-sm text-gray-300 px-2 shrink-0 z-20">
+      <div className="w-full max-w-6xl flex items-center justify-between text-xs sm:text-sm text-gray-300 px-2 shrink-0 z-20">
         {/* Left: 3 Rounds & Shield Indicator */}
         <div className="flex items-center gap-2">
           <span className="px-2.5 py-1 rounded-full bg-slate-800/90 border border-cyan-500/40 text-cyan-300 font-bold tracking-wider text-[11px] sm:text-xs uppercase flex items-center gap-1.5 shadow-md">
@@ -1897,13 +1897,13 @@ export default function Loc2VietaScales({
       </div>
 
       {/* 2. THE 2D CANVAS ARENA (800x600 coordinate space) */}
-      <div className="relative w-full max-w-4xl flex-1 flex items-center justify-center my-1 overflow-hidden">
+      <div className="relative w-full max-w-6xl flex-1 min-h-0 flex items-center justify-center my-1 overflow-hidden">
         <canvas
           ref={canvasRef}
           width={800}
           height={600}
           onClick={handleInteract}
-          className="w-full h-full max-h-[66vh] object-contain rounded-2xl border-2 border-slate-700/60 shadow-[0_15px_40px_rgba(0,0,0,0.9)] cursor-pointer"
+          className="w-full h-full object-contain rounded-2xl border-2 border-slate-700/60 shadow-[0_15px_40px_rgba(0,0,0,0.9)] cursor-pointer"
         />
 
         {/* 3. SHINING EQUATION DIRECTLY IN FRONT OF THE FOE (NO BACKGROUND BOX, HIGHER Z-AXIS) */}
@@ -1934,7 +1934,7 @@ export default function Loc2VietaScales({
       </div>
 
       {/* 3. MOBILE CONTROLS & STATUS FOOTER */}
-      <div className="w-full max-w-4xl flex items-center justify-between gap-3 shrink-0 px-2 py-1 z-20">
+      <div className="w-full max-w-6xl flex sm:hidden items-center justify-between gap-3 shrink-0 px-2 py-1 z-20">
         {/* Mobile D-Pad (Left) */}
         <div className="sm:hidden grid grid-cols-3 gap-1 w-28 h-28 touch-none">
           <div />
@@ -1984,19 +1984,7 @@ export default function Loc2VietaScales({
           <div />
         </div>
 
-        {/* Carrying Status Center Pill */}
-        <div className="flex-1 flex justify-center">
-          <div className="bg-black/75 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 flex items-center gap-2 text-xs">
-            <span className="text-gray-400 font-medium">Carrying:</span>
-            {heldRuneId ? (
-              <span className="font-bold text-yellow-300 font-mono bg-yellow-950/60 px-2 py-0.5 rounded border border-yellow-500/40">
-                Rune ({fracToDisplay(runes.find((r) => r.id === heldRuneId)?.value || frac(0))})
-              </span>
-            ) : (
-              <span className="text-gray-500 italic">Hands Empty</span>
-            )}
-          </div>
-        </div>
+        <div className="flex-1" />
 
         {/* Mobile Action Button (Right) */}
         <div className="sm:hidden">
