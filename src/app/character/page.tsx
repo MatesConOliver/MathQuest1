@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, onSnapshot, updateDoc, collection, getDocs, increment } from "firebase/firestore";
@@ -44,12 +45,57 @@ function DurabilityBar({ current, max }: { current: number; max: number }) {
 }
 
 // Hover Tooltip that shows all item stats cleanly (with correct percentage bonus calculations)
-function ItemStatsTooltip({ def, isFirstRow }: { def: GameItem; isFirstRow?: boolean }) {
+function ItemStatsTooltip({
+  def,
+  isFirstRow,
+  anchorRef,
+  isOpen = false,
+}: {
+  def: GameItem;
+  isFirstRow?: boolean;
+  anchorRef?: React.RefObject<HTMLDivElement>;
+  isOpen?: boolean;
+}) {
   const s = def.stats || {};
-  return (
-    <div className={`hidden group-hover:block absolute z-50 left-0 w-64 p-3 rounded-xl shadow-2xl pointer-events-none animate-in fade-in zoom-in duration-200 border border-white/20 bg-gray-900/95 dark:bg-black/95 text-white text-xs backdrop-blur-md ${
-      isFirstRow ? "top-full mt-2" : "bottom-full mb-2"
-    }`}>
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (!anchorRef || !isOpen) return;
+
+    const updatePosition = () => {
+      const anchor = anchorRef.current;
+      const tooltip = tooltipRef.current;
+      if (!anchor || !tooltip) return;
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const tooltipRect = tooltip.getBoundingClientRect();
+      const margin = 8;
+      const left = anchorRect.right + tooltipRect.width + margin <= window.innerWidth
+        ? anchorRect.right + margin
+        : anchorRect.left - tooltipRect.width - margin;
+      const top = Math.min(
+        Math.max(margin, anchorRect.top + anchorRect.height / 2 - tooltipRect.height / 2),
+        Math.max(margin, window.innerHeight - tooltipRect.height - margin)
+      );
+
+      setPosition({
+        top,
+        left: Math.min(Math.max(margin, left), Math.max(margin, window.innerWidth - tooltipRect.width - margin)),
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [anchorRef, isOpen]);
+
+  const tooltipContent = (
+    <>
       <div className="font-bold border-b border-gray-700 pb-1 mb-1.5 text-gray-300 uppercase tracking-widest text-[10px]">
         {def.name} Stats
       </div>
@@ -90,6 +136,29 @@ function ItemStatsTooltip({ def, isFirstRow }: { def: GameItem; isFirstRow?: boo
 
         {!def.stats && <div className="italic text-gray-400">No special stats.</div>}
       </div>
+    </>
+  );
+
+  if (anchorRef) {
+    if (!isOpen || typeof document === "undefined") return null;
+
+    return createPortal(
+      <div
+        ref={tooltipRef}
+        className="fixed z-[100] w-64 max-w-[calc(100vw-1rem)] max-h-[calc(100vh-1rem)] overflow-y-auto p-3 rounded-xl shadow-2xl pointer-events-none border border-white/20 bg-gray-900/95 dark:bg-black/95 text-white text-xs backdrop-blur-md"
+        style={{ top: position?.top ?? 0, left: position?.left ?? 0, visibility: position ? "visible" : "hidden" }}
+      >
+        {tooltipContent}
+      </div>,
+      document.body
+    );
+  }
+
+  return (
+    <div className={`hidden group-hover:block absolute z-50 left-0 w-64 p-3 rounded-xl shadow-2xl pointer-events-none animate-in fade-in zoom-in duration-200 border border-white/20 bg-gray-900/95 dark:bg-black/95 text-white text-xs backdrop-blur-md ${
+      isFirstRow ? "top-full mt-2" : "bottom-full mb-2"
+    }`}>
+      {tooltipContent}
     </div>
   );
 }
@@ -98,7 +167,6 @@ const InventoryItemCard = ({
   item, 
   def, 
   isEquipped, 
-  index, 
   onEquip, 
   onUse, 
   onSell 
@@ -106,11 +174,12 @@ const InventoryItemCard = ({
   item: InventoryItem;
   def: GameItem;
   isEquipped: boolean;
-  index: number;
   onEquip: (i: InventoryItem) => void;
   onUse: (i: InventoryItem) => void;
   onSell: (i: InventoryItem) => void;
 }) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   const isGoldPouch = item.itemId === 'gift_gold_bounty' || !!item.customData?.goldAmount || !!def.goldValue;
   const goldAmount = item.customData?.goldAmount || def.goldValue || 100;
   const displayName = item.customData?.title || def.name;
@@ -118,23 +187,27 @@ const InventoryItemCard = ({
   const isWeapon = def.slot === "mainHand" || def.slot === "offHand" || def.type === "weapon";
   const isBroken = isWeapon && (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
   const isGear = def.slot || ["armor", "head", "mainHand", "offHand", "weapon", "shield"].includes(def.type as string);
-  const isFirstRow = index < 2;
 
   // Sell Price: Usual = 50%, Broken = half of usual (25%)
   const usualSellPrice = Math.max(1, Math.ceil(def.price * 0.5));
   const sellValue = isBroken ? Math.max(1, Math.floor(usualSellPrice / 2)) : usualSellPrice;
 
   return (
-    <div className={`group relative p-3 rounded-xl flex flex-col gap-2 transition-all ${
+    <div
+      ref={cardRef}
+      onMouseEnter={() => setIsTooltipOpen(true)}
+      onMouseLeave={() => setIsTooltipOpen(false)}
+      className={`group relative p-3 rounded-xl flex flex-col gap-2 transition-all ${
       isGoldPouch
         ? "bg-amber-50/80 border-2 border-amber-400 dark:bg-amber-950/40 dark:border-amber-500/70 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
         : isBroken 
         ? "bg-red-950/30 border-2 border-red-600/70 dark:bg-red-950/40 dark:border-red-600/80 shadow-[0_0_12px_rgba(220,38,38,0.25)]" 
         : "border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-700/50"
-    }`}>
+      }`}
+    >
       
       {/* HOVER TOOLTIP */}
-      <ItemStatsTooltip def={def} isFirstRow={isFirstRow} />
+      <ItemStatsTooltip def={def} anchorRef={cardRef} isOpen={isTooltipOpen} />
 
       {/* CARD CONTENT */}
       <div className="flex justify-between items-start gap-2">
@@ -1100,7 +1173,7 @@ export default function CharacterPage() {
                     <p className="col-span-2 text-gray-600 dark:text-gray-300 text-center py-8">Your bag is empty.</p>
                     )}
                     
-                    {char.inventory.map((item, index) => {
+                    {char.inventory.map((item) => {
                         const def = gameItems[item.itemId];
                         if (!def) return null; 
                         const isEquipped = Object.values(char.equipment || {}).includes(item.instanceId);
@@ -1111,7 +1184,6 @@ export default function CharacterPage() {
                             item={item}
                             def={def}
                             isEquipped={isEquipped}
-                            index={index}
                             onEquip={handleEquip}
                             onUse={handleUse}
                             onSell={handleSell}
