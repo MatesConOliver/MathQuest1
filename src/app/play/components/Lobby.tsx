@@ -1,5 +1,6 @@
 
 import { EncounterDoc, FoeDoc } from "@/types/game";
+import { GameIcon } from "@/components/GameIcon";
 
 interface LobbyProps {
   encounters: EncounterDoc[];
@@ -17,7 +18,10 @@ const formatSkillName = (skill: string) => {
 export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, getFoe }: LobbyProps) {
   return (
     <main className="p-6 max-w-2xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold text-center mb-8 dark:text-white">Choose Your Battle ⚔️</h1>
+      <h1 className="text-3xl font-bold text-center mb-8 dark:text-white flex items-center justify-center gap-2">
+        <span>Choose Your Battle</span>
+        <GameIcon name="fight" fallback="⚔️" size="md" />
+      </h1>
       
       {msg && (
         <div className="p-4 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 font-bold rounded-xl text-center animate-pulse">
@@ -44,8 +48,8 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
                       {enc.questionTag}
                     </span>
                     {winCount > 0 && (
-                        <span className="text-xs font-bold text-green-500 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded-full">
-                            🏆 {winCount}
+                        <span className="text-xs font-bold text-green-500 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                            <GameIcon name="victory" fallback="🏆" size="xs" /> {winCount}
                         </span>
                     )}
                 </div>
@@ -55,8 +59,16 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Rewards</h4>
                     {canSeeRewards ? (
                         <div className="text-sm text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                            <span>XP: <span className="text-purple-600 dark:text-purple-400 font-bold">+{enc.winRewardXp || 0}</span></span>
-                            <span>Gold: <span className="text-yellow-600 dark:text-yellow-400 font-bold">+{enc.winRewardGold || 0}</span></span>
+                            <span className="inline-flex items-center gap-1">
+                              <GameIcon name="xp" fallback="⭐" size="xs" />
+                              <span>XP:</span>
+                              <span className="text-purple-600 dark:text-purple-400 font-bold">+{enc.winRewardXp || 0}</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <GameIcon name="gold" fallback="🪙" size="xs" />
+                              <span>Gold:</span>
+                              <span className="text-yellow-600 dark:text-yellow-400 font-bold">+{enc.winRewardGold || 0}</span>
+                            </span>
                             {skillRewards.map(([skill, value]) => (
                                 <span key={skill}>
                                     {formatSkillName(skill)}: <span className="font-bold text-blue-500">+{value}</span>
@@ -102,6 +114,7 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
                  onClick={() => onStartEncounter(enc)}
                  className="shrink-0 w-full sm:w-auto bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 font-bold py-3 px-8 rounded-xl transition-transform active:scale-95 flex items-center justify-center gap-2"
               >
+                 <GameIcon name="fight" fallback="⚔️" size="sm" />
                  <span>FIGHT</span>
                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />

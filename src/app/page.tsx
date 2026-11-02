@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StoryPlayer } from "@/components/StoryPlayer";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { GameIcon } from "@/components/GameIcon";
 import { Character, StoryEvent } from "@/types/game";
 
 export default function HomePage() {
@@ -240,7 +241,9 @@ export default function HomePage() {
             onClick={handleMapClick}
             className="group relative p-6 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-500 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all"
           >
-            <div className="text-3xl mb-2 group-hover:scale-110 transition-transform duration-300">🗺️</div>
+            <div className="mb-2 group-hover:scale-110 transition-transform duration-300 flex justify-center">
+              <GameIcon name="map" fallback="🗺️" size="2xl" />
+            </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white">World Map</h3>
             {needsToName && <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center text-white font-bold">Start here!</div>}
           </Link>
@@ -250,7 +253,9 @@ export default function HomePage() {
               href="/character"
               className={`p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl transition ${needsToName ? 'opacity-50 pointer-events-none' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
             >
-              <div className="text-2xl mb-1">🦉</div>
+              <div className="mb-1 flex justify-center">
+                <GameIcon name="character" fallback="🦉" size="xl" />
+              </div>
               <div className="font-bold text-gray-900 dark:text-gray-200">Character</div>
             </Link>
           </div>

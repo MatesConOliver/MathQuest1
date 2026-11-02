@@ -6,6 +6,7 @@ import { FoeDoc } from '@/types/game';
 import { SpecialFightCompleteResult } from './types';
 import { X, Swords, RefreshCw, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { getLoc2SpriteConfig } from '@/config/specialFightSprites';
+import { GameIcon } from '@/components/GameIcon';
 
 interface SpecialFightModalProps {
   isOpen: boolean;
@@ -360,8 +361,12 @@ export default function SpecialFightModal({
                       <div className="text-sm font-serif text-white">Find the sum of roots for $P(x) = 2x^3 - 8x^2 + 10x - 6$</div>
                     </div>
                     <div className="flex gap-2">
-                      <span className="px-4 py-2 bg-yellow-400 text-gray-950 font-bold rounded-xl text-xs">⚔️ Answer</span>
-                      <span className="px-4 py-2 bg-slate-800 text-white font-bold rounded-xl text-xs">🎒 Objects</span>
+                      <span className="px-4 py-2 bg-yellow-400 text-gray-950 font-bold rounded-xl text-xs inline-flex items-center gap-1.5">
+                        <GameIcon name="fight" fallback="⚔️" size="xs" /> Answer
+                      </span>
+                      <span className="px-4 py-2 bg-slate-800 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5">
+                        <GameIcon name="inventory" fallback="🎒" size="xs" /> Objects
+                      </span>
                     </div>
                   </div>
                 </div>

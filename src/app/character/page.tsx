@@ -9,6 +9,7 @@ import { useAudio } from "@/context/AudioContext";
 import { BlockMath } from 'react-katex';
 import Link from "next/link";
 import { HealthBar } from "@/app/play/components/shared/Bars";
+import { GameIcon } from "@/components/GameIcon";
 
 // --- COMPONENTS ---
 
@@ -65,24 +66,24 @@ function ItemStatsTooltip({ def, isFirstRow }: { def: GameItem; isFirstRow?: boo
           </span></div>
         )}
 
-        {s.maxHp?.flat && <div>❤️ Max HP: <span className="text-pink-300 font-bold">+{s.maxHp.flat}</span></div>}
+        {s.maxHp?.flat && <div className="flex items-center gap-1"><GameIcon name="hp" fallback="❤️" size="xs" /> Max HP: <span className="text-pink-300 font-bold">+{s.maxHp.flat}</span></div>}
         {s.maxHp?.mult && (
-          <div>❤️ Max HP: <span className="text-pink-300 font-bold">
+          <div className="flex items-center gap-1"><GameIcon name="hp" fallback="❤️" size="xs" /> Max HP: <span className="text-pink-300 font-bold">
             +{Math.round((s.maxHp.mult > 1 ? s.maxHp.mult - 1 : s.maxHp.mult) * 100)}%
           </span></div>
         )}
 
-        {s.heal?.flat && <div>🧪 Restores: <span className="text-green-300 font-bold">{s.heal.flat} HP</span></div>}
+        {s.heal?.flat && <div className="flex items-center gap-1"><GameIcon name="potion" fallback="🧪" size="xs" /> Restores: <span className="text-green-300 font-bold">{s.heal.flat} HP</span></div>}
         {s.heal?.mult && (
-          <div>🧪 Restores: <span className="text-green-300 font-bold">
+          <div className="flex items-center gap-1"><GameIcon name="potion" fallback="🧪" size="xs" /> Restores: <span className="text-green-300 font-bold">
             +{Math.round((s.heal.mult > 1 ? s.heal.mult - 1 : s.heal.mult) * 100)}% HP
           </span></div>
         )}
 
-        {s.time?.flat && <div>⏳ Time: <span className="text-yellow-300 font-bold">+{s.time.flat}s</span></div>}
+        {s.time?.flat && <div className="flex items-center gap-1"><GameIcon name="timer" fallback="⏳" size="xs" /> Time: <span className="text-yellow-300 font-bold">+{s.time.flat}s</span></div>}
         {/* Fixed: 1.05 represents a +5% increase */}
         {s.time?.mult && (
-          <div>⏳ Time: <span className="text-yellow-300 font-bold">
+          <div className="flex items-center gap-1"><GameIcon name="timer" fallback="⏳" size="xs" /> Time: <span className="text-yellow-300 font-bold">
             +{Math.round((s.time.mult > 1 ? s.time.mult - 1 : s.time.mult) * 100)}%
           </span></div>
         )}
@@ -313,6 +314,8 @@ function EquipRow({ slotName, slotKey, equippedId, gameItems, inventory, onUnequ
         <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-700/60 border border-gray-200 dark:border-gray-600 shrink-0 flex items-center justify-center overflow-hidden shadow-inner">
           {def?.imageUrl ? (
             <img src={def.imageUrl} alt={def.name} className="w-full h-full object-cover" />
+          ) : slotKey === "mainHand" ? (
+            <GameIcon name="fight" fallback="⚔️" size="lg" className="opacity-50" />
           ) : (
             <span className="text-xl opacity-50">{slotIcons[slotKey] || "📦"}</span>
           )}
@@ -897,10 +900,16 @@ export default function CharacterPage() {
         </div>
 
         <div className="flex flex-col items-end gap-2">
-          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">🪙 {char.gold} G</div>
+          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500 flex items-center gap-1.5">
+            <GameIcon name="gold" fallback="🪙" size="md" /> {char.gold} G
+          </div>
           <nav aria-label="Page navigation" className="flex flex-wrap justify-end gap-2">
-            <Link href="/map" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🗺️ Map</Link>
-            <Link href="/" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">🏠 Main menu</Link>
+            <Link href="/map" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">
+              <GameIcon name="map" fallback="🗺️" size="xs" /> Map
+            </Link>
+            <Link href="/" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">
+              <GameIcon name="home" fallback="🏠" size="xs" /> Main menu
+            </Link>
           </nav>
         </div>
       </header>
@@ -1060,7 +1069,9 @@ export default function CharacterPage() {
 
           {/* EQUIPPED GEAR SECTION */}
           <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4">
-            <h2 className="text-xl font-bold">Equipped Gear</h2>
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <GameIcon name="fight" fallback="⚔️" size="sm" /> Equipped Gear
+            </h2>
             <div className="space-y-2">
             <EquipRow slotName="Main Hand" slotKey="mainHand" equippedId={char.equipment?.mainHand} gameItems={gameItems} inventory={char.inventory} onUnequip={() => handleUnequip('mainHand')} />
             <EquipRow slotName="Off Hand" slotKey="offHand" equippedId={char.equipment?.offHand} gameItems={gameItems} inventory={char.inventory} onUnequip={() => handleUnequip('offHand')} />
@@ -1076,7 +1087,9 @@ export default function CharacterPage() {
             {/* BACKPACK INVENTORY */}
             <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 h-fit transition-colors">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold">Backpack ({char.inventory.length})</h2>
+                    <h2 className="text-xl font-bold flex items-center gap-2">
+                      <GameIcon name="inventory" fallback="🎒" size="sm" /> Backpack ({char.inventory.length})
+                    </h2>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">

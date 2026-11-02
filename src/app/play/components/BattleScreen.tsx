@@ -757,7 +757,8 @@ export function BattleScreen(props: BattleScreenProps) {
                         onClick={nextQuestion}
                         className="w-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:to-amber-300 text-black font-black py-3 px-4 rounded-xl shadow-xl text-sm sm:text-base tracking-wider uppercase transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-2"
                       >
-                        <span>🏆 Claim Victory!</span>
+                        <GameIcon name="victory" fallback="🏆" size="sm" />
+                        <span>Claim Victory!</span>
                         <span className="text-xl">🎉</span>
                       </button>
                     ) : playerHp <= 0 ? (
@@ -765,7 +766,8 @@ export function BattleScreen(props: BattleScreenProps) {
                         onClick={nextQuestion}
                         className="w-full bg-red-700 hover:bg-red-600 text-white font-black py-3 px-4 rounded-xl shadow-xl text-sm sm:text-base tracking-wider uppercase transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-2"
                       >
-                        <span>💀 You Have Fallen... Continue</span>
+                        <GameIcon name="defeat" fallback="💀" size="sm" />
+                        <span>You Have Fallen... Continue</span>
                         <span className="text-xl">➡️</span>
                       </button>
                     ) : (
@@ -956,7 +958,8 @@ function ObjectsModal({
         <div className="px-5 py-3.5 border-b border-gray-800 flex justify-between items-center bg-gray-800/40">
           <div>
             <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2">
-              <span>🎒</span> Objects & Equipment
+              <GameIcon name="inventory" fallback="🎒" size="md" />
+              <span>Objects & Equipment</span>
             </h2>
             <p className="text-[11px] text-gray-400">
               Equipped gear is fixed during battle. Use potions and consumables from your bag.
@@ -977,10 +980,12 @@ function ObjectsModal({
           <div className="space-y-3">
             <div className="flex justify-between items-center pb-1.5 border-b border-gray-800">
               <h3 className="text-sm font-black uppercase tracking-wider text-yellow-400 flex items-center gap-1.5">
-                <span>⚔️</span> Equipped Gear
+                <GameIcon name="fight" fallback="⚔️" size="xs" />
+                <span>Equipped Gear</span>
               </h3>
-              <span className="text-[10px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 px-2 py-0.5 rounded-full">
-                🔒 Fixed in Battle
+              <span className="text-[10px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                <GameIcon name="lock" fallback="🔒" size="xs" />
+                <span>Fixed in Battle</span>
               </span>
             </div>
 
@@ -1059,11 +1064,19 @@ function ObjectsModal({
                               💥 Dmg +{Math.round((s.damage.mult > 1 ? s.damage.mult - 1 : s.damage.mult) * 100)}%
                             </span>
                           ) : null}
-                          {s.maxHp?.flat ? <span className="px-1.5 py-0.5 rounded bg-pink-950/60 border border-pink-500/40 text-pink-300 font-bold">❤️ +{s.maxHp.flat} HP</span> : null}
-                          {s.time?.flat ? <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/40 text-yellow-300 font-bold">⏳ +{s.time.flat}s</span> : null}
+                          {s.maxHp?.flat ? (
+                            <span className="px-1.5 py-0.5 rounded bg-pink-950/60 border border-pink-500/40 text-pink-300 font-bold inline-flex items-center gap-1">
+                              <GameIcon name="hp" fallback="❤️" size="xs" /> +{s.maxHp.flat} HP
+                            </span>
+                          ) : null}
+                          {s.time?.flat ? (
+                            <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/40 text-yellow-300 font-bold inline-flex items-center gap-1">
+                              <GameIcon name="timer" fallback="⏳" size="xs" /> +{s.time.flat}s
+                            </span>
+                          ) : null}
                           {s.time?.mult ? (
-                            <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/40 text-yellow-300 font-bold">
-                              ⏳ +{Math.round((s.time.mult > 1 ? s.time.mult - 1 : s.time.mult) * 100)}%
+                            <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/40 text-yellow-300 font-bold inline-flex items-center gap-1">
+                              <GameIcon name="timer" fallback="⏳" size="xs" /> +{Math.round((s.time.mult > 1 ? s.time.mult - 1 : s.time.mult) * 100)}%
                             </span>
                           ) : null}
                         </div>
@@ -1089,7 +1102,8 @@ function ObjectsModal({
           <div className="space-y-3">
             <div className="flex justify-between items-center pb-1.5 border-b border-gray-800">
               <h3 className="text-sm font-black uppercase tracking-wider text-green-400 flex items-center gap-1.5">
-                <span>🧪</span> Consumables & Bag Items
+                <GameIcon name="potion" fallback="🧪" size="xs" />
+                <span>Consumables & Bag Items</span>
               </h3>
               <span className="text-[10px] text-gray-400 font-bold font-mono">
                 HP: {playerHp}/{playerMaxHp}
@@ -1115,7 +1129,7 @@ function ObjectsModal({
                           {gameItem?.imageUrl ? (
                             <img src={gameItem.imageUrl} alt={gameItem.name} className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-xl">🧪</span>
+                            <GameIcon name="potion" fallback="🧪" size="md" />
                           )}
                         </div>
                         <div className="min-w-0">
@@ -1203,7 +1217,9 @@ function EscapeConfirm({ onConfirm, onCancel }: { onConfirm: () => void; onCance
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
       <div className="bg-gray-900 border-2 border-red-500/50 rounded-2xl p-6 w-full max-w-sm text-center text-white shadow-2xl space-y-4">
-        <div className="text-4xl">🏃💨</div>
+        <div className="flex justify-center">
+          <GameIcon name="escape" fallback="🏃" size="2xl" />
+        </div>
         <h2 className="text-2xl font-black">Flee Battle?</h2>
         <p className="text-xs text-gray-300">You will retreat to the map. Any potions consumed will remain spent.</p>
         <div className="flex justify-around gap-3 pt-2">

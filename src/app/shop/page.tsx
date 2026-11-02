@@ -184,7 +184,7 @@ function ShopContent() {
     return (
       <main className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
-          <span className="text-3xl animate-pulse">🏪</span>
+          <GameIcon name="shop" fallback="🏪" size="2xl" className="animate-pulse" />
           <span className="text-xs font-mono uppercase tracking-widest text-gray-400">Opening store...</span>
         </div>
       </main>
@@ -306,8 +306,8 @@ function ShopContent() {
                           <span className="text-base">📦</span>
                         )}
                       </div>
-                      <span className={`text-[10px] font-mono font-bold ${canAfford ? 'text-amber-300' : 'text-gray-500'}`}>
-                        🪙 {item.price}
+                      <span className={`text-[10px] font-mono font-bold flex items-center gap-1 ${canAfford ? 'text-amber-300' : 'text-gray-500'}`}>
+                        <GameIcon name="gold" fallback="🪙" size="xs" /> {item.price}
                       </span>
                     </div>
                     <p className="text-xs font-bold truncate text-white">{item.name}</p>
@@ -335,8 +335,8 @@ function ShopContent() {
                     <p className="text-xs text-gray-400 uppercase font-mono mt-0.5">
                       {selectedItem.type} {selectedItem.slot ? `· Slot: ${selectedItem.slot}` : ''}
                     </p>
-                    <p className="text-xs font-mono font-bold text-amber-300 mt-1">
-                      🪙 {selectedItem.price} Gold
+                    <p className="text-xs font-mono font-bold text-amber-300 mt-1 flex items-center gap-1">
+                      <GameIcon name="gold" fallback="🪙" size="xs" /> {selectedItem.price} Gold
                     </p>
                   </div>
                 </div>

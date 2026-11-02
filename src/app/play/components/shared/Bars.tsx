@@ -1,4 +1,6 @@
 
+import { GameIcon } from "@/components/GameIcon";
+
 export function HealthBar({
   current,
   max,
@@ -22,7 +24,9 @@ export function HealthBar({
     <div className="w-full space-y-2">
       <div className="flex justify-between items-center">
         <span className={`text-xs font-bold uppercase ${labelClassName}`}>{label}</span>
-        <span className={`text-sm font-bold ${valueClassName}`}>{current}/{max} HP</span>
+        <span className={`text-sm font-bold inline-flex items-center gap-1 ${valueClassName}`}>
+          <GameIcon name="hp" fallback="❤️" size="xs" /> {current}/{max} HP
+        </span>
       </div>
       
       <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 relative shadow-inner">
@@ -50,7 +54,9 @@ export function TimeBar({ current, max }: { current: number; max: number }) {
   return (
     <div className="w-full flex flex-col gap-1">
       <div className="flex justify-between items-end px-1">
-        <span className="text-xs font-bold uppercase text-gray-400 dark:text-gray-400 tracking-wider">⏳ Time Remaining</span>
+        <span className="text-xs font-bold uppercase text-gray-400 dark:text-gray-400 tracking-wider inline-flex items-center gap-1">
+          <GameIcon name="timer" fallback="⏳" size="xs" /> Time Remaining
+        </span>
         <span className={`text-2xl font-black ${current <= 5 ? 'text-red-400' : 'text-gray-100'}`}>
            {timeString}
         </span>

@@ -1,5 +1,6 @@
 
 import { Character, EncounterDoc, FoeDoc } from "@/types/game";
+import { GameIcon } from "@/components/GameIcon";
 
 interface BattleIntroProps {
   encounter: EncounterDoc | null;
@@ -41,8 +42,8 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
                   {encounter?.title || foe?.name || "Battle"}
                 </h1>
                 {canSeeRewards && (
-                   <span className="text-lg font-bold text-green-500 bg-green-900/50 px-3 py-1 rounded-full">
-                       🏆 {winCount}
+                   <span className="text-lg font-bold text-green-500 bg-green-900/50 px-3 py-1 rounded-full inline-flex items-center gap-1.5">
+                       <GameIcon name="victory" fallback="🏆" size="sm" /> {winCount}
                    </span>
                 )}
             </div>
@@ -64,17 +65,25 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-50 dark:bg-gray-900/40 p-3 rounded-xl border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
                     <span className="text-[10px] font-black text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1">Enemy Stats</span>
-                    <div className="text-sm font-bold flex flex-wrap justify-center gap-x-3">
-                      <span className="text-green-600 dark:text-green-400">❤ {foe?.maxHp || 50}</span>
-                      <span className="text-red-600 dark:text-red-400">⚔️ {foe?.attackDamage || 5}</span>
+                    <div className="text-sm font-bold flex flex-wrap justify-center gap-x-3 gap-y-1">
+                      <span className="text-green-600 dark:text-green-400 inline-flex items-center gap-1">
+                        <GameIcon name="hp" fallback="❤️" size="xs" /> {foe?.maxHp || 50}
+                      </span>
+                      <span className="text-red-600 dark:text-red-400 inline-flex items-center gap-1">
+                        <GameIcon name="fight" fallback="⚔️" size="xs" /> {foe?.attackDamage || 5}
+                      </span>
                     </div>
                 </div>
 
                 <div className="bg-slate-50 dark:bg-gray-900/40 p-3 rounded-xl border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
                     <span className="text-[10px] font-black text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1">Rewards</span>
-                    <div className="flex flex-col items-center">
-                        <span className="text-xl font-bold text-purple-600 dark:text-purple-400">+{encounter?.winRewardXp || 0} XP</span>
-                        <span className="text-sm font-bold text-yellow-600 dark:text-yellow-500">+{encounter?.winRewardGold || 0} Gold</span>
+                    <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-xl font-bold text-purple-600 dark:text-purple-400 inline-flex items-center gap-1">
+                          <GameIcon name="xp" fallback="⭐" size="xs" /> +{encounter?.winRewardXp || 0} XP
+                        </span>
+                        <span className="text-sm font-bold text-yellow-600 dark:text-yellow-500 inline-flex items-center gap-1">
+                          <GameIcon name="gold" fallback="🪙" size="xs" /> +{encounter?.winRewardGold || 0} Gold
+                        </span>
                     </div>
                 </div>
             </div>
@@ -96,7 +105,7 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
           >
             <div className="relative z-10 flex items-center justify-center gap-2">
               <span className="text-xl font-black tracking-widest">FIGHT!</span>
-              <span className="text-2xl group-hover:translate-x-1 transition-transform">⚔️</span>
+              <GameIcon name="fight" fallback="⚔️" size="lg" className="group-hover:translate-x-1 transition-transform" />
             </div>
           </button>
         </div>

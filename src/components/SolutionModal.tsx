@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase";
 import { BlockMath, InlineMath } from "react-katex";
 import { MathMarkdown } from "@/components/MathMarkdown";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
+import { GameIcon } from "@/components/GameIcon";
 
 interface SolutionModalProps {
   question: QuestionDoc;
@@ -444,7 +445,7 @@ export function SolutionModal({
           {/* Header */}
           <div className="px-5 sm:px-6 py-3.5 border-b border-gray-800 flex justify-between items-center bg-gray-800/60">
             <div className="flex items-center gap-2.5">
-              <span className="text-2xl">💡</span>
+              <GameIcon name="hint" fallback="💡" size="xl" />
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-base sm:text-lg font-black text-indigo-300">Question explanation</h2>
@@ -735,8 +736,8 @@ export function SolutionModal({
             >
               <span>🚩</span>
               <span>Report issue with question or answer</span>
-              <span className="text-[10px] bg-yellow-400/20 text-yellow-300 px-1.5 py-0.5 rounded font-black border border-yellow-500/30">
-                💰 Bounty
+              <span className="text-[10px] bg-yellow-400/20 text-yellow-300 px-1.5 py-0.5 rounded font-black border border-yellow-500/30 inline-flex items-center gap-1">
+                <GameIcon name="gold" fallback="🪙" size="xs" /> Bounty
               </span>
             </button>
 

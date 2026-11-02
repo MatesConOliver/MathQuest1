@@ -611,7 +611,7 @@ function MapContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900">
         <div className="animate-pulse flex flex-col items-center gap-2">
-          <span className="text-4xl">🗺️</span>
+          <GameIcon name="map" fallback="🗺️" size="2xl" />
           <span className="text-gray-600 dark:text-gray-300 font-bold tracking-widest">LOADING MAP...</span>
         </div>
       </div>
@@ -752,7 +752,7 @@ function MapContent() {
                     >
                       <div className="w-full h-full rounded-full ring-2 ring-white/60 backdrop-blur-sm bg-black/40 flex items-center justify-center transition-transform duration-300 ease-out group-hover:scale-110">
                         {isSkillLocked && !shouldShowFog ? (
-                          <span className="text-2xl">🔒</span>
+                          <GameIcon name="lock" fallback="🔒" size="lg" />
                         ) : (
                           <span className="text-2xl select-none">{mapMeta?.emoji || "📍"}</span>
                         )}
@@ -985,7 +985,7 @@ function MapContent() {
                         return (
                           <div className="p-3 sm:p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-200 space-y-2">
                             <div className="flex items-center gap-2 font-black text-xs sm:text-sm">
-                              <span>🔒</span> Node Access Locked
+                              <GameIcon name="lock" fallback="🔒" size="xs" /> Node Access Locked
                             </div>
                             {unlockStatus.reason === 'story' ? (
                               <p className="text-xs text-gray-300">
@@ -1033,14 +1033,22 @@ function MapContent() {
                                   >
                                     <div className="flex items-center gap-2.5 min-w-0">
                                       <div className="w-10 h-10 rounded-lg bg-gray-800 border border-white/10 flex items-center justify-center text-xl shrink-0 shadow-inner">
-                                        {enc.emoji || '⚔️'}
+                                        {enc.emoji ? (
+                                          enc.emoji
+                                        ) : (
+                                          <GameIcon
+                                            name={enc.encounterType === 'shop' ? 'shop' : 'fight'}
+                                            fallback={enc.encounterType === 'shop' ? '🏪' : '⚔️'}
+                                            size="md"
+                                          />
+                                        )}
                                       </div>
                                       <div className="min-w-0">
                                         <div className="flex items-center gap-1.5">
                                           <h4 className="font-bold text-white text-xs sm:text-sm truncate">{enc.title}</h4>
                                           {winCount > 0 && (
-                                            <span className="text-[9px] font-bold text-green-400 bg-green-950/80 px-1.5 py-0.2 rounded border border-green-800 shrink-0">
-                                              🏆 {winCount}
+                                            <span className="text-[9px] font-bold text-green-400 bg-green-950/80 px-1.5 py-0.2 rounded border border-green-800 shrink-0 inline-flex items-center gap-1">
+                                              <GameIcon name="victory" fallback="🏆" size="xs" /> {winCount}
                                             </span>
                                           )}
                                         </div>
@@ -1150,7 +1158,7 @@ function MapContent() {
 
                           {isLocked && (
                             <div className="mt-2 text-xs text-red-400 font-semibold flex items-center gap-1">
-                              <span>🔒</span>
+                              <GameIcon name="lock" fallback="🔒" size="xs" />
                               {unlockStatus.reason === 'story' ? 'Requires Story Progression' : 'Skill Requirements Unmet'}
                             </div>
                           )}
@@ -1178,16 +1186,26 @@ function MapContent() {
                       {panelEncounters.map((enc) => (
                         <div key={enc.id} className="p-3 rounded-xl bg-gray-800 border border-white/10 flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-xl">{enc.emoji || '⚔️'}</span>
+                            <span className="text-xl">
+                              {enc.emoji ? (
+                                enc.emoji
+                              ) : (
+                                <GameIcon
+                                  name={enc.encounterType === 'shop' ? 'shop' : 'fight'}
+                                  fallback={enc.encounterType === 'shop' ? '🏪' : '⚔️'}
+                                  size="md"
+                                />
+                              )}
+                            </span>
                             <span className="text-sm font-bold text-white">{enc.title}</span>
                           </div>
                           {enc.encounterType === 'shop' ? (
-                            <Link href={`/shop?encounterId=${enc.id}&locationId=${selectedLocation.id}`} className="px-3.5 py-2 bg-emerald-500 text-gray-950 font-bold text-xs rounded-lg flex items-center gap-1">
-                              <span>🏪</span> VISIT STORE
+                            <Link href={`/shop?encounterId=${enc.id}&locationId=${selectedLocation.id}`} className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-lg flex items-center gap-1.5 transition-colors">
+                              <GameIcon name="shop" fallback="🏪" size="xs" /> VISIT STORE
                             </Link>
                           ) : (
-                            <Link href={`/play?id=${enc.id}&locationId=${selectedLocation.id}&subAreaId=${selectedSubArea.id}`} className="px-4 py-2 bg-yellow-400 text-gray-950 font-bold text-xs rounded-lg">
-                              FIGHT
+                            <Link href={`/play?id=${enc.id}&locationId=${selectedLocation.id}&subAreaId=${selectedSubArea.id}`} className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-bold text-xs rounded-lg flex items-center gap-1.5 transition-colors">
+                              <GameIcon name="fight" fallback="⚔️" size="xs" /> FIGHT
                             </Link>
                           )}
                         </div>
@@ -1209,7 +1227,7 @@ export default function MapPage() {
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900">
         <div className="animate-pulse flex flex-col items-center gap-2">
-          <span className="text-4xl">🗺️</span>
+          <GameIcon name="map" fallback="🗺️" size="2xl" />
           <span className="text-gray-600 dark:text-gray-300 font-bold tracking-widest">LOADING MAP...</span>
         </div>
       </div>

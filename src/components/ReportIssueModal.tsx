@@ -5,6 +5,7 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { QuestionDoc, Character, SubArea } from "@/types/game";
 import { User } from "firebase/auth";
+import { GameIcon } from "@/components/GameIcon";
 
 interface ReportIssueModalProps {
   user: User | null;
@@ -216,7 +217,7 @@ export function ReportIssueModal({
               >
                 {isSubmitting ? (
                   <>
-                    <span className="animate-spin text-sm">⏳</span>
+                    <GameIcon name="timer" fallback="⏳" size="xs" className="animate-spin" />
                     <span>Submitting...</span>
                   </>
                 ) : (

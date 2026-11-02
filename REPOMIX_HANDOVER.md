@@ -51,10 +51,11 @@ This document serves as the master context and handover reference for generating
   - `src/components/GameIcon.tsx`
   - `src/lib/imageOptimizer.ts`
 - **Features**:
-  - Replaces default emojis across the game (world map, backpack, gold, fight button, escape button, health, xp, victory, defeat, hint, timer, lock) with custom uploaded sprites.
+  - Replaces default emojis across the game (world map, character, home, store, gold, fight buttons, escape/flee, health, xp, victory, defeat, hint, timer, lock, potions, backpack) with custom uploaded sprites.
+  - **Comprehensive UI-wide Adoption**: All hardcoded emojis in the Lobby, World Map, Character Sheet, Store Grid, Battle Intro, Combat Arena (Turn Timer, Health Bars, Victory/Defeat modals, Consumables, Objects & Equipment), and Solution/Report modals now utilize `<GameIcon name="..." />` so uploaded sprite customizations immediately propagate game-wide with 100% consistency.
   - **Client-Side Auto-Downscaling**: All uploaded icon images are automatically scaled down client-side via HTML5 Canvas to max **128×128px PNG** with alpha transparency before saving, guaranteeing tiny payload sizes (~4KB–12KB) and smooth 60fps rendering.
-  - **Infallible Storage Fallback**: Handles Cloud Run read-only filesystem (`EROFS`). If local filesystem write fails and Firebase Storage is restricted, it seamlessly uses a compact Base64 Data URL fallback so icon replacement never fails.
-  - Real-time synchronization via Firestore `system_settings/icons` document + `localStorage` caching + character document backup.
+  - **Infallible Storage Fallback**: Handles Cloud Run & serverless read-only filesystem (`EROFS`). If local filesystem write fails and Firebase Storage is restricted, it seamlessly uses a compact Base64 Data URL fallback so icon replacement never fails.
+  - Real-time synchronization via Firestore `system_settings/icons` document + `locations/system_icons` fallback + `localStorage` caching + character document backup.
 
 ### D. Firebase Security Rules Hardened
 - **`firestore.rules`**: Restricts `isGM()` exclusively to `oliveru1996@gmail.com`. Protects `system_settings`, `settings`, `questions`, `foes`, `items`, `stories`, `locations`, `subAreas`.
