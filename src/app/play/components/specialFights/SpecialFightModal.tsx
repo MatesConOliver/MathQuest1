@@ -5,7 +5,7 @@ import { SPECIAL_FIGHTS_LIST, getSpecialFightById } from './registry';
 import { FoeDoc } from '@/types/game';
 import { SpecialFightCompleteResult } from './types';
 import { X, Swords, RefreshCw, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
-import { getLoc2SpriteConfig } from '@/config/specialFightSprites';
+import { getLoc2SpriteConfig, subscribeLoc2SpriteConfig } from '@/config/specialFightSprites';
 import { GameIcon } from '@/components/GameIcon';
 
 interface SpecialFightModalProps {
@@ -65,6 +65,18 @@ export default function SpecialFightModal({
       }
     }
   }, [isOpen, initialFightId, initialFoeId, initialAutoPlayTransition, foes]);
+
+  // Shared sprite config (published by the GM) used by the transition screen
+  const [sprites, setSprites] = useState(() => getLoc2SpriteConfig());
+  useEffect(() => {
+    const onLocalUpdate = () => setSprites(getLoc2SpriteConfig());
+    window.addEventListener('specialFightSpritesUpdated', onLocalUpdate);
+    const unsub = subscribeLoc2SpriteConfig(setSprites);
+    return () => {
+      window.removeEventListener('specialFightSpritesUpdated', onLocalUpdate);
+      unsub();
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -282,7 +294,7 @@ export default function SpecialFightModal({
                   unlockedContinents: [],
                   encounterWins: {},
                   imageUrl:
-                    getLoc2SpriteConfig().owl.type === 'character'
+                    sprites.owl.type === 'character'
                       ? 'https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=bae93c5e-92ed-4958-9274-fb67a3f5f8c9'
                       : undefined,
                 }}
@@ -314,9 +326,9 @@ export default function SpecialFightModal({
                   {/* Trembling Foe in upper-right stage */}
                   <div className="absolute top-[10%] right-[12%] flex flex-col items-center">
                     <div className="relative animate-boss-tremble">
-                      {getLoc2SpriteConfig().foe.type === 'emoji' ? (
+                      {sprites.foe.type === 'emoji' ? (
                         <span className="text-7xl sm:text-8xl select-none filter drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]">
-                          {getLoc2SpriteConfig().foe.emoji || activeFoe.emoji || '👹'}
+                          {sprites.foe.emoji || activeFoe.emoji || '👹'}
                         </span>
                       ) : activeFoe.imageUrl ? (
                         <img
@@ -336,14 +348,14 @@ export default function SpecialFightModal({
 
                   {/* Player Owl in lower-left */}
                   <div className="absolute bottom-[8%] left-[10%] flex flex-col items-center">
-                    {getLoc2SpriteConfig().owl.type === 'emoji' ? (
+                    {sprites.owl.type === 'emoji' ? (
                       <span className="text-7xl sm:text-8xl select-none filter drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]">
-                        {getLoc2SpriteConfig().owl.emoji || '🦉'}
+                        {sprites.owl.emoji || '🦉'}
                       </span>
                     ) : (
                       <img
                         src={
-                          getLoc2SpriteConfig().owl.path ||
+                          sprites.owl.path ||
                           'https://firebasestorage.googleapis.com/v0/b/pokematicos.firebasestorage.app/o/The_Primordial_Equation_Owl_Sprites%2Fowl%20back.png?alt=media&token=bae93c5e-92ed-4958-9274-fb67a3f5f8c9'
                         }
                         alt="Player Owl"

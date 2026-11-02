@@ -20,7 +20,7 @@ import {
   Skull,
   RotateCcw,
 } from 'lucide-react';
-import { getLoc2SpriteConfig, Loc2SpriteConfig } from '@/config/specialFightSprites';
+import { getLoc2SpriteConfig, subscribeLoc2SpriteConfig, Loc2SpriteConfig } from '@/config/specialFightSprites';
 
 // Render an emoji completely 100% opaque on an offscreen canvas with solid backing & clamped alpha
 function createOpaqueEmojiCanvas(emoji: string, size = 128): HTMLCanvasElement {
@@ -410,7 +410,12 @@ export default function Loc2VietaScales({
       }
     };
     window.addEventListener('specialFightSpritesUpdated', handleUpdate);
-    return () => window.removeEventListener('specialFightSpritesUpdated', handleUpdate);
+    // Shared config published by the GM (applies to every player)
+    const unsubShared = subscribeLoc2SpriteConfig((cfg) => setSpriteConfig(cfg));
+    return () => {
+      window.removeEventListener('specialFightSpritesUpdated', handleUpdate);
+      unsubShared();
+    };
   }, []);
 
   // Rounds state: 3 epic rounds

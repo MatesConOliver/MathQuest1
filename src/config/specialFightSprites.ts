@@ -1,3 +1,6 @@
+import { db } from '@/lib/firebase';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+
 export interface SpriteChoice {
   id: string;
   name: string;
@@ -171,6 +174,46 @@ export const DEFAULT_LOC2_SPRITES: Loc2SpriteConfig = {
 
 const STORAGE_KEY = 'mq_special_fight_loc2_sprites';
 
+// Sprite choices are shared with all players through Firestore (one doc per slot so
+// large data-URL assets stay under the 1 MiB document limit). The `locations`
+// collection is used because deployed rules allow signed-in read / GM write there
+// and location queries (orderBy('order')) ignore docs without an `order` field.
+const SLOT_KEYS: (keyof Loc2SpriteConfig)[] = ['background', 'dais', 'platformSum', 'platformProduct', 'owl', 'foe'];
+const slotDocRef = (slot: string) => doc(db, 'locations', `special_fight_loc2_sprite_${slot}`);
+
+function writeLocal(config: Loc2SpriteConfig) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  } catch {}
+}
+
+/** Listens to the shared config; updates the local cache and calls back with the effective config. */
+export function subscribeLoc2SpriteConfig(onChange: (config: Loc2SpriteConfig) => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const remote: Partial<Record<keyof Loc2SpriteConfig, SpriteChoice | null>> = {};
+  const unsubs = SLOT_KEYS.map((slot) =>
+    onSnapshot(
+      slotDocRef(slot),
+      (snap) => {
+        remote[slot] = snap.exists() ? ((snap.data().choice as SpriteChoice) ?? null) : null;
+        // Wait until every slot has reported once
+        if (SLOT_KEYS.some((k) => remote[k] === undefined)) return;
+        // Nothing published yet: keep whatever is cached locally
+        if (SLOT_KEYS.every((k) => remote[k] === null)) return;
+        const merged = Object.fromEntries(
+          SLOT_KEYS.map((k) => [k, remote[k] || DEFAULT_LOC2_SPRITES[k]])
+        ) as unknown as Loc2SpriteConfig;
+        writeLocal(merged);
+        onChange(merged);
+      },
+      () => {
+        // Permission/network issue: fall back to the local cache
+      }
+    )
+  );
+  return () => unsubs.forEach((u) => u());
+}
+
 export function getLoc2SpriteConfig(): Loc2SpriteConfig {
   if (typeof window === 'undefined') {
     return DEFAULT_LOC2_SPRITES;
@@ -195,11 +238,17 @@ export function getLoc2SpriteConfig(): Loc2SpriteConfig {
 export function saveLoc2SpriteConfig(config: Loc2SpriteConfig): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    writeLocal(config);
     window.dispatchEvent(new CustomEvent('specialFightSpritesUpdated', { detail: config }));
   } catch (err) {
     console.error('Failed to save special fight sprite config', err);
   }
+  // Publish for all players (GM only; rejected by rules for anyone else)
+  SLOT_KEYS.forEach((slot) => {
+    setDoc(slotDocRef(slot), { choice: JSON.parse(JSON.stringify(config[slot])) }).catch((err) =>
+      console.warn(`Could not publish sprite slot "${slot}" to the cloud:`, err)
+    );
+  });
 }
 
 export function resetLoc2SpriteConfig(): Loc2SpriteConfig {
@@ -208,6 +257,10 @@ export function resetLoc2SpriteConfig(): Loc2SpriteConfig {
       localStorage.removeItem(STORAGE_KEY);
       window.dispatchEvent(new CustomEvent('specialFightSpritesUpdated', { detail: DEFAULT_LOC2_SPRITES }));
     } catch {}
+    // Publish defaults explicitly so subscribers don't keep stale cloud choices
+    SLOT_KEYS.forEach((slot) => {
+      setDoc(slotDocRef(slot), { choice: JSON.parse(JSON.stringify(DEFAULT_LOC2_SPRITES[slot])) }).catch(() => {});
+    });
   }
   return DEFAULT_LOC2_SPRITES;
 }

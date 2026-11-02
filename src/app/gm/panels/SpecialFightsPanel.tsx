@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import {
   getLoc2SpriteConfig,
+  subscribeLoc2SpriteConfig,
   saveLoc2SpriteConfig,
   resetLoc2SpriteConfig,
   LOC2_AVAILABLE_SPRITES,
@@ -44,6 +45,7 @@ export function SpecialFightsPanel() {
 
   // Active Sprite Config for Location 2
   const [spriteConfig, setSpriteConfig] = useState<Loc2SpriteConfig>(() => getLoc2SpriteConfig());
+  useEffect(() => subscribeLoc2SpriteConfig(setSpriteConfig), []);
   const [isCustomizerOpen, setIsCustomizerOpen] = useState<boolean>(true);
   const [savedFeedback, setSavedFeedback] = useState<string | null>(null);
 
