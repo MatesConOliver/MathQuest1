@@ -14,9 +14,11 @@ import {
 /**
  * GM assets stored as compact data URLs in Firestore (same approach as system icons).
  * Works on read-only serverless hosts and needs no Storage bucket/CORS setup.
- * Uses the `system_settings` collection, which is public-read / GM-write in the deployed rules.
+ * Stored in the `locations` collection, which production rules already allow (signed-in read / GM write);
+ * `system_settings` is not covered by the deployed rules. Location queries use orderBy('order'),
+ * so these docs (no `order` field) never show up in location lists.
  */
-const COLLECTION = 'system_settings';
+const COLLECTION = 'locations';
 const KIND = 'gm_asset';
 // Firestore documents are capped at 1 MiB; keep headroom for the other fields.
 const MAX_DATA_URL_CHARS = 900_000;
