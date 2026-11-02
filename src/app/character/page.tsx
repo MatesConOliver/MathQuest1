@@ -1070,7 +1070,7 @@ export default function CharacterPage() {
           {/* EQUIPPED GEAR SECTION */}
           <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4">
             <h2 className="text-xl font-bold flex items-center gap-2.5">
-              <GameIcon name="fight" fallback="⚔️" size="md" /> Equipped Gear
+              <img src="/Assets/General/others/Bagpack.png" alt="" className="w-7 h-7 object-contain" /> Equipped Gear
             </h2>
             <div className="space-y-2">
             <EquipRow slotName="Main Hand" slotKey="mainHand" equippedId={char.equipment?.mainHand} gameItems={gameItems} inventory={char.inventory} onUnequip={() => handleUnequip('mainHand')} />
