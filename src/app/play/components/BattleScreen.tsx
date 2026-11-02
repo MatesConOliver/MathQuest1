@@ -7,6 +7,7 @@ import { User } from "firebase/auth";
 import { CombatEffect } from "../hooks/useBattle";
 import { SolutionModal } from "@/components/SolutionModal";
 import { getSpecialFightById } from "./specialFights/registry";
+import { GameIcon } from "@/components/GameIcon";
 
 // RENDER HELPERS
 const renderLegacyMixedText = (text: string | undefined): React.ReactNode => {
@@ -455,7 +456,7 @@ export function BattleScreen(props: BattleScreenProps) {
                 className="w-20 h-20 sm:w-24 sm:h-24 drop-shadow-[0_0_20px_rgba(255,255,255,1)] object-contain"
               />
             ) : (
-              <span className="text-6xl sm:text-7xl drop-shadow-[0_0_25px_rgba(255,255,255,1)]">⚔️</span>
+              <GameIcon name="fight" fallback="⚔️" size={72} className="drop-shadow-[0_0_25px_rgba(255,255,255,1)]" />
             )}
           </div>
         )}
@@ -535,7 +536,7 @@ export function BattleScreen(props: BattleScreenProps) {
                       onClick={() => setShowAnswers(true)}
                       className="bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black py-2.5 sm:py-3 px-3 rounded-xl shadow-lg border-2 border-yellow-200 transition-transform hover:scale-[1.01] active:scale-95 flex flex-col items-center justify-center gap-0.5"
                     >
-                      <span className="text-xl sm:text-2xl">⚔️</span>
+                      <GameIcon name="fight" fallback="⚔️" size="xl" />
                       <span className="text-xs sm:text-sm tracking-wider uppercase font-black">Answer</span>
                       <span className="text-[10px] text-gray-800 font-semibold">Choose Option</span>
                     </button>
@@ -545,7 +546,7 @@ export function BattleScreen(props: BattleScreenProps) {
                       onClick={() => setShowInventory(true)}
                       className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 sm:py-3 px-3 rounded-xl shadow-md border border-slate-600 transition-transform hover:scale-[1.01] active:scale-95 flex flex-col items-center justify-center gap-0.5"
                     >
-                      <span className="text-xl sm:text-2xl">🎒</span>
+                      <GameIcon name="inventory" fallback="🎒" size="xl" />
                       <span className="text-xs sm:text-sm tracking-wider uppercase font-bold">Objects</span>
                       <span className="text-[10px] text-gray-400 font-normal">Gear & Items</span>
                     </button>
@@ -563,7 +564,7 @@ export function BattleScreen(props: BattleScreenProps) {
                       onClick={() => setShowEscapeConfirm(true)}
                       className="bg-red-950/80 hover:bg-red-900 text-red-200 font-bold py-2 px-3 rounded-xl shadow border border-red-800/60 transition-transform hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-1.5 text-xs"
                     >
-                      <span>🏃</span> Retreat
+                      <GameIcon name="escape" fallback="🏃" size="sm" className="mr-1" /> Retreat
                     </button>
                   </div>
                 </div>
@@ -645,7 +646,7 @@ export function BattleScreen(props: BattleScreenProps) {
                       onClick={() => setShowSolutionModal(true)}
                       className="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs rounded-xl shadow-lg transition-transform hover:scale-105 active:scale-95 flex items-center gap-1.5 border border-indigo-400/40"
                     >
-                      <span>💡</span>
+                      <GameIcon name="hint" fallback="💡" size="xs" />
                       <span>Ask for Explanation</span>
                     </button>
                   </div>

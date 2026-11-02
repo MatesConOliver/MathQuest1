@@ -59,6 +59,16 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      // Check Icons folder
+      const iconsFolderKey = 'Assets/Icons';
+      const iconsFolderPath = path.join(PUBLIC_DIR, iconsFolderKey);
+      try {
+        const files = await fs.readdir(iconsFolderPath);
+        summary[iconsFolderKey] = files.filter((f) => !f.startsWith('.')).length;
+      } catch {
+        summary[iconsFolderKey] = 0;
+      }
+
       return NextResponse.json({ success: true, summary });
     }
 

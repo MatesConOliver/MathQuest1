@@ -1,0 +1,20 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function isGM() {
+      return signedIn() && request.auth.token.email == "oliveru1996@gmail.com";
+    }
+
+    // Public read for game assets, sprites and system icons; uploads permitted for GM
+    match /Assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if isGM();
+    }
+
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if isGM();
+    }
+  }
+}

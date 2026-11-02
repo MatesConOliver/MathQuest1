@@ -681,12 +681,9 @@ export function ReportsPanel({ onSwitchToQuestions }: ReportsPanelProps) {
             </p>
             <div className="relative">
               <pre className="p-3 bg-gray-950 text-emerald-400 font-mono text-[11px] rounded-xl overflow-x-auto max-h-60 border border-gray-800 leading-relaxed">
-{`// 1. In isGM() helper, allow both GM emails:
+{`// 1. In isGM() helper, allow GM email:
 function isGM() {
-  return signedIn() && (
-    request.auth.token.email == "oliveru1996@gmail.com" ||
-    request.auth.token.email == "oliverozcariz@britanico-aragon.edu"
-  );
+  return signedIn() && request.auth.token.email == "oliveru1996@gmail.com";
 }
 
 // 2. Add reports collection rules:
@@ -705,7 +702,7 @@ match /submissions/{submissionId} {
               </pre>
               <button
                 onClick={() => {
-                  const rulesText = `function isGM() {\n  return signedIn() && (\n    request.auth.token.email == "oliveru1996@gmail.com" ||\n    request.auth.token.email == "oliverozcariz@britanico-aragon.edu"\n  );\n}\n\nmatch /reports/{reportId} {\n  allow create: if signedIn();\n  allow read: if isGM() || (signedIn() && (resource.data.userId == request.auth.uid || resource.data.ownerUid == request.auth.uid));\n  allow update, delete: if isGM();\n}\n\nmatch /submissions/{submissionId} {\n  allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;\n  allow read: if (signedIn() && resource.data.ownerUid == request.auth.uid) || isGM();\n  allow update, delete: if isGM();\n}`;
+                  const rulesText = `function isGM() {\n  return signedIn() && request.auth.token.email == "oliveru1996@gmail.com";\n}\n\nmatch /reports/{reportId} {\n  allow create: if signedIn();\n  allow read: if isGM() || (signedIn() && (resource.data.userId == request.auth.uid || resource.data.ownerUid == request.auth.uid));\n  allow update, delete: if isGM();\n}\n\nmatch /submissions/{submissionId} {\n  allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;\n  allow read: if (signedIn() && resource.data.ownerUid == request.auth.uid) || isGM();\n  allow update, delete: if isGM();\n}`;
                   navigator.clipboard.writeText(rulesText);
                   setCopiedRules(true);
                   setTimeout(() => setCopiedRules(false), 2000);

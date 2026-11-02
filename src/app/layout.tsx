@@ -4,6 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import { AudioProvider } from "@/context/AudioContext";
+import { SystemIconsProvider } from "@/context/SystemIconsContext";
 
 export const metadata: Metadata = {
   title: "MathQuest1",
@@ -24,9 +25,11 @@ export default function RootLayout({
       <body
         className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
       >
-        <AudioProvider>
-          {children}
-        </AudioProvider>
+        <SystemIconsProvider>
+          <AudioProvider>
+            {children}
+          </AudioProvider>
+        </SystemIconsProvider>
       </body>
     </html>
   );

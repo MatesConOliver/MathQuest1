@@ -22,7 +22,15 @@ import {
   X,
   Cloud,
   HardDrive,
+  RotateCcw,
+  CheckCircle2,
+  Sliders,
+  Search,
+  Shield,
+  AlertTriangle,
 } from 'lucide-react';
+import { SYSTEM_ICON_DEFINITIONS, useSystemIcons, SystemIconDef } from '@/context/SystemIconsContext';
+import { optimizeIconImage } from '@/lib/imageOptimizer';
 
 interface AssetFile {
   name: string;
@@ -36,7 +44,7 @@ interface AssetFile {
 
 export function AssetManagerPanel() {
   // Navigation State
-  const [category, setCategory] = useState<'locations' | 'general'>('locations');
+  const [category, setCategory] = useState<'locations' | 'general' | 'icons'>('locations');
   const [selectedLocation, setSelectedLocation] = useState<number>(2); // Default to location 2
   const [selectedGeneral, setSelectedGeneral] = useState<'gear' | 'consumables' | 'others'>('gear');
 
@@ -44,7 +52,9 @@ export function AssetManagerPanel() {
   const activeFolder =
     category === 'locations'
       ? `Assets/Location specific/location ${selectedLocation}`
-      : `Assets/General/${selectedGeneral}`;
+      : category === 'general'
+      ? `Assets/General/${selectedGeneral}`
+      : 'Assets/Icons';
 
   // Data State
   const [files, setFiles] = useState<AssetFile[]>([]);
@@ -68,6 +78,19 @@ export function AssetManagerPanel() {
   const [inspectImage, setInspectImage] = useState<AssetFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Modal to view/copy Firestore and Storage rules
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [copiedRules, setCopiedRules] = useState<'firestore' | 'storage' | null>(null);
+
+  // System Icons & Custom Emoji Replacements State
+  const { icons: systemIcons, updateIcon, resetIcon, hasPermissionNotice } = useSystemIcons();
+  const [iconFilter, setIconFilter] = useState<'all' | 'navigation' | 'combat' | 'economy' | 'status' | 'meta'>('all');
+  const [iconSearch, setIconSearch] = useState('');
+  const [optimizingKey, setOptimizingKey] = useState<string | null>(null);
+  const [iconFeedback, setIconFeedback] = useState<{ key: string; msg: string; type: 'success' | 'error' } | null>(null);
+  const iconFileInputRef = useRef<HTMLInputElement | null>(null);
+  const targetIconKeyRef = useRef<string | null>(null);
+
   // Helper to format bytes
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B';
@@ -75,6 +98,144 @@ export function AssetManagerPanel() {
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  };
+
+  // Single-click Icon Upload with automated client-side downscaling (max 128x128px PNG)
+  const handleTriggerIconUpload = (key: string) => {
+    targetIconKeyRef.current = key;
+    iconFileInputRef.current?.click();
+  };
+
+  const handleIconFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const iconKey = targetIconKeyRef.current;
+    if (!file || !iconKey) return;
+
+    setOptimizingKey(iconKey);
+    setIconFeedback(null);
+
+    try {
+      // 1. Auto-optimize client-side: resize to max 128x128px PNG with alpha transparency
+      const { file: optimizedFile, width, height, originalSize, optimizedSize } = await optimizeIconImage(file, 128);
+      const filename = `${iconKey}.png`;
+
+      // Pre-compute lightweight Base64 Data URL as infallible zero-permission fallback
+      const base64DataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(optimizedFile);
+      });
+
+      let iconPath = '';
+      if (storageDestination === 'cloud') {
+        try {
+          const cloudPath = `Assets/Icons/${filename}`;
+          const fileRef = storageRef(storage, cloudPath);
+          await uploadBytes(fileRef, optimizedFile);
+          iconPath = await getDownloadURL(fileRef);
+        } catch (cloudErr) {
+          console.warn('Firebase Storage upload failed, falling back to compact Base64 Data URL:', cloudErr);
+          iconPath = base64DataUrl;
+        }
+      } else {
+        try {
+          const formData = new FormData();
+          formData.append('file', optimizedFile);
+          formData.append('folder', 'Assets/Icons');
+          formData.append('customName', iconKey);
+
+          const res = await fetch('/api/gm/assets', {
+            method: 'POST',
+            body: formData,
+          });
+          const data = await res.json();
+          if (data.success) {
+            iconPath = data.file.path;
+          } else if (data.isReadOnly) {
+            // Container filesystem is read-only (Cloud Run); try Firebase Storage with fallback to Base64
+            try {
+              const cloudPath = `Assets/Icons/${filename}`;
+              const fileRef = storageRef(storage, cloudPath);
+              await uploadBytes(fileRef, optimizedFile);
+              iconPath = await getDownloadURL(fileRef);
+            } catch (cloudErr) {
+              console.warn('Firebase Storage fallback failed, using compact Data URL:', cloudErr);
+              iconPath = base64DataUrl;
+            }
+          } else {
+            // Fallback to Data URL
+            iconPath = base64DataUrl;
+          }
+        } catch (fetchErr) {
+          console.warn('Local asset API failed, using compact Data URL:', fetchErr);
+          iconPath = base64DataUrl;
+        }
+      }
+
+      if (!iconPath) {
+        iconPath = base64DataUrl;
+      }
+
+      // 2. Persist in Firestore / local cache / user character doc
+      const persistResult = await updateIcon(iconKey, iconPath);
+      loadFiles();
+      loadSummary();
+
+      const savingsPct = originalSize > optimizedSize ? Math.round(((originalSize - optimizedSize) / originalSize) * 100) : 0;
+      const isDataUrl = iconPath.startsWith('data:');
+
+      if (persistResult?.permissionNotice) {
+        setIconFeedback({
+          key: iconKey,
+          type: 'success',
+          msg: `Saved locally & to your character profile (${width}×${height}px, ${formatBytes(optimizedSize)}). Live in game! (Deploy updated Firestore rules to broadcast to other players).`,
+        });
+      } else if (isDataUrl) {
+        setIconFeedback({
+          key: iconKey,
+          type: 'success',
+          msg: `Downscaled to ${width}×${height}px (${formatBytes(optimizedSize)}${savingsPct > 0 ? `, -${savingsPct}%` : ''}). Live in game! (Saved via compact sprite data).`,
+        });
+      } else {
+        setIconFeedback({
+          key: iconKey,
+          type: 'success',
+          msg: `Downscaled to ${width}×${height}px (${formatBytes(optimizedSize)}${savingsPct > 0 ? `, -${savingsPct}%` : ''}). Live in game!`,
+        });
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to optimize & upload icon';
+      setIconFeedback({
+        key: iconKey,
+        type: 'error',
+        msg: msg.includes('permission') || msg.includes('unauthorized')
+          ? 'Cloud storage/database permission issue. Check the Firebase Rules button above.'
+          : msg,
+      });
+    } finally {
+      setOptimizingKey(null);
+      if (iconFileInputRef.current) iconFileInputRef.current.value = '';
+      targetIconKeyRef.current = null;
+    }
+  };
+
+  const handleResetIcon = async (iconKey: string) => {
+    try {
+      await resetIcon(iconKey);
+      setIconFeedback({
+        key: iconKey,
+        type: 'success',
+        msg: 'Reset to original emoji default.',
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Reset failed';
+      setIconFeedback({
+        key: iconKey,
+        type: 'error',
+        msg,
+      });
+    }
   };
 
   // Upload to Firebase Storage helper with strict timeout to prevent endless hanging
@@ -217,22 +378,33 @@ export function AssetManagerPanel() {
           loadSummary();
         } else if (data.isReadOnly) {
           // Seamless auto-fallback to Firebase Storage when serverless container has read-only filesystem!
-          const downloadUrl = await uploadToFirebaseStorage(selectedUploadFile, finalFilename);
-          setUploadSuccess(`Read-only server detected — auto-saved to Firebase Storage!`);
-          const newAsset: AssetFile = {
-            name: finalFilename,
-            path: downloadUrl,
-            size: selectedUploadFile.size,
-            sizeFormatted: formatBytes(selectedUploadFile.size),
-            modifiedAt: new Date().toISOString(),
-            isImage: true,
-            extension: originalExt,
-          };
-          setFiles((prev) => [newAsset, ...prev.filter((f) => f.name !== finalFilename)]);
-          setSelectedUploadFile(null);
-          setCustomFileName('');
-          setPreviewDataUrl(null);
-          if (fileInputRef.current) fileInputRef.current.value = '';
+          try {
+            const downloadUrl = await uploadToFirebaseStorage(selectedUploadFile, finalFilename);
+            setUploadSuccess(`Read-only server detected — auto-saved to Firebase Storage!`);
+            const newAsset: AssetFile = {
+              name: finalFilename,
+              path: downloadUrl,
+              size: selectedUploadFile.size,
+              sizeFormatted: formatBytes(selectedUploadFile.size),
+              modifiedAt: new Date().toISOString(),
+              isImage: true,
+              extension: originalExt,
+            };
+            setFiles((prev) => [newAsset, ...prev.filter((f) => f.name !== finalFilename)]);
+            setSelectedUploadFile(null);
+            setCustomFileName('');
+            setPreviewDataUrl(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+          } catch (storageErr) {
+            const msg = storageErr instanceof Error ? storageErr.message : 'Storage upload failed';
+            if (msg.includes('permission') || msg.includes('unauthorized')) {
+              setError(
+                `Firebase Cloud Storage write permission denied. In Firebase Console → Storage → Rules, ensure GM email (oliveru1996@gmail.com) is authorized or click the "🛡️ Firebase Rules" button at top.`
+              );
+            } else {
+              setError(msg);
+            }
+          }
         } else {
           setError(data.error || 'Upload failed');
         }
@@ -258,7 +430,13 @@ export function AssetManagerPanel() {
         if (fileInputRef.current) fileInputRef.current.value = '';
       } catch (cloudErr: unknown) {
         const msg = cloudErr instanceof Error ? cloudErr.message : 'Upload failed';
-        setError(msg);
+        if (msg.includes('permission') || msg.includes('unauthorized')) {
+          setError(
+            `Firebase Cloud Storage write permission denied. Please publish storage.rules in Firebase Console (click "🛡️ Firebase Rules" button).`
+          );
+        } else {
+          setError(msg);
+        }
       }
     } finally {
       setIsUploading(false);
@@ -334,15 +512,46 @@ export function AssetManagerPanel() {
           </p>
         </div>
 
-        {/* Current Active Path Indicator */}
-        <div className="bg-black/60 border border-indigo-500/30 p-3 rounded-xl shrink-0 font-mono text-xs">
-          <span className="text-gray-400 block text-[10px] uppercase font-bold tracking-wider">Active Folder:</span>
-          <span className="text-cyan-300 font-bold break-all flex items-center gap-1.5 mt-0.5">
-            <Folder className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-            /{activeFolder}
-          </span>
+        {/* Current Active Path Indicator & Rules Button */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 shrink-0">
+          <button
+            onClick={() => setShowRulesModal(true)}
+            className="px-3 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+            title="View Firebase Firestore & Storage Rules for GM"
+          >
+            <Shield className="w-3.5 h-3.5 text-amber-400" />
+            <span>Firebase Rules</span>
+          </button>
+          <div className="bg-black/60 border border-indigo-500/30 p-3 rounded-xl shrink-0 font-mono text-xs">
+            <span className="text-gray-400 block text-[10px] uppercase font-bold tracking-wider">Active Folder:</span>
+            <span className="text-cyan-300 font-bold break-all flex items-center gap-1.5 mt-0.5">
+              <Folder className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              /{activeFolder}
+            </span>
+          </div>
         </div>
       </div>
+
+      {/* Cloud Permission Notice Banner */}
+      {hasPermissionNotice && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+            <div className="text-xs">
+              <p className="font-bold text-amber-300">Firebase Cloud Permissions Notice</p>
+              <p className="text-gray-300">
+                Your custom sprites and icons are active in-game and saved to your character document. To broadcast icons globally across all players and enable Cloud Storage, publish the updated security rules in Firebase Console.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowRulesModal(true)}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-xs rounded-xl shrink-0 transition-colors shadow-sm"
+          >
+            View & Copy Rules
+          </button>
+        </div>
+      )}
 
       {/* 2. Category Selector & Navigation Tabs */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
@@ -368,6 +577,26 @@ export function AssetManagerPanel() {
           >
             <Package className="w-4 h-4" />
             General (Gear, Consumables, Others)
+          </button>
+          <button
+            onClick={() => setCategory('icons')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all ${
+              category === 'icons'
+                ? 'bg-amber-500 text-gray-950 shadow-md shadow-amber-500/30 font-black'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-white'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            System Icons & Emojis
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                category === 'icons'
+                  ? 'bg-black/20 text-gray-950'
+                  : 'bg-amber-500/20 text-amber-300'
+              }`}
+            >
+              {Object.keys(systemIcons).length}/{SYSTEM_ICON_DEFINITIONS.length} active
+            </span>
           </button>
         </div>
 
@@ -408,7 +637,7 @@ export function AssetManagerPanel() {
               })}
             </div>
           </div>
-        ) : (
+        ) : category === 'general' ? (
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-2">
               Select General Subfolder:
@@ -440,8 +669,229 @@ export function AssetManagerPanel() {
               })}
             </div>
           </div>
+        ) : (
+          /* System Icons Filter & Search Bar */
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(['all', 'navigation', 'combat', 'economy', 'status', 'meta'] as const).map((filt) => {
+                  const count = filt === 'all' 
+                    ? SYSTEM_ICON_DEFINITIONS.length 
+                    : SYSTEM_ICON_DEFINITIONS.filter(d => d.category === filt).length;
+                  const isSelected = iconFilter === filt;
+                  return (
+                    <button
+                      key={filt}
+                      onClick={() => setIconFilter(filt)}
+                      className={`px-3 py-1.5 rounded-xl font-bold text-xs uppercase tracking-wider capitalize flex items-center gap-1.5 transition-all ${
+                        isSelected
+                          ? 'bg-amber-500 text-gray-950 font-black shadow-sm'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <span>{filt}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                        isSelected ? 'bg-black/20 text-gray-950' : 'bg-gray-200 dark:bg-gray-700 text-gray-400'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Search bar */}
+              <div className="relative min-w-[220px]">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Filter icons by name or key..."
+                  value={iconSearch}
+                  onChange={(e) => setIconSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+            </div>
+          </div>
         )}
       </div>
+
+      {/* Hidden file input for single-click individual icon replacement */}
+      <input
+        ref={iconFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleIconFileSelected}
+      />
+
+      {/* 2.5 SPECIAL VIEW: SYSTEM ICONS & EMOJI REPLACEMENT HUB */}
+      {category === 'icons' && (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          {/* Optimization Notice Banner */}
+          <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-slate-900 border border-amber-500/30 rounded-2xl p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-white text-base">Client-Side Auto Downscaling Active</h3>
+                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded text-[10px] font-mono font-bold">Max 128×128px PNG</span>
+                </div>
+                <p className="text-xs text-gray-300 max-w-3xl leading-relaxed">
+                  You can upload high-resolution artwork or photos without worrying about memory bloat. Images are automatically scaled down to 128×128px PNG sprites with alpha transparency before saving to <code className="text-amber-300 font-mono">/public/Assets/Icons/</code>, maintaining crisp sharpness, ~10KB file sizes, and 60fps game performance.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Icon Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {SYSTEM_ICON_DEFINITIONS
+              .filter((def) => {
+                const matchesFilter = iconFilter === 'all' || def.category === iconFilter;
+                const matchesSearch =
+                  !iconSearch.trim() ||
+                  def.name.toLowerCase().includes(iconSearch.toLowerCase()) ||
+                  def.key.toLowerCase().includes(iconSearch.toLowerCase()) ||
+                  def.description.toLowerCase().includes(iconSearch.toLowerCase());
+                return matchesFilter && matchesSearch;
+              })
+              .map((def) => {
+                const currentCustomUrl = systemIcons[def.key];
+                const isOptimizing = optimizingKey === def.key;
+                const feedback = iconFeedback?.key === def.key ? iconFeedback : null;
+
+                return (
+                  <div
+                    key={def.key}
+                    className={`bg-white dark:bg-slate-900 rounded-2xl p-4 border transition-all flex flex-col justify-between gap-3 shadow-sm ${
+                      currentCustomUrl
+                        ? 'border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
+                        : 'border-gray-200 dark:border-gray-800'
+                    }`}
+                  >
+                    {/* Card Header */}
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <div>
+                          <h4 className="font-black text-sm text-gray-900 dark:text-white flex items-center gap-1.5">
+                            {def.name}
+                          </h4>
+                          <span className="font-mono text-[10px] text-gray-400">
+                            key: <strong className="text-amber-400 font-bold">&quot;{def.key}&quot;</strong>
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-gray-100 dark:bg-gray-800 text-gray-500">
+                          {def.category}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug line-clamp-2">
+                        {def.description}
+                      </p>
+                    </div>
+
+                    {/* Live Preview Center */}
+                    <div className="bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-gray-800 rounded-xl p-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Checkerboard Icon Vessel */}
+                        <div className="w-14 h-14 rounded-xl bg-gray-900 border border-white/10 flex items-center justify-center shrink-0 shadow-inner overflow-hidden relative">
+                          {currentCustomUrl ? (
+                            <img
+                              src={currentCustomUrl}
+                              alt={def.name}
+                              className="w-10 h-10 object-contain drop-shadow"
+                            />
+                          ) : (
+                            <span className="text-2xl select-none">{def.defaultEmoji}</span>
+                          )}
+                        </div>
+
+                        {/* Status Label & Path */}
+                        <div className="min-w-0">
+                          {currentCustomUrl ? (
+                            <div>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded">
+                                <CheckCircle2 className="w-3 h-3" /> Custom Sprite
+                              </span>
+                              <p className="text-[10px] text-gray-400 font-mono truncate max-w-[170px] mt-1" title={currentCustomUrl}>
+                                {currentCustomUrl}
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-gray-400 bg-gray-800/80 border border-gray-700 px-2 py-0.5 rounded">
+                                Default Emoji ({def.defaultEmoji})
+                              </span>
+                              <p className="text-[10px] text-gray-500 mt-1">No custom file assigned</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Path Copy Button (if custom) */}
+                      {currentCustomUrl && (
+                        <button
+                          onClick={() => handleCopyPath(currentCustomUrl)}
+                          title="Copy asset path"
+                          className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors shrink-0"
+                        >
+                          {copiedPath === currentCustomUrl ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Feedback Toast */}
+                    {feedback && (
+                      <div
+                        className={`text-[10px] p-2 rounded-lg font-mono flex items-center gap-1.5 ${
+                          feedback.type === 'success'
+                            ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40'
+                            : 'bg-red-950/80 text-red-300 border border-red-500/40'
+                        }`}
+                      >
+                        {feedback.type === 'success' ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                        ) : (
+                          <Info className="w-3.5 h-3.5 shrink-0 text-red-400" />
+                        )}
+                        <span>{feedback.msg}</span>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => handleTriggerIconUpload(def.key)}
+                        disabled={isOptimizing}
+                        className="flex-1 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-gray-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{isOptimizing ? 'Optimizing...' : currentCustomUrl ? 'Replace Sprite' : 'Upload Sprite'}</span>
+                      </button>
+
+                      {currentCustomUrl && (
+                        <button
+                          onClick={() => handleResetIcon(def.key)}
+                          title="Reset to default emoji"
+                          className="py-2 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-white text-xs font-bold transition-all flex items-center gap-1"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Reset</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
       {/* 3. Drag-and-Drop Uploader Card */}
       <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
@@ -842,6 +1292,161 @@ export function AssetManagerPanel() {
                     <Copy className="w-3.5 h-3.5" /> Copy Path URL
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Firebase Rules Modal for GM */}
+      {showRulesModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setShowRulesModal(false)}
+        >
+          <div
+            className="bg-slate-900 border border-indigo-500/40 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Firebase Security Rules for GM</h3>
+                  <p className="text-xs text-gray-400">Authorizes oliveru1996@gmail.com</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRulesModal(false)}
+                className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-300 leading-relaxed">
+              To allow uploading sprites, persisting custom system icons globally, and updating game content across devices on the live server, publish these rules in your{' '}
+              <a
+                href="https://console.firebase.google.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber-400 underline font-bold"
+              >
+                Firebase Console ↗
+              </a>:
+            </p>
+
+            {/* Section 1: Firestore Rules */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider font-mono">
+                  1. Firestore Database → Rules
+                </span>
+                <button
+                  onClick={() => {
+                    const rulesText = `function isGM() {
+  return signedIn() && request.auth.token.email == "oliveru1996@gmail.com";
+}
+
+// Allow system icons & global settings write by GM:
+match /system_settings/{settingId} {
+  allow read: if true;
+  allow write: if isGM();
+}
+
+match /settings/{settingId} {
+  allow read: if true;
+  allow write: if isGM();
+}`;
+                    navigator.clipboard.writeText(rulesText);
+                    setCopiedRules('firestore');
+                    setTimeout(() => setCopiedRules(null), 2000);
+                  }}
+                  className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-[10px] font-bold border border-gray-700 transition-colors flex items-center gap-1"
+                >
+                  {copiedRules === 'firestore' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  {copiedRules === 'firestore' ? 'Copied Firestore Snippet!' : 'Copy Firestore Rules'}
+                </button>
+              </div>
+              <pre className="p-3 bg-black text-emerald-400 font-mono text-[11px] rounded-xl overflow-x-auto max-h-48 border border-gray-800 leading-relaxed">
+{`function isGM() {
+  return signedIn() && request.auth.token.email == "oliveru1996@gmail.com";
+}
+
+// System icons and settings:
+match /system_settings/{settingId} {
+  allow read: if true;
+  allow write: if isGM();
+}`}
+              </pre>
+            </div>
+
+            {/* Section 2: Storage Rules */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider font-mono">
+                  2. Storage → Rules (Assets Bucket)
+                </span>
+                <button
+                  onClick={() => {
+                    const storageRulesText = `rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function isGM() {
+      return signedIn() && request.auth.token.email == "oliveru1996@gmail.com";
+    }
+
+    match /Assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if isGM();
+    }
+
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if isGM();
+    }
+  }
+}`;
+                    navigator.clipboard.writeText(storageRulesText);
+                    setCopiedRules('storage');
+                    setTimeout(() => setCopiedRules(null), 2000);
+                  }}
+                  className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-[10px] font-bold border border-gray-700 transition-colors flex items-center gap-1"
+                >
+                  {copiedRules === 'storage' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  {copiedRules === 'storage' ? 'Copied Storage Snippet!' : 'Copy Storage Rules'}
+                </button>
+              </div>
+              <pre className="p-3 bg-black text-cyan-300 font-mono text-[11px] rounded-xl overflow-x-auto max-h-48 border border-gray-800 leading-relaxed">
+{`rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function isGM() {
+      return signedIn() && request.auth.token.email == "oliveru1996@gmail.com";
+    }
+
+    match /Assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if isGM();
+    }
+  }
+}`}
+              </pre>
+            </div>
+
+            <div className="flex justify-between items-center pt-2">
+              <span className="text-[11px] text-gray-500">
+                Note: In this app version, icons work immediately via local storage and character document fallback even if cloud rules are pending.
+              </span>
+              <button
+                onClick={() => setShowRulesModal(false)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-colors shrink-0"
+              >
+                Close
               </button>
             </div>
           </div>

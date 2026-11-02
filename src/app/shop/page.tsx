@@ -11,6 +11,7 @@ import { Character, GameItem, EncounterDoc } from "@/types/game";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAudio } from "@/context/AudioContext";
 import Link from "next/link";
+import { GameIcon } from "@/components/GameIcon";
 
 function ShopContent() {
   const { playTrack } = useAudio()!; 
@@ -231,7 +232,7 @@ function ShopContent() {
             <span>‹</span> Return to Location
           </Link>
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-xl">{encounter?.emoji || "🏪"}</span>
+            <GameIcon name="shop" fallback={encounter?.emoji || "🏪"} size="md" />
             <h1 className="text-sm sm:text-base font-black tracking-tight text-white truncate">
               {encounter?.title || "Outpost Merchant"}
             </h1>
@@ -245,15 +246,15 @@ function ShopContent() {
         {/* Right: Gold Purse & Character Link */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="px-3 py-1 rounded-lg bg-black/60 border border-amber-400/30 text-amber-300 font-mono text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-sm">
-            <span>🪙</span>
+            <GameIcon name="gold" fallback="🪙" size="sm" />
             <span>{character?.gold ?? 0}</span>
             <span className="text-[10px] text-amber-400/70 font-sans uppercase">Gold</span>
           </div>
           <Link
             href="/character"
-            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-medium border border-white/10 transition-colors"
+            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-medium border border-white/10 transition-colors flex items-center gap-1.5"
           >
-            🦉 Character
+            <GameIcon name="character" fallback="🦉" size="xs" /> Character
           </Link>
         </div>
       </header>
@@ -368,7 +369,7 @@ function ShopContent() {
                     : 'bg-white/5 text-gray-500 border border-white/10 cursor-not-allowed'
                 }`}
               >
-                <span>🪙 {selectedItem.price} G</span>
+                <span className="flex items-center gap-1.5"><GameIcon name="gold" fallback="🪙" size="xs" /> {selectedItem.price} G</span>
                 <span>{canAffordSelected ? '— Acquire Ware' : '— Not Enough Gold'}</span>
               </button>
             </div>
@@ -385,7 +386,7 @@ export default function ShopPage() {
     <Suspense fallback={
       <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
-          <span className="text-3xl animate-pulse">🏪</span>
+          <GameIcon name="shop" fallback="🏪" size="2xl" className="animate-pulse" />
           <span className="text-xs font-mono uppercase tracking-widest text-gray-400">Loading Store...</span>
         </div>
       </div>

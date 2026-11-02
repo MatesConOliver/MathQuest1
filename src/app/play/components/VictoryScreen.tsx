@@ -1,5 +1,6 @@
 
 import { Character } from "@/types/game";
+import { GameIcon } from "@/components/GameIcon";
 
 interface VictoryScreenProps {
   character: Character | null;
@@ -20,7 +21,9 @@ export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain,
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-yellow-50 dark:bg-gray-900 transition-colors">
       <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-yellow-400 dark:border-yellow-600 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
-        <div className="text-6xl animate-bounce">🎉</div>
+        <div className="flex justify-center text-6xl animate-bounce">
+          <GameIcon name="victory" fallback="🎉" size={64} />
+        </div>
         <div className="text-center">
           <h1 className="text-4xl font-black text-yellow-600 dark:text-yellow-400 uppercase tracking-widest drop-shadow-sm">Victory!</h1>
           <p className="text-gray-500 dark:text-gray-400 font-bold mt-2 uppercase text-sm tracking-tighter">Level {character?.level || 1}</p>
@@ -30,11 +33,15 @@ export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain,
             <div className="font-bold text-yellow-800 dark:text-yellow-200 uppercase text-xs tracking-wider mb-2 text-center">Rewards</div>
             <div className="flex justify-between items-center px-2">
                 <span className="font-bold text-gray-600 dark:text-gray-400">XP Gained</span>
-                <span className="font-bold text-blue-600 dark:text-blue-400 text-lg">+{xpReward}</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400 text-lg flex items-center gap-1">
+                  <GameIcon name="xp" fallback="⭐" size="xs" /> +{xpReward}
+                </span>
             </div>
             <div className="flex justify-between items-center px-2">
                 <span className="font-bold text-gray-600 dark:text-gray-400">Gold Found</span>
-                <span className="font-bold text-yellow-600 dark:text-yellow-400 text-lg">🪙 +{goldReward}</span>
+                <span className="font-bold text-yellow-600 dark:text-yellow-400 text-lg flex items-center gap-1">
+                  <GameIcon name="gold" fallback="🪙" size="xs" /> +{goldReward}
+                </span>
             </div>
             {skillGains && Object.keys(skillGains).length > 0 && (
                 <div className="pt-1">
@@ -54,7 +61,7 @@ export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain,
               <div className="font-bold text-yellow-800 dark:text-yellow-200 uppercase text-xs tracking-wider mb-2">Level Up Bonuses</div>
               <div className="flex justify-between items-center px-4">
                 <span className="font-bold text-gray-600 dark:text-gray-400">Max Health</span>
-                <span className="font-black text-green-600 dark:text-green-400 text-xl">+{hpGain} 💚</span>
+                <span className="font-black text-green-600 dark:text-green-400 text-xl flex items-center gap-1.5">+{hpGain} <GameIcon name="hp" fallback="💚" size="sm" /></span>
               </div>
               <div className="flex justify-between items-center px-4 bg-yellow-100 dark:bg-yellow-800/30 rounded-lg py-2">
                 <span className="font-bold text-gray-700 dark:text-gray-300">Upgrade Points</span>

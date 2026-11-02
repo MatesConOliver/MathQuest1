@@ -6,9 +6,7 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
     function isGM() {
-      return signedIn() && (
-        request.auth.token.email == "oliveru1996@gmail.com"
-      );
+      return signedIn() && request.auth.token.email == "oliveru1996@gmail.com";
     }
 
     // --- CHARACTERS ---
@@ -69,9 +67,14 @@ service cloud.firestore {
       allow update: if isGM() || (signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aiSolution']));
     }
 
-    // --- GAME SETTINGS (Loading tips, global configuration) ---
+    // --- GAME SETTINGS (Loading tips, global configuration, system icons) ---
     match /settings/{settingId} {
-      allow read: if signedIn();
+      allow read: if true;
+      allow write: if isGM();
+    }
+
+    match /system_settings/{settingId} {
+      allow read: if true;
       allow write: if isGM();
     }
 

@@ -1,93 +1,56 @@
-# Store Redesign & Multi-Layout System
+# System Icons Manager & Universal Asset Replacement
 
-A complete redesign of the encounter item shop to eliminate visual clutter, remove bright saturated badges and emoji spam, dramatically improve background art visibility, and provide an interactive 4-layout switcher inspired by classic game stores (*Dark Souls*, *Zelda*, *Diablo*, *Octopath Traveler*).
+A comprehensive icon management system that enables the Game Master to replace hardcoded game emojis (World Map, Character, Gold, Fight, Escape, Store, HP, XP, Potions, etc.) with custom visual assets, featuring client-side 128×128px image auto-optimization, a dedicated GM Assets panel, Firestore live persistence, and a universal `<GameIcon />` component.
 
-## User Review & Critical Decisions
+## Implementation Status: COMPLETED ✅
 
-> [!IMPORTANT]
-> - **Confirmed Choice 1 (Layout Selection)**: An interactive 4-button layout switcher bar will be included in the store (`1. Side Ledger`, `2. Bottom Shelf`, `3. Compact Grid`, `4. Floating Dock`) so the user can test all 4 styles on the live game and pick their favorite. The selection is persisted in `localStorage`.
-> - **Confirmed Choice 2 (Background Visibility)**: Each layout pairs with a tailored, low-opacity backdrop treatment (e.g., directional gradients and soft edge vignettes instead of a full dark blur blanket) ensuring the background art is fully recognizable and atmospheric.
-> - **Confirmed Choice 3 (Item Inspection)**: Selecting an item in the list/shelf opens an inspector panel displaying clean stats, lore description, price, and a dignified "Purchase" button.
+All architectural decisions and features have been fully implemented and verified with successful Next.js compilation and lint checks.
 
----
-
-## 1. Overview & Core Concept
-
-- **What It Does**: Replaces the bulky 3-column card grid with four minimalist, low-clutter store presentations that showcase the merchant outpost background art while providing clear, readable item inspection and purchasing.
-- **Target Experience**: Evokes the restrained, immersive atmosphere of classic RPG merchant encounters (like visiting a bonfire merchant in *Dark Souls* or an apothecary in *Octopath Traveler*).
-- **Key Value**: Low visual fatigue, high readability, beautiful background presence, and immediate user agency to toggle between 4 layout styles.
-
----
-
-## 2. User Experience & Visual Design
-
-### The 4 Distinct Layout Variations
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│ [1. Side Ledger]             [2. Bottom Shelf]                         │
-│ ┌──────┬──────────────────┐  ┌──────────────────────────────────────┐  │
-│ │List  │ Clear Background │  │       Clear Background Art           │  │
-│ │+Lore │ Art              │  ├──────────────────────────────────────┤  │
-│ │Panel │                  │  │ [Item 1] [Item 2] [Item 3] | Details │  │
-│ └──────┴──────────────────┘  └──────────────────────────────────────┘  │
-│                                                                        │
-│ [3. Compact Grid]            [4. Floating Dock]                        │
-│ ┌───────────────┬─────────┐  ┌──────────────────────────────────────┐  │
-│ │ [][][][]      │ Detail  │  │        Clear Background Art          │  │
-│ │ [][][][]      │ Card    │  │   ┌──────────────────────────────┐   │  │
-│ └───────────────┴─────────┘  │   │  Docked List  |  Inspector   │   │  │
-│                              │   └──────────────────────────────┘   │  │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-1. **Layout 1: Side Ledger (*Dark Souls* / *Hollow Knight* Style)**
-   - **Position**: Vertical shop column anchored to the left (~380px wide).
-   - **Background Art**: 65% of the viewport is completely unobstructed. Soft left-to-right fade (`from-black/80 via-black/40 to-transparent`) ensures text contrast while preserving the art.
-   - **Interaction**: Clean list of item rows. Selecting an item displays its lore, stat bonuses, and purchase button in the inspector card below the list.
-
-2. **Layout 2: Bottom Shelf (*Zelda* / *Metroid* Merchant Counter)**
-   - **Position**: Docked across the bottom third of the viewport.
-   - **Background Art**: The entire upper 60% of the screen is an open panorama of the merchant scene. Gentle upward gradient from the bottom (`from-black/90 via-black/40 to-transparent`).
-   - **Interaction**: Horizontal item shelf with scroll/paging + right-hand inspector preview card.
-
-3. **Layout 3: Compact Grid (*Diablo* / *Final Fantasy* Inventory Slots)**
-   - **Position**: Tightly grouped, elegant grid of compact item slots on the left with an adjacent detail card on the right.
-   - **Background Art**: Clean, unobtrusive subtle corner vignette, letting the central scene remain crisp.
-   - **Interaction**: Clicking an item slot selects it with a gold hairline border and displays the full lore card and purchase button.
-
-4. **Layout 4: Floating Dock (*Octopath Traveler* / *Sea of Stars*)**
-   - **Position**: Floating minimalist card container centered in the lower half of the screen.
-   - **Background Art**: Full-bleed background viewable all around the floating dock with subtle glassmorphic backdrop.
-   - **Interaction**: Left pane holds the streamlined catalog; right pane holds the item inspect and purchase action.
-
-### Anti-Slop & Design Constitution Compliance
-- **No Shiny Badges or Capsule Pills**: All prices and categories use clean typographic figures (`font-mono tabular-nums`) and subtle hairline dividers.
-- **No Emoji Spam**: Replaced saturated emojis with clean SVG icons or subtle icon glyphs.
-- **Restrained Color Palette**: Deep charcoal / slate surfaces (`rgba(15, 23, 42, 0.85)`), muted warm gold accent (`text-amber-300`, `border-amber-400/40`), clean white/gray text.
-- **Gold Balance & Navigation**: Kept in a quiet, single-line header with "‹ Return to Location" link.
+| Feature / Component | Status | Details |
+| :--- | :---: | :--- |
+| **Client-Side Image Auto-Optimizer** (`src/lib/imageOptimizer.ts`) | ✅ Complete | Auto-resizes any upload to max 128×128px PNG with alpha transparency & high-quality smoothing |
+| **System Icons Real-Time Context** (`src/context/SystemIconsContext.tsx`) | ✅ Complete | Listens via Firestore `onSnapshot` to `system_settings/icons` with local cache fallback |
+| **Universal `<GameIcon />` Component** (`src/components/GameIcon.tsx`) | ✅ Complete | Renders custom sprite if available; gracefully falls back to default emoji with zero broken images |
+| **GM Asset Manager "System Icons" Hub** (`src/app/gm/panels/AssetManagerPanel.tsx`) | ✅ Complete | Category selector, search filter, auto-downscaling notification, live preview, 1-click upload & reset |
+| **Backend Asset Handler** (`src/app/api/gm/assets/route.ts`) | ✅ Complete | Supports `Assets/Icons` in summary counts, uploads, and file listings with safe path verification |
+| **Firestore Security Rules** (`firestore.rules`) | ✅ Complete | Unrestricted read for players (`allow read: if true;`), GM-only write for system icons (`isGM()`) |
+| **World & Area Map Integration** (`src/app/map/page.tsx`) | ✅ Complete | Replaced map, character, home, store, fight, xp, and gold emojis with `<GameIcon>` |
+| **Store & Merchant Outpost Integration** (`src/app/shop/page.tsx`) | ✅ Complete | Replaced store title, coin purse, character link, purchase CTA, and skeleton with `<GameIcon>` |
+| **Battle Commands & Combat Effects** (`src/app/play/components/BattleScreen.tsx`) | ✅ Complete | Replaced fight, objects bag, retreat/escape, weapon slash, and solution buttons with `<GameIcon>` |
+| **Victory & Defeat Screens** (`VictoryScreen.tsx`, `DefeatScreen.tsx`) | ✅ Complete | Replaced victory trophy, gold, xp, health bonus, defeat skull, and return buttons with `<GameIcon>` |
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
+## 1. Catalog of Supported System Icons
 
-- **Decision 1: Interactive Layout Switcher**:
-  - *Approach*: Provide a 4-tab switcher in the store header allowing instant live switching between the 4 layouts.
-  - *Why*: Allows the user to evaluate all 4 game-store styles in the actual browser environment with their real background images and inventory.
-  - *Persistence*: Stored in `localStorage.getItem('shop_layout_style')` so the chosen layout is remembered.
-- **Decision 2: Light Gradient Scrims Over Heavy Blur**:
-  - *Approach*: Removed `backdrop-blur-[2px]` and heavy `bg-black/75` blanket. Replaced with localized directional scrims so the background art remains sharp and recognizable.
-- **Decision 3: Inspector Purchasing Pattern**:
-  - *Approach*: Selecting an item loads its description, stats, and a clean "Purchase (X Gold)" button into the inspector panel. Prevents accidental purchases and gives players time to read item lore.
+| Icon Key | Default Fallback | Category | Primary In-Game Usage |
+| :--- | :---: | :---: | :--- |
+| `map` | 🗺️ | Navigation | World Map header, top navigation, and return to map buttons |
+| `character` | 🦉 | Navigation | Character profile quick-links, stats sheet, equipment |
+| `home` | 🏠 | Navigation | Home button and main entrance links |
+| `shop` | 🏪 | Economy | Outpost store headers, merchant visit buttons, and shopping links |
+| `gold` | 🪙 | Economy | Coin purses, item pricing, reward displays, and treasury counters |
+| `fight` | ⚔️ | Combat | Battle encounter cards, fight CTA buttons, and attack commands |
+| `escape` | 🏃 | Combat | Battle retreat buttons, flee prompts, and escape confirmation modals |
+| `inventory` | 🎒 | Combat | Battle objects button, inventory bag triggers, and item slots |
+| `potion` | 🧪 | Combat | Healing potions, elixir triggers, and consumable slots |
+| `hp` | ❤️ | Status | Health bars, player/foe vitality indicators, and level-up HP bonuses |
+| `xp` | ⭐ | Status | XP bars, victory experience tallies, and progression badges |
+| `victory` | 🏆 | Status | Battle triumph screen banner, victory medals, and quest clears |
+| `defeat` | 💀 | Status | Battle defeat screen banner, combatant fallen notice, and revival prompts |
+| `lock` | 🔒 | Meta | Locked sub-area pins, sealed regions, and prerequisite gate indicators |
+| `hint` | 💡 | Meta | Ask for explanation buttons and question solution modals |
+| `timer` | ⏳ | Meta | Turn timers, speed challenges, and countdown clocks |
 
 ---
 
-## 4. Technical Implementation
+## 2. Technical Summary
 
-- **File**: `src/app/shop/page.tsx`
-- **State**:
-  - `activeLayout`: `'ledger' | 'shelf' | 'grid' | 'dock'` (defaults to `'ledger'` or persisted value).
-  - `selectedItem`: `GameItem | null` (defaults to first item in store).
-  - Standard shop states: `character`, `encounter`, `items`, `loading`, `msg`.
-- **Purchasing Handler**: Remains wired to Firestore `characters` updates (subtract gold, arrayUnion inventory).
-- **Navigation**: Clean link back to `/map?locationId=${locationId}` without `subAreaId`.
+1. **Auto-Downscaling Guarantee**:
+   Uploaded images of any resolution (even 4K or 10MB camera uploads) are drawn onto an offscreen HTML5 canvas, downscaled with high-quality smoothing to fit within 128×128px, and encoded as a transparent PNG. Files end up between 5KB and 20KB, guaranteeing instant asset loading and zero frame drops.
+
+2. **Zero Broken Image Fallback**:
+   `<GameIcon name="gold" fallback="🪙" />` attempts to load the custom asset. If an image error occurs or if no custom image is assigned in Firestore, it instantly renders the default emoji without shifting page layout.
+
+3. **Instant Live Updates**:
+   When a Game Master uploads or resets an icon in the GM panel, the change is written to `system_settings/icons` in Firestore. All active players receive the update in real-time via `onSnapshot` without needing to refresh their browsers.

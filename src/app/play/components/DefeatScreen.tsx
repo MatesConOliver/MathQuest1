@@ -1,5 +1,6 @@
 
 import { useRouter } from "next/navigation";
+import { GameIcon } from "@/components/GameIcon";
 
 interface DefeatScreenProps {
   msg: string;
@@ -22,7 +23,9 @@ export function DefeatScreen({ msg, onTryAgain, onReturnToMap }: DefeatScreenPro
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-red-50 dark:bg-gray-900 transition-colors">
       <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-8 rounded-3xl shadow-xl border-4 border-red-500 dark:border-red-600 text-center max-w-sm w-full space-y-6 animate-in zoom-in duration-300">
-        <div className="text-6xl animate-pulse">💀</div>
+        <div className="flex justify-center text-6xl animate-pulse">
+          <GameIcon name="defeat" fallback="💀" size={64} />
+        </div>
         <div className="text-center">
           <h1 className="text-4xl font-black text-red-600 dark:text-red-500 uppercase tracking-widest drop-shadow-md">Defeat</h1>
           <p className="text-gray-500 dark:text-gray-400 font-bold mt-2 italic">&ldquo;You have fallen...&rdquo;</p>
@@ -34,9 +37,10 @@ export function DefeatScreen({ msg, onTryAgain, onReturnToMap }: DefeatScreenPro
         <div className="pt-4 flex flex-col gap-2">
           <button 
             onClick={handleReturn}
-            className="w-full bg-gray-900 text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-gray-200 py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg"
+            className="w-full bg-gray-900 text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-gray-200 py-4 rounded-xl font-bold text-xl hover:scale-105 transition-transform shadow-lg flex items-center justify-center gap-2"
           >
-            Return to Location 🗺️
+            <span>Return to Location</span>
+            <GameIcon name="map" fallback="🗺️" size="md" />
           </button>
           <button 
             onClick={onTryAgain}

@@ -13,6 +13,7 @@ import classNames from "classnames";
 import { UnlockStatus, getUnlockStatus } from "@/lib/unlock";
 import { StoryPlayer } from "@/components/StoryPlayer";
 import { buildMapPath } from "@/lib/mapPath";
+import { GameIcon } from "@/components/GameIcon";
 
 // --- HELPER FUNCTIONS ---
 
@@ -656,7 +657,7 @@ function MapContent() {
             <header className="flex flex-col gap-4 border-b border-gray-800 pb-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h1 className="text-3xl md:text-4xl font-black text-white flex items-center gap-2">
-                  <span>🗺️</span> World Map
+                  <GameIcon name="map" fallback="🗺️" size="lg" /> World Map
                 </h1>
                 <p className="text-gray-300 font-medium">Select an unlocked region to begin an expedition</p>
               </div>
@@ -675,8 +676,8 @@ function MapContent() {
                       {isRedeeming ? "Checking..." : "Redeem"}
                     </button>
                   </form>
-                  <Link href="/character" className={topActionClass}>🦉 Character</Link>
-                  <Link href="/" className={topActionClass}>🏠 Home</Link>
+                  <Link href="/character" className={topActionClass}><GameIcon name="character" fallback="🦉" size="sm" className="mr-1.5" />Character</Link>
+                  <Link href="/" className={topActionClass}><GameIcon name="home" fallback="🏠" size="sm" className="mr-1.5" />Home</Link>
                 </div>
                 {codeMessage && <p role="status" aria-live="polite" className="text-sm font-medium text-yellow-300">{codeMessage}</p>}
               </div>
@@ -832,8 +833,8 @@ function MapContent() {
 
               {/* Quick Nav Links */}
               <div className="flex items-center gap-2 shrink-0">
-                <Link href="/character" className={topActionClass}>🦉 Character</Link>
-                <Link href="/" className={topActionClass}>🏠 Home</Link>
+                <Link href="/character" className={topActionClass}><GameIcon name="character" fallback="🦉" size="sm" className="mr-1.5" />Character</Link>
+                <Link href="/" className={topActionClass}><GameIcon name="home" fallback="🏠" size="sm" className="mr-1.5" />Home</Link>
               </div>
             </div>
 
@@ -1047,20 +1048,20 @@ function MapContent() {
                                         {/* Rewards Badges or Store Tag */}
                                         {enc.encounterType === 'shop' ? (
                                           <div className="flex flex-wrap gap-1 mt-1 text-[9px] sm:text-[10px]">
-                                            <span className="px-1.5 py-0.5 rounded bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 font-bold">
-                                              🏪 Merchant Shop ({enc.shopItemIds?.length ?? 'All'} items)
+                                            <span className="px-1.5 py-0.5 rounded bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 font-bold flex items-center gap-1">
+                                              <GameIcon name="shop" fallback="🏪" size="xs" /> Merchant Shop ({enc.shopItemIds?.length ?? 'All'} items)
                                             </span>
                                           </div>
                                         ) : (
                                           <div className="flex flex-wrap gap-1 mt-1 text-[9px] sm:text-[10px]">
                                             {enc.winRewardXp ? (
-                                              <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-purple-300 font-bold">
-                                                +{enc.winRewardXp} XP
+                                              <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-purple-300 font-bold flex items-center gap-1">
+                                                <GameIcon name="xp" fallback="⭐" size="xs" /> +{enc.winRewardXp} XP
                                               </span>
                                             ) : null}
                                             {enc.winRewardGold ? (
-                                              <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/30 text-yellow-300 font-bold">
-                                                +{enc.winRewardGold} G
+                                              <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-500/30 text-yellow-300 font-bold flex items-center gap-1">
+                                                <GameIcon name="gold" fallback="🪙" size="xs" /> +{enc.winRewardGold} G
                                               </span>
                                             ) : null}
                                             {skillRewards.map(([skill, val]) => (
@@ -1079,14 +1080,16 @@ function MapContent() {
                                         href={`/shop?encounterId=${enc.id}&locationId=${selectedLocation.id}`}
                                         className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-black text-xs uppercase tracking-wider rounded-lg shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-1.5"
                                       >
-                                        <span>🏪</span> VISIT STORE
+                                        <GameIcon name="shop" fallback="🏪" size="sm" />
+                                        <span>VISIT STORE</span>
                                       </Link>
                                     ) : (
                                       <Link
                                         href={`/play?id=${enc.id}&locationId=${selectedLocation.id}&subAreaId=${selectedSubArea.id}`}
-                                        className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black text-xs uppercase tracking-wider rounded-lg shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-1"
+                                        className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black text-xs uppercase tracking-wider rounded-lg shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-1.5"
                                       >
-                                        <span>⚔️</span> FIGHT
+                                        <GameIcon name="fight" fallback="⚔️" size="sm" />
+                                        <span>FIGHT</span>
                                       </Link>
                                     )}
                                   </div>
