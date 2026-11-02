@@ -23,6 +23,17 @@ const SIZE_CLASSES = {
   '4xl': 'w-28 h-28',  // 112px
 };
 
+const SIZE_PX = {
+  xs: 18,
+  sm: 22,
+  md: 28,
+  lg: 36,
+  xl: 48,
+  '2xl': 64,
+  '3xl': 80,
+  '4xl': 112,
+};
+
 export function GameIcon({
   name,
   fallback,
@@ -44,14 +55,20 @@ export function GameIcon({
 
   let sizeClass = '';
   let inlineStyle: React.CSSProperties = {};
+  let boxPx: number | undefined;
 
   if (typeof size === 'number') {
     inlineStyle = { width: `${size}px`, height: `${size}px` };
+    boxPx = size;
   } else if (size && SIZE_CLASSES[size]) {
     sizeClass = SIZE_CLASSES[size];
+    boxPx = SIZE_PX[size];
   } else if (!size) {
     sizeClass = 'w-[1.25em] h-[1.25em]';
   }
+
+  // Emojis are text, so scale the glyph with the box when an explicit size is given
+  const emojiStyle: React.CSSProperties = boxPx ? { fontSize: `${Math.round(boxPx * 0.8)}px` } : {};
 
   // If a custom image URL exists and hasn't errored out, render the custom asset
   if (iconUrl && !hasImgError) {
@@ -77,7 +94,7 @@ export function GameIcon({
       role="img"
       aria-label={alt || name}
       className={`${inline ? 'inline-flex items-center justify-center align-middle' : 'flex items-center justify-center'} shrink-0 select-none ${sizeClass} ${className}`}
-      style={inlineStyle}
+      style={{ ...inlineStyle, ...emojiStyle }}
     >
       <span className="leading-none text-center select-none flex items-center justify-center w-full h-full">
         {resolvedFallback}
