@@ -1909,7 +1909,7 @@ export default function Loc2VietaScales({
         {/* 3. SHINING EQUATION DIRECTLY IN FRONT OF THE FOE (NO BACKGROUND BOX, HIGHER Z-AXIS) */}
         {bossState === 'normal' && currentRound && (
           <div className="absolute top-[14%] sm:top-[15%] left-1/2 -translate-x-1/2 pointer-events-none z-30 flex flex-col items-center select-none">
-            <div className="text-yellow-200 text-xs sm:text-sm font-black tracking-wide drop-shadow-[0_0_8px_rgba(250,204,21,1)] filter drop-shadow-[0_0_18px_rgba(245,158,11,0.85)] animate-pulse">
+            <div className="text-yellow-200 text-sm sm:text-base font-black [&_.katex]:font-black [&_.katex_*]:font-black tracking-wide drop-shadow-[0_0_8px_rgba(250,204,21,1)] filter drop-shadow-[0_0_18px_rgba(245,158,11,0.85)] animate-equation-twinkle">
               <InlineMath math={currentRound.latex} />
             </div>
           </div>

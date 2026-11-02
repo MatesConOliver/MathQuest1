@@ -124,6 +124,17 @@ body {
   }
 }
 
+/* Steady glow for ~85% of a 3.6s cycle, then one brief twinkle */
+@keyframes equationTwinkle {
+  0%, 82%, 100% { opacity: 1; }
+  88% { opacity: 0.55; }
+  94% { opacity: 1; }
+}
+
+.animate-equation-twinkle {
+  animation: equationTwinkle 3.6s ease-in-out infinite;
+}
+
 .animate-damage-float {
   animation: showdownDamageFloat 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
