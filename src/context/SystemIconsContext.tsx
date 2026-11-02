@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { auth, db } from '@/lib/firebase';
-import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, deleteField } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 export interface SystemIconDef {
@@ -203,19 +203,31 @@ export function SystemIconsProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     let fallbackUnsub: (() => void) | null = null;
 
-    const applyData = (data?: Record<string, string>) => {
-      if (!data) return;
-      setIcons((prev) => {
-        const merged = { ...prev, ...data };
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
-          } catch {
-            // ignore
-          }
-        }
-        return merged;
+    // Cloud sources are authoritative: an icon missing from every loaded source is dropped locally
+    const sources: Record<'primary' | 'fallback' | 'character', Record<string, string> | null> = {
+      primary: null,
+      fallback: null,
+      character: null,
+    };
+
+    const applySource = (name: keyof typeof sources, data: Record<string, string> | null) => {
+      sources[name] = data || {};
+      const merged: Record<string, string> = {};
+      Object.entries({ ...sources.character, ...sources.fallback, ...sources.primary }).forEach(([k, v]) => {
+        if (typeof v === 'string' && v.trim()) merged[k] = v;
       });
+      setIcons((prev) => {
+        const prevKeys = Object.keys(prev);
+        const same = prevKeys.length === Object.keys(merged).length && prevKeys.every((k) => prev[k] === merged[k]);
+        return same ? prev : merged;
+      });
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
+        } catch {
+          // ignore
+        }
+      }
     };
 
     const primaryDocRef = doc(db, 'system_settings', 'icons');
@@ -225,9 +237,7 @@ export function SystemIconsProvider({ children }: { children: React.ReactNode })
       primaryDocRef,
       (docSnap) => {
         setIsLoading(false);
-        if (docSnap.exists()) {
-          applyData(docSnap.data() as Record<string, string>);
-        }
+        applySource('primary', docSnap.exists() ? (docSnap.data() as Record<string, string>) : null);
       },
       () => {
         // If primary collection is restricted in remote Firestore rules, listen to locations fallback
@@ -235,9 +245,7 @@ export function SystemIconsProvider({ children }: { children: React.ReactNode })
         fallbackUnsub = onSnapshot(
           fallbackDocRef,
           (fallbackSnap) => {
-            if (fallbackSnap.exists()) {
-              applyData(fallbackSnap.data() as Record<string, string>);
-            }
+            applySource('fallback', fallbackSnap.exists() ? (fallbackSnap.data() as Record<string, string>) : null);
           },
           () => {
             // Quiet fail: local cache and character document still provide icon state
@@ -246,26 +254,30 @@ export function SystemIconsProvider({ children }: { children: React.ReactNode })
       }
     );
 
-    // Also check if current user character has fallback custom icons
-    const authUnsub = onAuthStateChanged(auth, async (u) => {
-      if (u) {
-        try {
-          const charSnap = await getDoc(doc(db, 'characters', u.uid));
-          if (charSnap.exists()) {
-            const charData = charSnap.data();
-            if (charData?.customSystemIcons) {
-              applyData(charData.customSystemIcons as Record<string, string>);
-            }
-          }
-        } catch {
+    // Also listen to the signed-in user's character doc, which holds fallback custom icons
+    let charUnsub: (() => void) | null = null;
+    const authUnsub = onAuthStateChanged(auth, (u) => {
+      if (charUnsub) {
+        charUnsub();
+        charUnsub = null;
+      }
+      if (!u) return;
+      charUnsub = onSnapshot(
+        doc(db, 'characters', u.uid),
+        (charSnap) => {
+          const icons = charSnap.exists() ? charSnap.data()?.customSystemIcons : null;
+          applySource('character', (icons as Record<string, string>) || null);
+        },
+        () => {
           // ignore
         }
-      }
+      );
     });
 
     return () => {
       primaryUnsub();
       if (fallbackUnsub) fallbackUnsub();
+      if (charUnsub) charUnsub();
       authUnsub();
     };
   }, []);
@@ -353,14 +365,14 @@ export function SystemIconsProvider({ children }: { children: React.ReactNode })
       let writtenToCloud = false;
 
       try {
-        await setDoc(doc(db, 'locations', 'system_icons'), updated);
+        await setDoc(doc(db, 'locations', 'system_icons'), { [key]: deleteField() }, { merge: true });
         writtenToCloud = true;
       } catch {
         // fallback
       }
 
       try {
-        await setDoc(doc(db, 'system_settings', 'icons'), updated);
+        await setDoc(doc(db, 'system_settings', 'icons'), { [key]: deleteField() }, { merge: true });
         writtenToCloud = true;
         setHasPermissionNotice(false);
       } catch {
@@ -375,7 +387,7 @@ export function SystemIconsProvider({ children }: { children: React.ReactNode })
         try {
           await setDoc(
             doc(db, 'characters', u.uid),
-            { customSystemIcons: { [key]: '' } },
+            { customSystemIcons: { [key]: deleteField() } },
             { merge: true }
           );
         } catch {
