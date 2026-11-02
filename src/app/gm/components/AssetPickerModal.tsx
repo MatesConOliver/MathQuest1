@@ -11,6 +11,12 @@ import {
   Check,
   Image as ImageIcon,
 } from 'lucide-react';
+import {
+  saveCloudAsset,
+  listCloudAssets,
+  countCloudAssets,
+  mergeAssets,
+} from '@/lib/gmAssets';
 
 interface AssetFile {
   name: string;
@@ -64,13 +70,14 @@ export function AssetPickerModal({
   const loadFiles = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/gm/assets?folder=${encodeURIComponent(activeFolder)}`);
-      const data = await res.json();
-      if (data.success) {
-        setFiles(data.files || []);
-      }
-    } catch {
-      // quiet fail
+      const [localResult, cloudResult] = await Promise.allSettled([
+        fetch(`/api/gm/assets?folder=${encodeURIComponent(activeFolder)}`).then((r) => r.json()),
+        listCloudAssets(activeFolder),
+      ]);
+      const local: AssetFile[] =
+        localResult.status === 'fulfilled' && localResult.value.success ? localResult.value.files || [] : [];
+      const cloud = cloudResult.status === 'fulfilled' ? cloudResult.value : [];
+      setFiles(mergeAssets(local, cloud));
     } finally {
       setIsLoading(false);
     }
@@ -80,9 +87,11 @@ export function AssetPickerModal({
     try {
       const res = await fetch('/api/gm/assets?action=summary');
       const data = await res.json();
-      if (data.success) {
-        setFolderSummary(data.summary || {});
-      }
+      const local: Record<string, number> = data.success ? data.summary || {} : {};
+      const cloud = await countCloudAssets(Object.keys(local));
+      const merged: Record<string, number> = { ...local };
+      for (const k of Object.keys(cloud)) merged[k] = (merged[k] || 0) + cloud[k];
+      setFolderSummary(merged);
     } catch {
       // quiet fail
     }
@@ -102,22 +111,14 @@ export function AssetPickerModal({
 
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('folder', activeFolder);
-
-      const res = await fetch('/api/gm/assets', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.success) {
-        loadFiles();
-        loadSummary();
-        // Automatically select the freshly uploaded asset!
-        onSelectAsset(data.file.path);
-        onClose();
-      }
+      const base = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_\-\s]/g, '').trim() || 'asset';
+      const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')).toLowerCase() : '.png';
+      const saved = await saveCloudAsset(activeFolder, `${base}${ext}`, file);
+      loadFiles();
+      loadSummary();
+      // Automatically select the freshly uploaded asset!
+      onSelectAsset(saved.path);
+      onClose();
     } catch {
       // quiet fail
     } finally {

@@ -1,5 +1,6 @@
 'use client';
 
+import { listCloudAssets, mergeAssets } from '@/lib/gmAssets';
 import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -65,13 +66,16 @@ export function SpecialFightsPanel() {
   const loadBrowserFiles = async () => {
     setBrowserLoading(true);
     try {
-      const res = await fetch(`/api/gm/assets?folder=${encodeURIComponent(activeBrowserFolder)}`);
-      const data = await res.json();
-      if (data.success && Array.isArray(data.files)) {
-        setBrowserFiles(data.files);
-      } else {
-        setBrowserFiles([]);
-      }
+      const [localResult, cloudResult] = await Promise.allSettled([
+        fetch(`/api/gm/assets?folder=${encodeURIComponent(activeBrowserFolder)}`).then((r) => r.json()),
+        listCloudAssets(activeBrowserFolder),
+      ]);
+      const local =
+        localResult.status === 'fulfilled' && localResult.value.success && Array.isArray(localResult.value.files)
+          ? localResult.value.files
+          : [];
+      const cloud = cloudResult.status === 'fulfilled' ? cloudResult.value : [];
+      setBrowserFiles(mergeAssets(local, cloud));
     } catch (err) {
       console.error('Error fetching assets for browser:', err);
       setBrowserFiles([]);

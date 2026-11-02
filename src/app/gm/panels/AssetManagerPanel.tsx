@@ -1,8 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { storage } from '@/lib/firebase';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import {
+  saveCloudAsset,
+  listCloudAssets,
+  deleteCloudAsset,
+  countCloudAssets,
+  mergeAssets,
+} from '@/lib/gmAssets';
 import {
   Folder,
   FolderOpen,
@@ -40,6 +45,7 @@ interface AssetFile {
   modifiedAt: string;
   isImage: boolean;
   extension: string;
+  source?: 'cloud' | 'local';
 }
 
 export function AssetManagerPanel() {
@@ -63,7 +69,7 @@ export function AssetManagerPanel() {
   const [error, setError] = useState<string | null>(null);
 
   // Storage Target: 'local' (/public) or 'cloud' (Firebase Storage)
-  const [storageDestination, setStorageDestination] = useState<'cloud' | 'local'>('local');
+  const [storageDestination, setStorageDestination] = useState<'cloud' | 'local'>('cloud');
 
   // Upload State
   const [isUploading, setIsUploading] = useState(false);
@@ -129,15 +135,7 @@ export function AssetManagerPanel() {
 
       let iconPath = '';
       if (storageDestination === 'cloud') {
-        try {
-          const cloudPath = `Assets/Icons/${filename}`;
-          const fileRef = storageRef(storage, cloudPath);
-          await uploadBytes(fileRef, optimizedFile);
-          iconPath = await getDownloadURL(fileRef);
-        } catch (cloudErr) {
-          console.warn('Firebase Storage upload failed, falling back to compact Base64 Data URL:', cloudErr);
-          iconPath = base64DataUrl;
-        }
+        iconPath = base64DataUrl;
       } else {
         try {
           const formData = new FormData();
@@ -231,23 +229,9 @@ export function AssetManagerPanel() {
     }
   };
 
-  // Upload to Firebase Storage helper with strict timeout to prevent endless hanging
-  const uploadToFirebaseStorage = async (file: File, filename: string): Promise<string> => {
-    const cloudPath = `${activeFolder}/${filename}`;
-    const fileRef = storageRef(storage, cloudPath);
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(
-        () =>
-          reject(
-            new Error(
-              'Firebase Cloud Storage upload timed out (10s). Use the "Local Filesystem" option or verify Firebase Storage bucket configuration.'
-            )
-          ),
-        10000
-      )
-    );
-    await Promise.race([uploadBytes(fileRef, file), timeoutPromise]);
-    return await getDownloadURL(fileRef);
+  // Save to Firestore as a compact data URL (same mechanism as system icons)
+  const saveToCloud = async (file: File, filename: string): Promise<AssetFile> => {
+    return saveCloudAsset(activeFolder, filename, file);
   };
 
   // Fetch file list for current folder
@@ -255,15 +239,19 @@ export function AssetManagerPanel() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/gm/assets?folder=${encodeURIComponent(activeFolder)}`);
-      const data = await res.json();
-      if (data.success) {
-        setFiles(data.files || []);
-      } else {
-        setError(data.error || 'Failed to load assets');
+      const [localResult, cloudResult] = await Promise.allSettled([
+        fetch(`/api/gm/assets?folder=${encodeURIComponent(activeFolder)}`).then((r) => r.json()),
+        listCloudAssets(activeFolder),
+      ]);
+      const local: AssetFile[] =
+        localResult.status === 'fulfilled' && localResult.value.success
+          ? (localResult.value.files || []).map((f: AssetFile) => ({ ...f, source: 'local' as const }))
+          : [];
+      const cloud = cloudResult.status === 'fulfilled' ? cloudResult.value : [];
+      if (localResult.status === 'rejected' && cloudResult.status === 'rejected') {
+        setError('Network error while loading files');
       }
-    } catch {
-      setError('Network error while loading files');
+      setFiles(mergeAssets(local, cloud));
     } finally {
       setIsLoading(false);
     }
@@ -274,9 +262,11 @@ export function AssetManagerPanel() {
     try {
       const res = await fetch('/api/gm/assets?action=summary');
       const data = await res.json();
-      if (data.success) {
-        setFolderSummary(data.summary || {});
-      }
+      const local: Record<string, number> = data.success ? data.summary || {} : {};
+      const cloud = await countCloudAssets(Object.keys(local));
+      const merged: Record<string, number> = { ...local };
+      for (const k of Object.keys(cloud)) merged[k] = (merged[k] || 0) + cloud[k];
+      setFolderSummary(merged);
     } catch {
       // Quiet fail for summary
     }
@@ -326,26 +316,19 @@ export function AssetManagerPanel() {
     if (!safeBaseName) safeBaseName = 'asset';
     const finalFilename = safeBaseName.endsWith(originalExt) ? safeBaseName : `${safeBaseName}${originalExt}`;
 
+    const finishCloudUpload = (asset: AssetFile, message: string) => {
+      setUploadSuccess(message);
+      setFiles((prev) => [asset, ...prev.filter((f) => f.name !== finalFilename)]);
+      setSelectedUploadFile(null);
+      setCustomFileName('');
+      setPreviewDataUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      loadSummary();
+    };
+
     try {
       if (storageDestination === 'cloud') {
-        // Direct Firebase Storage Upload
-        const downloadUrl = await uploadToFirebaseStorage(selectedUploadFile, finalFilename);
-        setUploadSuccess(`Uploaded to Firebase Cloud Storage!`);
-        // Add to active view
-        const newAsset: AssetFile = {
-          name: finalFilename,
-          path: downloadUrl,
-          size: selectedUploadFile.size,
-          sizeFormatted: formatBytes(selectedUploadFile.size),
-          modifiedAt: new Date().toISOString(),
-          isImage: true,
-          extension: originalExt,
-        };
-        setFiles((prev) => [newAsset, ...prev.filter((f) => f.name !== finalFilename)]);
-        setSelectedUploadFile(null);
-        setCustomFileName('');
-        setPreviewDataUrl(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        finishCloudUpload(await saveToCloud(selectedUploadFile, finalFilename), 'Saved to the cloud database!');
       } else {
         // Attempt local public directory upload
         const formData = new FormData();
@@ -370,77 +353,38 @@ export function AssetManagerPanel() {
           loadFiles();
           loadSummary();
         } else if (data.isReadOnly) {
-          // Seamless auto-fallback to Firebase Storage when serverless container has read-only filesystem!
-          try {
-            const downloadUrl = await uploadToFirebaseStorage(selectedUploadFile, finalFilename);
-            setUploadSuccess(`Read-only server detected — auto-saved to Firebase Storage!`);
-            const newAsset: AssetFile = {
-              name: finalFilename,
-              path: downloadUrl,
-              size: selectedUploadFile.size,
-              sizeFormatted: formatBytes(selectedUploadFile.size),
-              modifiedAt: new Date().toISOString(),
-              isImage: true,
-              extension: originalExt,
-            };
-            setFiles((prev) => [newAsset, ...prev.filter((f) => f.name !== finalFilename)]);
-            setSelectedUploadFile(null);
-            setCustomFileName('');
-            setPreviewDataUrl(null);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-          } catch (storageErr) {
-            const msg = storageErr instanceof Error ? storageErr.message : 'Storage upload failed';
-            if (msg.includes('permission') || msg.includes('unauthorized')) {
-              setError(
-                `Firebase Cloud Storage write permission denied. In Firebase Console → Storage → Rules, ensure GM email (oliveru1996@gmail.com) is authorized or click the "🛡️ Firebase Rules" button at top.`
-              );
-            } else {
-              setError(msg);
-            }
-          }
+          finishCloudUpload(
+            await saveToCloud(selectedUploadFile, finalFilename),
+            'Read-only server detected — saved to the cloud database instead!'
+          );
         } else {
           setError(data.error || 'Upload failed');
         }
       }
     } catch (err: unknown) {
-      // In case of any network/CORS error uploading to local, try Firebase Storage
-      try {
-        const downloadUrl = await uploadToFirebaseStorage(selectedUploadFile, finalFilename);
-        setUploadSuccess(`Auto-fallback: Uploaded to Firebase Cloud Storage!`);
-        const newAsset: AssetFile = {
-          name: finalFilename,
-          path: downloadUrl,
-          size: selectedUploadFile.size,
-          sizeFormatted: formatBytes(selectedUploadFile.size),
-          modifiedAt: new Date().toISOString(),
-          isImage: true,
-          extension: originalExt,
-        };
-        setFiles((prev) => [newAsset, ...prev.filter((f) => f.name !== finalFilename)]);
-        setSelectedUploadFile(null);
-        setCustomFileName('');
-        setPreviewDataUrl(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      } catch (cloudErr: unknown) {
-        const msg = cloudErr instanceof Error ? cloudErr.message : 'Upload failed';
-        if (msg.includes('permission') || msg.includes('unauthorized')) {
-          setError(
-            `Firebase Cloud Storage write permission denied. Please publish storage.rules in Firebase Console (click "🛡️ Firebase Rules" button).`
-          );
-        } else {
-          setError(msg);
-        }
-      }
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      setError(
+        msg.includes('permission') || msg.includes('Missing or insufficient')
+          ? 'Cloud database write permission denied. Make sure you are signed in as the GM account.'
+          : msg
+      );
     } finally {
       setIsUploading(false);
     }
   };
 
   // Delete file
-  const handleDelete = async (fileName: string) => {
+  const handleDelete = async (file: AssetFile) => {
+    const fileName = file.name;
     if (!confirm(`Are you sure you want to delete ${fileName} from ${activeFolder}?`)) return;
 
     try {
+      if (file.source === 'cloud') {
+        await deleteCloudAsset(activeFolder, fileName);
+        loadFiles();
+        loadSummary();
+        return;
+      }
       const res = await fetch(
         `/api/gm/assets?folder=${encodeURIComponent(activeFolder)}&filename=${encodeURIComponent(fileName)}`,
         { method: 'DELETE' }
@@ -449,11 +393,13 @@ export function AssetManagerPanel() {
       if (data.success) {
         loadFiles();
         loadSummary();
+      } else if (data.isReadOnly) {
+        alert(`${fileName} is bundled with the deployed app and can't be deleted from the live site. Remove it from the repo's public/ folder and redeploy.`);
       } else {
         alert(data.error || 'Could not delete file');
       }
     } catch {
-      alert('Network error while deleting');
+      alert('Could not delete file');
     }
   };
 
@@ -907,7 +853,7 @@ export function AssetManagerPanel() {
                   : 'text-gray-600 dark:text-gray-400 hover:text-white'
               }`}
             >
-              <Cloud className="w-3.5 h-3.5" /> Firebase Cloud
+              <Cloud className="w-3.5 h-3.5" /> Cloud (recommended)
             </button>
             <button
               type="button"
@@ -1196,7 +1142,7 @@ export function AssetManagerPanel() {
                   </button>
 
                   <button
-                    onClick={() => handleDelete(file.name)}
+                    onClick={() => handleDelete(file)}
                     className="p-1.5 rounded-lg text-gray-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
                     title="Delete file"
                   >
@@ -1249,7 +1195,7 @@ export function AssetManagerPanel() {
             <div className="flex items-center justify-between border-b border-gray-800 pb-3">
               <div>
                 <h4 className="text-sm font-black text-white">{inspectImage.name}</h4>
-                <p className="text-[11px] text-gray-400 font-mono">{inspectImage.path}</p>
+                <p className="text-[11px] text-gray-400 font-mono">{inspectImage.path.startsWith('data:') ? `Cloud asset (${inspectImage.name})` : inspectImage.path}</p>
               </div>
               <button
                 onClick={() => setInspectImage(null)}

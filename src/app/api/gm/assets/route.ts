@@ -203,6 +203,12 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: `Deleted ${filename}` });
   } catch (err: unknown) {
+    if ((err as { code?: string })?.code === 'EROFS') {
+      return NextResponse.json(
+        { success: false, isReadOnly: true, error: 'Read-only filesystem: bundled assets cannot be deleted at runtime.' },
+        { status: 403 }
+      );
+    }
     const message = err instanceof Error ? err.message : 'Delete failed';
     return NextResponse.json({ success: false, error: message }, { status: 400 });
   }
