@@ -102,6 +102,18 @@ function createProcessedTransparentCanvas(
   try {
     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imgData.data;
+
+    // Sprites that already have real transparency (cutouts) must be left untouched,
+    // otherwise legitimate white/dark details (e.g. eyes) get punched out.
+    let hasTransparency = false;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] < 250) {
+        hasTransparency = true;
+        break;
+      }
+    }
+    if (hasTransparency) return canvas;
+
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
