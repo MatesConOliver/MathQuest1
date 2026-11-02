@@ -33,14 +33,14 @@ export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain,
             <div className="font-bold text-yellow-800 dark:text-yellow-200 uppercase text-xs tracking-wider mb-2 text-center">Rewards</div>
             <div className="flex justify-between items-center px-2">
                 <span className="font-bold text-gray-600 dark:text-gray-400">XP Gained</span>
-                <span className="font-bold text-blue-600 dark:text-blue-400 text-lg flex items-center gap-1">
-                  <GameIcon name="xp" fallback="⭐" size="xs" /> +{xpReward}
+                <span className="font-bold text-blue-600 dark:text-blue-400 text-lg flex items-center gap-1.5">
+                  <GameIcon name="xp" fallback="⭐" size="md" /> +{xpReward}
                 </span>
             </div>
             <div className="flex justify-between items-center px-2">
                 <span className="font-bold text-gray-600 dark:text-gray-400">Gold Found</span>
-                <span className="font-bold text-yellow-600 dark:text-yellow-400 text-lg flex items-center gap-1">
-                  <GameIcon name="gold" fallback="🪙" size="xs" /> +{goldReward}
+                <span className="font-bold text-yellow-600 dark:text-yellow-400 text-lg flex items-center gap-1.5">
+                  <GameIcon name="gold" fallback="🪙" size="md" /> +{goldReward}
                 </span>
             </div>
             {skillGains && Object.keys(skillGains).length > 0 && (
@@ -61,7 +61,7 @@ export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain,
               <div className="font-bold text-yellow-800 dark:text-yellow-200 uppercase text-xs tracking-wider mb-2">Level Up Bonuses</div>
               <div className="flex justify-between items-center px-4">
                 <span className="font-bold text-gray-600 dark:text-gray-400">Max Health</span>
-                <span className="font-black text-green-600 dark:text-green-400 text-xl flex items-center gap-1.5">+{hpGain} <GameIcon name="hp" fallback="💚" size="sm" /></span>
+                <span className="font-black text-green-600 dark:text-green-400 text-xl flex items-center gap-1.5">+{hpGain} <GameIcon name="hp" fallback="💚" size="md" /></span>
               </div>
               <div className="flex justify-between items-center px-4 bg-yellow-100 dark:bg-yellow-800/30 rounded-lg py-2">
                 <span className="font-bold text-gray-700 dark:text-gray-300">Upgrade Points</span>

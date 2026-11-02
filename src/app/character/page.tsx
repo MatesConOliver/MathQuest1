@@ -66,24 +66,24 @@ function ItemStatsTooltip({ def, isFirstRow }: { def: GameItem; isFirstRow?: boo
           </span></div>
         )}
 
-        {s.maxHp?.flat && <div className="flex items-center gap-1"><GameIcon name="hp" fallback="❤️" size="xs" /> Max HP: <span className="text-pink-300 font-bold">+{s.maxHp.flat}</span></div>}
+        {s.maxHp?.flat && <div className="flex items-center gap-1.5"><GameIcon name="hp" fallback="❤️" size="sm" /> Max HP: <span className="text-pink-300 font-bold">+{s.maxHp.flat}</span></div>}
         {s.maxHp?.mult && (
-          <div className="flex items-center gap-1"><GameIcon name="hp" fallback="❤️" size="xs" /> Max HP: <span className="text-pink-300 font-bold">
+          <div className="flex items-center gap-1.5"><GameIcon name="hp" fallback="❤️" size="sm" /> Max HP: <span className="text-pink-300 font-bold">
             +{Math.round((s.maxHp.mult > 1 ? s.maxHp.mult - 1 : s.maxHp.mult) * 100)}%
           </span></div>
         )}
 
-        {s.heal?.flat && <div className="flex items-center gap-1"><GameIcon name="potion" fallback="🧪" size="xs" /> Restores: <span className="text-green-300 font-bold">{s.heal.flat} HP</span></div>}
+        {s.heal?.flat && <div className="flex items-center gap-1.5"><GameIcon name="potion" fallback="🧪" size="sm" /> Restores: <span className="text-green-300 font-bold">{s.heal.flat} HP</span></div>}
         {s.heal?.mult && (
-          <div className="flex items-center gap-1"><GameIcon name="potion" fallback="🧪" size="xs" /> Restores: <span className="text-green-300 font-bold">
+          <div className="flex items-center gap-1.5"><GameIcon name="potion" fallback="🧪" size="sm" /> Restores: <span className="text-green-300 font-bold">
             +{Math.round((s.heal.mult > 1 ? s.heal.mult - 1 : s.heal.mult) * 100)}% HP
           </span></div>
         )}
 
-        {s.time?.flat && <div className="flex items-center gap-1"><GameIcon name="timer" fallback="⏳" size="xs" /> Time: <span className="text-yellow-300 font-bold">+{s.time.flat}s</span></div>}
+        {s.time?.flat && <div className="flex items-center gap-1.5"><GameIcon name="timer" fallback="⏳" size="sm" /> Time: <span className="text-yellow-300 font-bold">+{s.time.flat}s</span></div>}
         {/* Fixed: 1.05 represents a +5% increase */}
         {s.time?.mult && (
-          <div className="flex items-center gap-1"><GameIcon name="timer" fallback="⏳" size="xs" /> Time: <span className="text-yellow-300 font-bold">
+          <div className="flex items-center gap-1.5"><GameIcon name="timer" fallback="⏳" size="sm" /> Time: <span className="text-yellow-300 font-bold">
             +{Math.round((s.time.mult > 1 ? s.time.mult - 1 : s.time.mult) * 100)}%
           </span></div>
         )}
@@ -315,7 +315,7 @@ function EquipRow({ slotName, slotKey, equippedId, gameItems, inventory, onUnequ
           {def?.imageUrl ? (
             <img src={def.imageUrl} alt={def.name} className="w-full h-full object-cover" />
           ) : slotKey === "mainHand" ? (
-            <GameIcon name="fight" fallback="⚔️" size="lg" className="opacity-50" />
+            <GameIcon name="fight" fallback="⚔️" size="xl" className="opacity-50" />
           ) : (
             <span className="text-xl opacity-50">{slotIcons[slotKey] || "📦"}</span>
           )}
@@ -900,15 +900,15 @@ export default function CharacterPage() {
         </div>
 
         <div className="flex flex-col items-end gap-2">
-          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500 flex items-center gap-1.5">
-            <GameIcon name="gold" fallback="🪙" size="md" /> {char.gold} G
+          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500 flex items-center gap-2">
+            <GameIcon name="gold" fallback="🪙" size="xl" /> {char.gold} G
           </div>
           <nav aria-label="Page navigation" className="flex flex-wrap justify-end gap-2">
             <Link href="/map" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">
-              <GameIcon name="map" fallback="🗺️" size="xs" /> Map
+              <GameIcon name="map" fallback="🗺️" size="sm" /> Map
             </Link>
             <Link href="/" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">
-              <GameIcon name="home" fallback="🏠" size="xs" /> Main menu
+              <GameIcon name="home" fallback="🏠" size="sm" /> Main menu
             </Link>
           </nav>
         </div>
@@ -1069,8 +1069,8 @@ export default function CharacterPage() {
 
           {/* EQUIPPED GEAR SECTION */}
           <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4">
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <GameIcon name="fight" fallback="⚔️" size="sm" /> Equipped Gear
+            <h2 className="text-xl font-bold flex items-center gap-2.5">
+              <GameIcon name="fight" fallback="⚔️" size="md" /> Equipped Gear
             </h2>
             <div className="space-y-2">
             <EquipRow slotName="Main Hand" slotKey="mainHand" equippedId={char.equipment?.mainHand} gameItems={gameItems} inventory={char.inventory} onUnequip={() => handleUnequip('mainHand')} />
@@ -1087,8 +1087,8 @@ export default function CharacterPage() {
             {/* BACKPACK INVENTORY */}
             <div className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 h-fit transition-colors">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold flex items-center gap-2">
-                      <GameIcon name="inventory" fallback="🎒" size="sm" /> Backpack ({char.inventory.length})
+                    <h2 className="text-xl font-bold flex items-center gap-2.5">
+                      <GameIcon name="inventory" fallback="🎒" size="md" /> Backpack ({char.inventory.length})
                     </h2>
                 </div>
                 

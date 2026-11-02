@@ -676,8 +676,8 @@ function MapContent() {
                       {isRedeeming ? "Checking..." : "Redeem"}
                     </button>
                   </form>
-                  <Link href="/character" className={topActionClass}><GameIcon name="character" fallback="🦉" size="sm" className="mr-1.5" />Character</Link>
-                  <Link href="/" className={topActionClass}><GameIcon name="home" fallback="🏠" size="sm" className="mr-1.5" />Home</Link>
+                  <Link href="/character" className={topActionClass}><GameIcon name="character" fallback="🦉" size="md" className="mr-1.5" />Character</Link>
+                  <Link href="/" className={topActionClass}><GameIcon name="home" fallback="🏠" size="md" className="mr-1.5" />Home</Link>
                 </div>
                 {codeMessage && <p role="status" aria-live="polite" className="text-sm font-medium text-yellow-300">{codeMessage}</p>}
               </div>
@@ -833,8 +833,8 @@ function MapContent() {
 
               {/* Quick Nav Links */}
               <div className="flex items-center gap-2 shrink-0">
-                <Link href="/character" className={topActionClass}><GameIcon name="character" fallback="🦉" size="sm" className="mr-1.5" />Character</Link>
-                <Link href="/" className={topActionClass}><GameIcon name="home" fallback="🏠" size="sm" className="mr-1.5" />Home</Link>
+                <Link href="/character" className={topActionClass}><GameIcon name="character" fallback="🦉" size="md" className="mr-1.5" />Character</Link>
+                <Link href="/" className={topActionClass}><GameIcon name="home" fallback="🏠" size="md" className="mr-1.5" />Home</Link>
               </div>
             </div>
 

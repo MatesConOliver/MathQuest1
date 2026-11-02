@@ -245,16 +245,16 @@ function ShopContent() {
 
         {/* Right: Gold Purse & Character Link */}
         <div className="flex items-center gap-3 shrink-0">
-          <div className="px-3 py-1 rounded-lg bg-black/60 border border-amber-400/30 text-amber-300 font-mono text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-sm">
-            <GameIcon name="gold" fallback="🪙" size="sm" />
+          <div className="px-3 py-1 rounded-lg bg-black/60 border border-amber-400/30 text-amber-300 font-mono text-xs sm:text-sm font-bold flex items-center gap-2 shadow-sm">
+            <GameIcon name="gold" fallback="🪙" size="md" />
             <span>{character?.gold ?? 0}</span>
             <span className="text-[10px] text-amber-400/70 font-sans uppercase">Gold</span>
           </div>
           <Link
             href="/character"
-            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-medium border border-white/10 transition-colors flex items-center gap-1.5"
+            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-medium border border-white/10 transition-colors flex items-center gap-2"
           >
-            <GameIcon name="character" fallback="🦉" size="xs" /> Character
+            <GameIcon name="character" fallback="🦉" size="sm" /> Character
           </Link>
         </div>
       </header>
@@ -307,7 +307,7 @@ function ShopContent() {
                         )}
                       </div>
                       <span className={`text-[10px] font-mono font-bold flex items-center gap-1 ${canAfford ? 'text-amber-300' : 'text-gray-500'}`}>
-                        <GameIcon name="gold" fallback="🪙" size="xs" /> {item.price}
+                        <GameIcon name="gold" fallback="🪙" size="sm" /> {item.price}
                       </span>
                     </div>
                     <p className="text-xs font-bold truncate text-white">{item.name}</p>
@@ -335,8 +335,8 @@ function ShopContent() {
                     <p className="text-xs text-gray-400 uppercase font-mono mt-0.5">
                       {selectedItem.type} {selectedItem.slot ? `· Slot: ${selectedItem.slot}` : ''}
                     </p>
-                    <p className="text-xs font-mono font-bold text-amber-300 mt-1 flex items-center gap-1">
-                      <GameIcon name="gold" fallback="🪙" size="xs" /> {selectedItem.price} Gold
+                    <p className="text-xs font-mono font-bold text-amber-300 mt-1 flex items-center gap-1.5">
+                      <GameIcon name="gold" fallback="🪙" size="md" /> {selectedItem.price} Gold
                     </p>
                   </div>
                 </div>
@@ -369,7 +369,7 @@ function ShopContent() {
                     : 'bg-white/5 text-gray-500 border border-white/10 cursor-not-allowed'
                 }`}
               >
-                <span className="flex items-center gap-1.5"><GameIcon name="gold" fallback="🪙" size="xs" /> {selectedItem.price} G</span>
+                <span className="flex items-center gap-1.5"><GameIcon name="gold" fallback="🪙" size="sm" /> {selectedItem.price} G</span>
                 <span>{canAffordSelected ? '— Acquire Ware' : '— Not Enough Gold'}</span>
               </button>
             </div>

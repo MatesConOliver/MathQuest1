@@ -48,8 +48,8 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
                       {enc.questionTag}
                     </span>
                     {winCount > 0 && (
-                        <span className="text-xs font-bold text-green-500 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                            <GameIcon name="victory" fallback="🏆" size="xs" /> {winCount}
+                        <span className="text-xs font-bold text-green-500 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded-full inline-flex items-center gap-1.5">
+                            <GameIcon name="victory" fallback="🏆" size="sm" /> {winCount}
                         </span>
                     )}
                 </div>
@@ -59,13 +59,13 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Rewards</h4>
                     {canSeeRewards ? (
                         <div className="text-sm text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                            <span className="inline-flex items-center gap-1">
-                              <GameIcon name="xp" fallback="⭐" size="xs" />
+                            <span className="inline-flex items-center gap-1.5">
+                              <GameIcon name="xp" fallback="⭐" size="sm" />
                               <span>XP:</span>
                               <span className="text-purple-600 dark:text-purple-400 font-bold">+{enc.winRewardXp || 0}</span>
                             </span>
-                            <span className="inline-flex items-center gap-1">
-                              <GameIcon name="gold" fallback="🪙" size="xs" />
+                            <span className="inline-flex items-center gap-1.5">
+                              <GameIcon name="gold" fallback="🪙" size="sm" />
                               <span>Gold:</span>
                               <span className="text-yellow-600 dark:text-yellow-400 font-bold">+{enc.winRewardGold || 0}</span>
                             </span>

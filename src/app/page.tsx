@@ -254,7 +254,7 @@ export default function HomePage() {
               className={`p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl transition ${needsToName ? 'opacity-50 pointer-events-none' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
             >
               <div className="mb-1 flex justify-center">
-                <GameIcon name="character" fallback="🦉" size="xl" />
+                <GameIcon name="character" fallback="🦉" size="2xl" />
               </div>
               <div className="font-bold text-gray-900 dark:text-gray-200">Character</div>
             </Link>
