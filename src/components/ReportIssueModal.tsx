@@ -110,7 +110,7 @@ export function ReportIssueModal({
         {/* Header */}
         <div className="px-5 py-4 border-b border-gray-800 bg-gray-800/60 flex justify-between items-center">
           <div className="flex items-center gap-2.5">
-            <span className="text-2xl">🚩</span>
+            <GameIcon name="bounty" fallback="🎁" size="md" />
             <div>
               <h3 className="font-black text-base text-amber-300">Flag & Report Issue</h3>
               <p className="text-[11px] text-gray-400">Help improve MathQuest • Bounty rewards awarded by GM</p>
@@ -127,7 +127,7 @@ export function ReportIssueModal({
         {/* Form Body */}
         {success ? (
           <div className="p-8 text-center space-y-3">
-            <div className="text-5xl animate-bounce">🎁</div>
+            <GameIcon name="bounty" fallback="🎁" size="3xl" className="animate-bounce mx-auto" />
             <h4 className="text-lg font-black text-emerald-400">Report Successfully Submitted!</h4>
             <p className="text-xs text-gray-300 max-w-md mx-auto leading-relaxed">
               Thank you for reporting! The Game Master reviews flagged questions. If a typo or answer mistake is
@@ -222,7 +222,7 @@ export function ReportIssueModal({
                   </>
                 ) : (
                   <>
-                    <span>🚩</span>
+                    <GameIcon name="bounty" fallback="🎁" size="xs" />
                     <span>Submit Report</span>
                   </>
                 )}

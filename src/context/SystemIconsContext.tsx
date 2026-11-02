@@ -50,6 +50,13 @@ export const SYSTEM_ICON_DEFINITIONS: SystemIconDef[] = [
     description: 'Coin purses, item pricing, reward displays, and treasury counters',
   },
   {
+    key: 'bounty',
+    name: 'Question Report / Bounty',
+    category: 'economy',
+    defaultEmoji: '🎁',
+    description: 'Question reporting actions and bounty reward indicators',
+  },
+  {
     key: 'fight',
     name: 'Fight / Battle',
     category: 'combat',
@@ -462,4 +469,3 @@ export function useSystemIcons(): SystemIconsContextType {
   }
   return context;
 }
-
