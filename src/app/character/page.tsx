@@ -292,11 +292,11 @@ function EquipRow({ slotName, slotKey, equippedId, gameItems, inventory, onUnequ
   const isWeaponSlot = slotKey === "mainHand" || slotKey === "offHand";
   const isBroken = isWeaponSlot && instance && (instance.maxDurability || 0) > 0 && (instance.durability || 0) <= 0;
 
-  const slotIcons: Record<string, string> = {
-    mainHand: "⚔️",
-    offHand: "🛡️",
-    armor: "🥋",
-    head: "👑",
+  const slotIcons: Record<string, { name: string; fallback: string }> = {
+    mainHand: { name: "equippedMainHand", fallback: "⚔️" },
+    offHand: { name: "equippedOffHand", fallback: "🛡️" },
+    armor: { name: "equippedArmor", fallback: "🥋" },
+    head: { name: "equippedHead", fallback: "👑" },
   };
 
   return (
@@ -314,10 +314,13 @@ function EquipRow({ slotName, slotKey, equippedId, gameItems, inventory, onUnequ
         <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-700/60 border border-gray-200 dark:border-gray-600 shrink-0 flex items-center justify-center overflow-hidden shadow-inner">
           {def?.imageUrl ? (
             <img src={def.imageUrl} alt={def.name} className="w-full h-full object-cover" />
-          ) : slotKey === "mainHand" ? (
-            <GameIcon name="fight" fallback="⚔️" size="xl" className="opacity-50" />
           ) : (
-            <span className="text-xl opacity-50">{slotIcons[slotKey] || "📦"}</span>
+            <GameIcon
+              name={slotIcons[slotKey]?.name || "inventory"}
+              fallback={slotIcons[slotKey]?.fallback || "📦"}
+              size="xl"
+              className="opacity-50"
+            />
           )}
         </div>
 
@@ -1070,7 +1073,7 @@ export default function CharacterPage() {
           {/* EQUIPPED GEAR SECTION */}
           <section className="bg-white dark:bg-gray-800 dark:text-gray-100 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4">
             <h2 className="text-xl font-bold flex items-center gap-2.5">
-              <img src="/Assets/General/others/Bagpack.png" alt="" className="w-7 h-7 object-contain" /> Equipped Gear
+              <GameIcon name="equippedGear" fallback="🎒" size="md" /> Equipped Gear
             </h2>
             <div className="space-y-2">
             <EquipRow slotName="Main Hand" slotKey="mainHand" equippedId={char.equipment?.mainHand} gameItems={gameItems} inventory={char.inventory} onUnequip={() => handleUnequip('mainHand')} />
