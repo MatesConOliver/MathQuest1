@@ -231,9 +231,7 @@ function CircularTimer({ timeLeft, totalTime }: { timeLeft: number; totalTime: n
           {timeStr}
         </span>
       </div>
-      <div className="text-[10px] uppercase font-black tracking-wider text-gray-300 leading-tight">
-        Time<br /><span className="text-gray-400 font-semibold">Limit</span>
-      </div>
+      <GameIcon name="timer" fallback="⏳" size="md" />
     </div>
   );
 }
@@ -526,10 +524,6 @@ export function BattleScreen(props: BattleScreenProps) {
               {/* MODE 1: POKEMON COMMAND MENU (FIGHT / BAG / SKIP / RUN) */}
               {!showAnswers && !isPaused && (
                 <div className="flex flex-col h-full justify-between gap-2">
-                  <div className="shrink-0 flex justify-between items-center pb-1 border-b border-gray-800">
-                    <span className="text-xs font-black text-yellow-400 uppercase tracking-wider">Battle Commands:</span>
-                    <span className="text-[10px] text-gray-400 font-bold">Choose action</span>
-                  </div>
                   <div className="grid grid-cols-2 gap-2 sm:gap-2.5 flex-1 items-stretch">
                     {/* 1. FIGHT / ANSWER (Primary yellow button) */}
                     <button
@@ -538,17 +532,15 @@ export function BattleScreen(props: BattleScreenProps) {
                     >
                       <GameIcon name="fight" fallback="⚔️" size="xl" />
                       <span className="text-xs sm:text-sm tracking-wider uppercase font-black">Answer</span>
-                      <span className="text-[10px] text-gray-800 font-semibold">Choose Option</span>
                     </button>
 
-                    {/* 2. BAG / OBJECTS */}
+                    {/* 2. BACKPACK */}
                     <button
                       onClick={() => setShowInventory(true)}
                       className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 sm:py-3 px-3 rounded-xl shadow-md border border-slate-600 transition-transform hover:scale-[1.01] active:scale-95 flex flex-col items-center justify-center gap-0.5"
                     >
                       <GameIcon name="inventory" fallback="🎒" size="xl" />
-                      <span className="text-xs sm:text-sm tracking-wider uppercase font-bold">Objects</span>
-                      <span className="text-[10px] text-gray-400 font-normal">Gear & Items</span>
+                      <span className="text-xs sm:text-sm tracking-wider uppercase font-bold">Backpack</span>
                     </button>
 
                     {/* 3. SKIP TURN */}
@@ -573,8 +565,7 @@ export function BattleScreen(props: BattleScreenProps) {
               {/* MODE 2: MULTIPLE CHOICE OPTIONS (A, B, C, D) - CRISP, FRAMED IMAGES & READABLE MATH */}
               {showAnswers && !isPaused && (
                 <div className="flex flex-col h-full overflow-hidden">
-                  <div className="shrink-0 flex justify-between items-center mb-1.5 pb-1 border-b border-gray-800">
-                    <span className="text-xs font-black text-yellow-400 uppercase tracking-wider">Select Option:</span>
+                  <div className="shrink-0 flex justify-start items-center mb-1.5 pb-1 border-b border-gray-800">
                     <button
                       onClick={() => setShowAnswers(false)}
                       className="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-bold py-1 px-3 rounded-lg border border-gray-700 transition-colors flex items-center gap-1 active:scale-95"
@@ -910,11 +901,11 @@ function ObjectsModal({
   onUse: (item: InventoryItem) => void;
   onClose: () => void;
 }) {
-  const equipSlots: Array<{ key: 'mainHand' | 'offHand' | 'armor' | 'head'; label: string; icon: string }> = [
-    { key: 'mainHand', label: 'Main Hand', icon: '⚔️' },
-    { key: 'offHand', label: 'Off Hand', icon: '🛡️' },
-    { key: 'armor', label: 'Armor', icon: '🥋' },
-    { key: 'head', label: 'Head', icon: '👑' },
+  const equipSlots: Array<{ key: 'mainHand' | 'offHand' | 'armor' | 'head'; label: string; icon: string; iconName: string }> = [
+    { key: 'mainHand', label: 'Main Hand', icon: '⚔️', iconName: 'equippedMainHand' },
+    { key: 'offHand', label: 'Off Hand', icon: '🛡️', iconName: 'equippedOffHand' },
+    { key: 'armor', label: 'Armor', icon: '🥋', iconName: 'equippedArmor' },
+    { key: 'head', label: 'Head', icon: '👑', iconName: 'equippedHead' },
   ];
 
   // Helper: detect consumable potions / food
@@ -959,11 +950,8 @@ function ObjectsModal({
           <div>
             <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2">
               <GameIcon name="inventory" fallback="🎒" size="md" />
-              <span>Objects & Equipment</span>
+              <span>Gear & Items</span>
             </h2>
-            <p className="text-[11px] text-gray-400">
-              Equipped gear is fixed during battle. Use potions and consumables from your bag.
-            </p>
           </div>
           <button
             onClick={onClose}
@@ -976,16 +964,16 @@ function ObjectsModal({
         {/* 2-Column Content */}
         <div className="p-4 sm:p-5 overflow-y-auto custom-scrollbar flex-1 grid grid-cols-1 md:grid-cols-2 gap-5 min-h-0">
           
-          {/* LEFT COLUMN: EQUIPPED GEAR (FIXED DURING BATTLE) */}
+          {/* LEFT COLUMN: EQUIPPED GEAR (LOCKED DURING BATTLE) */}
           <div className="space-y-3">
             <div className="flex justify-between items-center pb-1.5 border-b border-gray-800">
               <h3 className="text-sm font-black uppercase tracking-wider text-yellow-400 flex items-center gap-1.5">
-                <GameIcon name="fight" fallback="⚔️" size="xs" />
+                <GameIcon name="equippedGear" fallback="🎒" size="xs" />
                 <span>Equipped Gear</span>
               </h3>
               <span className="text-[10px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
                 <GameIcon name="lock" fallback="🔒" size="xs" />
-                <span>Fixed in Battle</span>
+                <span>Locked during battle</span>
               </span>
             </div>
 
@@ -1004,7 +992,7 @@ function ObjectsModal({
                       key={slot.key}
                       className="p-3 rounded-xl bg-gray-800/30 border border-dashed border-gray-700/70 flex items-center gap-3 text-gray-500"
                     >
-                      <span className="text-2xl opacity-40">{slot.icon}</span>
+                      <GameIcon name={slot.iconName} fallback={slot.icon} size="xl" className="opacity-50" />
                       <div>
                         <div className="text-[10px] font-black uppercase tracking-wider text-gray-400">
                           {slot.label}
@@ -1030,7 +1018,7 @@ function ObjectsModal({
                         {def.imageUrl ? (
                           <img src={def.imageUrl} alt={def.name} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-xl">{slot.icon}</span>
+                          <GameIcon name={slot.iconName} fallback={slot.icon} size="xl" className="opacity-50" />
                         )}
                       </div>
 
@@ -1091,10 +1079,6 @@ function ObjectsModal({
                   </div>
                 );
               })}
-            </div>
-
-            <div className="p-2.5 rounded-lg bg-gray-800/40 border border-gray-700/60 text-[10px] text-gray-400 text-center">
-              Gear setup is locked during encounters. Swap or repair gear anytime in the Character page.
             </div>
           </div>
 
@@ -1171,7 +1155,7 @@ function ObjectsModal({
             {otherItems.length > 0 && (
               <div className="pt-3 border-t border-gray-800 space-y-2">
                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <span>✨</span> Other Bag Items
+                  <GameIcon name="inventory" fallback="🎒" size="xs" /> Other Bag Items
                 </div>
                 <div className="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1">
                   {otherItems.map((item) => {
@@ -1183,7 +1167,11 @@ function ObjectsModal({
                         className="p-2 rounded-lg bg-gray-800/50 border border-gray-700/50 flex items-center justify-between text-xs"
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-sm">📦</span>
+                          {gameItem.imageUrl ? (
+                            <img src={gameItem.imageUrl} alt={gameItem.name} className="w-6 h-6 rounded object-cover shrink-0" />
+                          ) : (
+                            <GameIcon name="inventory" fallback="📦" size="sm" />
+                          )}
                           <span className="font-semibold text-gray-300 truncate">{gameItem.name}</span>
                         </div>
                         <span className="text-[10px] text-gray-500 uppercase font-mono shrink-0">
@@ -1221,7 +1209,6 @@ function EscapeConfirm({ onConfirm, onCancel }: { onConfirm: () => void; onCance
           <GameIcon name="escape" fallback="🏃" size="2xl" />
         </div>
         <h2 className="text-2xl font-black">Flee Battle?</h2>
-        <p className="text-xs text-gray-300">You will retreat to the map. Any potions consumed will remain spent.</p>
         <div className="flex justify-around gap-3 pt-2">
           <button
             onClick={onConfirm}
