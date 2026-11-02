@@ -1206,7 +1206,7 @@ function EscapeConfirm({ onConfirm, onCancel }: { onConfirm: () => void; onCance
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
       <div className="bg-gray-900 border-2 border-red-500/50 rounded-2xl p-6 w-full max-w-sm text-center text-white shadow-2xl space-y-4">
         <div className="flex justify-center">
-          <GameIcon name="escape" fallback="🏃" size={112} />
+          <GameIcon name="escape" fallback="🏃" size="2xl" />
         </div>
         <h2 className="text-2xl font-black">Flee Battle?</h2>
         <div className="flex justify-around gap-3 pt-2">
