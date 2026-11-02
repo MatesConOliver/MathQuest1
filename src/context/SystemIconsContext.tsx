@@ -71,6 +71,13 @@ export const SYSTEM_ICON_DEFINITIONS: SystemIconDef[] = [
     description: 'Battle objects button, inventory bag triggers, and item slots',
   },
   {
+    key: 'foeAttack',
+    name: 'Foe Attack Damage',
+    category: 'combat',
+    defaultEmoji: '⚔️',
+    description: 'Enemy attack damage stat shown in foe stats (battle intro)',
+  },
+  {
     key: 'equippedGear',
     name: 'Equipped Gear',
     category: 'combat',

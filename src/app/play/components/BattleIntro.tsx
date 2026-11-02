@@ -70,7 +70,7 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
                         <GameIcon name="hp" fallback="❤️" size="sm" /> {foe?.maxHp || 50}
                       </span>
                       <span className="text-red-600 dark:text-red-400 inline-flex items-center gap-1.5">
-                        <GameIcon name="fight" fallback="⚔️" size="sm" /> {foe?.attackDamage || 5}
+                        <GameIcon name="foeAttack" fallback="⚔️" size="sm" /> {foe?.attackDamage || 5}
                       </span>
                     </div>
                 </div>
