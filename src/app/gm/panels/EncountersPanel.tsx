@@ -20,22 +20,47 @@ import { compareStoreItems } from "@/lib/itemSorting";
 import { Input } from "@/app/gm/components/Input";
 import { SPECIAL_FIGHTS_LIST } from "@/app/play/components/specialFights/registry";
 import SpecialFightModal from "@/app/play/components/specialFights/SpecialFightModal";
-import { Swords, Sparkles, Store, ShoppingBag } from "lucide-react";
+import { Swords, Sparkles, Store, ShoppingBag, MapPin, Filter } from "lucide-react";
 
 export function EncountersPanel() {
     const [encounters, setEncounters] = useState<EncounterDoc[]>([]);
     const [locations, setLocations] = useState<GameLocation[]>([]);
-    const [subAreas, setSubAreas] = useState<SubArea[]>([]);
+    const [allSubAreas, setAllSubAreas] = useState<SubArea[]>([]);
     const [foes, setFoes] = useState<FoeDoc[]>([]);
     const [availableItems, setAvailableItems] = useState<GameItem[]>([]);
     const [msg, setMsg] = useState("");
     const [editingId, setEditingId] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
+    const [filterLocationId, setFilterLocationId] = useState<string>("all");
     const [isTestModalOpen, setIsTestModalOpen] = useState(false);
 
-    const visibleEncounters = encounters.filter(e => 
-      e.title.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Helper: Resolve encounter location ID directly or via its subArea
+    const getEncounterLocationId = (enc: EncounterDoc) => {
+      if (enc.locationId) return enc.locationId;
+      return allSubAreas.find(sa => sa.id === enc.subAreaId)?.locationId || "";
+    };
+
+    const unassignedCount = encounters.filter(e => !getEncounterLocationId(e)).length;
+
+    const visibleEncounters = encounters.filter(e => {
+      // 1. Location dropdown filter
+      if (filterLocationId !== "all") {
+        const encLocId = getEncounterLocationId(e);
+        if (filterLocationId === "unassigned") {
+          if (encLocId) return false;
+        } else {
+          if (encLocId !== filterLocationId) return false;
+        }
+      }
+
+      // 2. Search keyword filter
+      if (!searchTerm.trim()) return true;
+      const term = searchTerm.toLowerCase();
+      return (
+        e.title.toLowerCase().includes(term) ||
+        (e.id && e.id.toLowerCase().includes(term))
+      );
+    });
   
     // --- FORM STATE ---
     const [encounterType, setEncounterType] = useState<'battle' | 'shop'>('battle');
@@ -60,6 +85,11 @@ export function EncountersPanel() {
     const [selectedLocationId, setSelectedLocationId] = useState("");
     const [selectedSubAreaId, setSelectedSubAreaId] = useState("");
 
+    // SubAreas available for the form based on selected location
+    const formSubAreas = selectedLocationId
+      ? allSubAreas.filter(sa => sa.locationId === selectedLocationId)
+      : [];
+
     // Skill Rewards
     const [rewardAlgebra, setRewardAlgebra] = useState(0);
     const [rewardFunctions, setRewardFunctions] = useState(0);
@@ -67,13 +97,15 @@ export function EncountersPanel() {
     const [rewardStats, setRewardStats] = useState(0);
     const [rewardCalculus, setRewardCalculus] = useState(0);
 
-  
     useEffect(() => {
         const unsub = onSnapshot(query(collection(db, "encounters"), orderBy("title")), (snap) => {
             setEncounters(snap.docs.map(d => ({ ...d.data(), id: d.id } as EncounterDoc)));
         });
         const unsubLocs = onSnapshot(query(collection(db, "locations"), orderBy("order")), (snap) => {
             setLocations(snap.docs.map(d => ({ ...d.data(), id: d.id } as GameLocation)));
+        });
+        const unsubSubAreas = onSnapshot(query(collection(db, "subAreas"), orderBy("order")), (snap) => {
+            setAllSubAreas(snap.docs.map(d => ({ ...d.data(), id: d.id } as SubArea)));
         });
         const unsubFoes = onSnapshot(collection(db, "foes"), (snap) => {
             setFoes(snap.docs.map(d => ({ ...d.data(), id: d.id } as FoeDoc)));
@@ -83,22 +115,8 @@ export function EncountersPanel() {
             loaded.sort(compareStoreItems);
             setAvailableItems(loaded);
         });
-        return () => { unsub(); unsubLocs(); unsubFoes(); unsubItems(); };
+        return () => { unsub(); unsubLocs(); unsubSubAreas(); unsubFoes(); unsubItems(); };
     }, []);
-
-    useEffect(() => {
-        if (!selectedLocationId) {
-            setSubAreas([]);
-            return;
-        }
-        const unsub = onSnapshot(
-            query(collection(db, "subAreas"), where("locationId", "==", selectedLocationId), orderBy("order")),
-            (snap) => {
-                setSubAreas(snap.docs.map(d => ({ ...d.data(), id: d.id } as SubArea)));
-            }
-        );
-        return () => unsub();
-    }, [selectedLocationId]);
   
     function resetForm() {
       setEditingId(""); setTitle(""); setDesc("");
@@ -133,7 +151,7 @@ export function EncountersPanel() {
       setTimeMult(enc.timeMultiplier !== undefined ? enc.timeMultiplier : 1.0);
       setOrder(enc.order || 0);
       
-      const subAreaLocationId = subAreas.find(sa => sa.id === enc.subAreaId)?.locationId;
+      const subAreaLocationId = allSubAreas.find(sa => sa.id === enc.subAreaId)?.locationId;
       setSelectedLocationId(enc.locationId || subAreaLocationId || ""); 
 
       setTimeout(() => {
@@ -298,7 +316,7 @@ export function EncountersPanel() {
               <label className="label">Sub-Area</label>
               <select value={selectedSubAreaId} onChange={(e: ChangeEvent<HTMLSelectElement>) => setSelectedSubAreaId(e.target.value)} className="input" disabled={!selectedLocationId}>
                 <option value="">Select Sub-Area...</option>
-                {subAreas.map(sa => <option key={sa.id} value={sa.id}>{sa.name}</option>)}
+                {formSubAreas.map(sa => <option key={sa.id} value={sa.id}>{sa.name}</option>)}
               </select>
             </div>
           </div>
@@ -517,18 +535,76 @@ export function EncountersPanel() {
           </div>
         </div>
   
-        <div className="space-y-4 border-l dark:border-gray-700 pl-4">
+        <div className="space-y-3.5 border-l dark:border-gray-700 pl-4">
+          {/* LOCATION FILTER DROPDOWN */}
+          <div className="space-y-1.5 bg-gray-50 dark:bg-gray-800/60 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                <span>Filter Encounters by Location:</span>
+              </label>
+              {filterLocationId !== "all" && (
+                <button
+                  type="button"
+                  onClick={() => setFilterLocationId("all")}
+                  className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-bold"
+                >
+                  Show All ({encounters.length})
+                </button>
+              )}
+            </div>
+
+            <select
+              value={filterLocationId}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setFilterLocationId(e.target.value)}
+              className="input w-full text-xs font-semibold bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
+            >
+              <option value="all">🗺️ All Locations ({encounters.length})</option>
+              {locations.map((loc) => {
+                const count = encounters.filter(
+                  (e) => getEncounterLocationId(e) === loc.id
+                ).length;
+                return (
+                  <option key={loc.id} value={loc.id}>
+                    📍 {loc.name} ({count})
+                  </option>
+                );
+              })}
+              {unassignedCount > 0 && (
+                <option value="unassigned">⚠️ Unassigned / Legacy ({unassignedCount})</option>
+              )}
+            </select>
+          </div>
+
+          {/* SEARCH INPUT */}
           <Input 
               className="w-full text-sm" 
-              placeholder="🔍 Filter Encounters..." 
+              placeholder="🔍 Search encounters by title/ID..." 
               value={searchTerm} 
               onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)} 
           />
-          <h3 className="label-sm">Existing Encounters</h3>
-          <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
-              {visibleEncounters.map(enc => {
-                  const subArea = subAreas.find(sa => sa.id === enc.subAreaId);
-                  const location = locations.find(l => l.id === enc.locationId || l.id === subArea?.locationId);
+
+          {/* LIST HEADER WITH COUNTER */}
+          <div className="flex items-center justify-between pt-1">
+            <h3 className="label-sm flex items-center gap-1.5">
+              <span>Existing Encounters</span>
+              <span className="text-xs font-mono text-gray-400 font-normal">
+                ({visibleEncounters.length}{filterLocationId !== 'all' || searchTerm ? ` of ${encounters.length}` : ''})
+              </span>
+            </h3>
+            {filterLocationId !== 'all' && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[140px]">
+                {filterLocationId === 'unassigned' ? 'Unassigned' : locations.find((l) => l.id === filterLocationId)?.name || 'Filtered'}
+              </span>
+            )}
+          </div>
+
+          {/* ENCOUNTERS LIST */}
+          <div className="space-y-2 max-h-[580px] overflow-y-auto pr-2 custom-scrollbar">
+              {visibleEncounters.length > 0 ? (
+                visibleEncounters.map(enc => {
+                  const subArea = allSubAreas.find(sa => sa.id === enc.subAreaId);
+                  const location = locations.find(l => l.id === (enc.locationId || subArea?.locationId));
                   return (
                       <div 
                           key={enc.id} 
@@ -548,14 +624,23 @@ export function EncountersPanel() {
                                   </span>
                                 )}
                               </div>
-                              <div className="text-xs text-gray-400 font-mono">{location?.name} &gt; {subArea?.name || `(${enc.subAreaId || 'Legacy'})`}</div>
+                              <div className="text-xs text-gray-400 font-mono">
+                                {location?.name || "No Location"} &gt; {subArea?.name || `(${enc.subAreaId || 'Legacy'})`}
+                              </div>
                           </div>
                           <button onClick={(e: MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); if (enc.id) deleteEnc(enc.id); }} className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs font-bold px-2 ml-2">
                               DEL
                           </button>
                       </div>
-                  )
-              })}
+                  );
+                })
+              ) : (
+                <div className="p-6 text-center text-xs text-gray-400 italic bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
+                  {filterLocationId !== 'all' 
+                    ? `No encounters found in ${locations.find(l => l.id === filterLocationId)?.name || 'this location'}.` 
+                    : 'No encounters found matching your filter.'}
+                </div>
+              )}
           </div>
         </div>
 
