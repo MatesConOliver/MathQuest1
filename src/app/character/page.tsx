@@ -869,7 +869,36 @@ export default function CharacterPage() {
         const currentHp = (char as any).hp ?? char.maxHp;
         const healFlat = def.stats?.heal?.flat || 0;
         const healMult = def.stats?.heal?.mult || 0;
-        const healAmt = (healFlat > 0 || healMult > 0)
+        const hasHeal = healFlat > 0 || healMult > 0;
+
+        const hasCombatBuffs = Boolean(
+          (def.stats?.a || 0) !== 0 ||
+          (def.stats?.b || 0) !== 0 ||
+          (def.stats?.c || 0) !== 0 ||
+          (def.stats?.d || 0) !== 0 ||
+          (def.stats?.xBonus || 0) !== 0 ||
+          (def.stats?.damage?.mult || 0) > 0 ||
+          (def.stats?.time?.flat || 0) !== 0 ||
+          (def.stats?.time?.mult || 0) !== 0 ||
+          (def.stats?.maxHp?.flat || 0) !== 0 ||
+          (def.stats?.maxHp?.mult || 0) !== 0
+        );
+
+        // If it ONLY provides combat buffs without healing, protect it from being wasted outside combat
+        if (hasCombatBuffs && !hasHeal) {
+          setMsg(`⚔️ ${def.name} provides temporary combat buffs! Use it during battle.`);
+          setTimeout(() => setMsg(""), 3500);
+          return;
+        }
+
+        // If health is already full, avoid wasting the potion
+        if (currentHp >= derivedStats.maxHp) {
+          setMsg(hasCombatBuffs ? `⚔️ Health is already full! Save ${def.name} for battle buffs.` : "Health is already full!");
+          setTimeout(() => setMsg(""), 2500);
+          return;
+        }
+
+        const healAmt = hasHeal
           ? Math.round(healFlat + (derivedStats.maxHp * (healMult > 1 ? healMult - 1 : healMult)))
           : 20;
 

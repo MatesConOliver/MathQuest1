@@ -4,7 +4,7 @@ import { Character, FoeDoc, QuestionDoc, GameItem, InventoryItem, ContentBlock, 
 import { BlockMath, InlineMath } from 'react-katex';
 import React, { useState, useEffect } from "react";
 import { User } from "firebase/auth";
-import { CombatEffect } from "../hooks/useBattle";
+import { CombatEffect, CombatBuffs } from "../hooks/useBattle";
 import { SolutionModal } from "@/components/SolutionModal";
 import { getSpecialFightById } from "./specialFights/registry";
 import { GameIcon } from "@/components/GameIcon";
@@ -176,6 +176,7 @@ interface BattleScreenProps {
   isPhase2?: boolean;
   phase2SpeedPercent?: number;
   onCompleteSpecialFight?: (result: { success: boolean; message?: string }) => void;
+  combatBuffs?: CombatBuffs;
 }
 
 // CIRCULAR RING TIMER COMPONENT
@@ -245,6 +246,7 @@ function StatusPlate({
   level,
   isPhase2 = false,
   phase2SpeedPercent = 25,
+  combatBuffs,
 }: {
   name: string;
   hp: number;
@@ -253,9 +255,15 @@ function StatusPlate({
   level?: number;
   isPhase2?: boolean;
   phase2SpeedPercent?: number;
+  combatBuffs?: CombatBuffs;
 }) {
   const percent = Math.max(0, Math.min(100, (hp / (maxHp || 1)) * 100));
   const hpColor = percent > 50 ? 'bg-green-500' : percent > 20 ? 'bg-yellow-500' : 'bg-red-500 animate-pulse';
+
+  const hasBuffs = !isFoe && combatBuffs && (
+    combatBuffs.d !== 0 || combatBuffs.c !== 0 || combatBuffs.b !== 0 || combatBuffs.a !== 0 ||
+    combatBuffs.kBonus !== 0 || combatBuffs.xBonus !== 0 || combatBuffs.timeFlat !== 0
+  );
 
   return (
     <div className={`p-2.5 sm:p-3 rounded-2xl bg-black/80 backdrop-blur-md border ${
@@ -281,6 +289,46 @@ function StatusPlate({
         <span>{hp} / {maxHp}</span>
       </div>
 
+      {hasBuffs && combatBuffs && (
+        <div className="mt-1.5 flex flex-wrap gap-1 pt-1 border-t border-white/10">
+          {combatBuffs.d !== 0 && (
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-green-950/80 border border-green-500/50 text-green-300 font-bold font-mono">
+              🧪 D {combatBuffs.d > 0 ? '+' : ''}{combatBuffs.d}
+            </span>
+          )}
+          {combatBuffs.c !== 0 && (
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-950/80 border border-blue-500/50 text-blue-300 font-bold font-mono">
+              🧪 C {combatBuffs.c > 0 ? '+' : ''}{combatBuffs.c}
+            </span>
+          )}
+          {combatBuffs.b !== 0 && (
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-orange-950/80 border border-orange-500/50 text-orange-300 font-bold font-mono">
+              🧪 B {combatBuffs.b > 0 ? '+' : ''}{combatBuffs.b}
+            </span>
+          )}
+          {combatBuffs.a !== 0 && (
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-red-950/80 border border-red-500/50 text-red-300 font-bold font-mono">
+              🧪 A {combatBuffs.a > 0 ? '+' : ''}{combatBuffs.a}
+            </span>
+          )}
+          {combatBuffs.kBonus !== 0 && (
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-950/80 border border-purple-500/50 text-purple-300 font-bold font-mono">
+              🧪 DMG +{Math.round(combatBuffs.kBonus * 100)}%
+            </span>
+          )}
+          {combatBuffs.xBonus !== 0 && (
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-950/80 border border-indigo-500/50 text-indigo-300 font-bold font-mono">
+              🧪 X +{combatBuffs.xBonus}
+            </span>
+          )}
+          {combatBuffs.timeFlat !== 0 && (
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-yellow-950/80 border border-yellow-500/50 text-yellow-300 font-bold font-mono">
+              🧪 +{combatBuffs.timeFlat}s
+            </span>
+          )}
+        </div>
+      )}
+
       {isPhase2 && isFoe && (
         <div className="mt-1 flex items-center justify-between text-[10px] font-bold text-red-300 bg-red-950/80 px-2 py-0.5 rounded-md border border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse">
           <span>⚡ ENRAGED PHASE 2</span>
@@ -298,7 +346,8 @@ export function BattleScreen(props: BattleScreenProps) {
     isPaused, selectedChoice, gameItems, inventory, showInventory, setShowInventory, showEscapeConfirm,
     setShowEscapeConfirm, showSubquestionMenu, abandonGroupTurnCost, handleAnswer, nextQuestion, continueSubquestion, abandonGroup,
     skipQuestion, executeEscape, usePotion, subArea, locationOrder, locationName, combatEffect, user,
-    specialFightActive, activeSpecialFightId, isPhase2, phase2SpeedPercent, onCompleteSpecialFight
+    specialFightActive, activeSpecialFightId, isPhase2, phase2SpeedPercent, onCompleteSpecialFight,
+    combatBuffs
   } = props;
 
   const [showAnswers, setShowAnswers] = useState(false);
@@ -376,6 +425,7 @@ export function BattleScreen(props: BattleScreenProps) {
           hp={playerHp}
           maxHp={playerMaxHp}
           level={character?.level || 1}
+          combatBuffs={combatBuffs}
         />
 
         {/* Center: Turn Indicator & Circular Ring Timer */}
@@ -1099,9 +1149,15 @@ function ObjectsModal({
               {displayConsumables.length > 0 ? (
                 displayConsumables.map(({ item, quantity }) => {
                   const gameItem = gameItems[item.itemId];
-                  const healFlat = gameItem?.stats?.heal?.flat;
-                  const healMult = gameItem?.stats?.heal?.mult;
+                  const s = gameItem?.stats || {};
+                  const healFlat = s.heal?.flat;
+                  const healMult = s.heal?.mult;
+                  const hasBuffs = !!(
+                    s.a || s.b || s.c || s.d || s.xBonus || s.damage?.mult ||
+                    s.maxHp?.flat || s.maxHp?.mult || s.time?.flat || s.time?.mult
+                  );
                   const isHpFull = playerHp >= playerMaxHp;
+                  const canDrink = !isHpFull || hasBuffs;
 
                   return (
                     <div
@@ -1122,24 +1178,38 @@ function ObjectsModal({
                             <span className="text-yellow-400 font-mono text-xs">(x{quantity})</span>
                           </h4>
                           <p className="text-[11px] text-green-300 font-semibold mt-0.5">
-                            {healFlat ? `Restores +${healFlat} HP` : healMult ? `Restores +${Math.round(healMult * 100)}% HP` : 'Restores HP'}
+                            {healFlat ? `Restores +${healFlat} HP` : healMult ? `Restores +${Math.round(healMult * 100)}% HP` : hasBuffs ? 'Temporary Combat Buff' : 'Restores HP'}
                           </p>
+
+                          {/* Potion Stat Buff Badges */}
+                          {hasBuffs && (
+                            <div className="flex flex-wrap gap-1 mt-1 text-[9px]">
+                              {s.d ? <span className="px-1.5 py-0.5 rounded bg-green-950/70 border border-green-500/50 text-green-300 font-bold font-mono">D {s.d > 0 ? '+' : ''}{s.d}</span> : null}
+                              {s.c ? <span className="px-1.5 py-0.5 rounded bg-blue-950/70 border border-blue-500/50 text-blue-300 font-bold font-mono">C {s.c > 0 ? '+' : ''}{s.c}</span> : null}
+                              {s.b ? <span className="px-1.5 py-0.5 rounded bg-orange-950/70 border border-orange-500/50 text-orange-300 font-bold font-mono">B {s.b > 0 ? '+' : ''}{s.b}</span> : null}
+                              {s.a ? <span className="px-1.5 py-0.5 rounded bg-red-950/70 border border-red-500/50 text-red-300 font-bold font-mono">A {s.a > 0 ? '+' : ''}{s.a}</span> : null}
+                              {s.xBonus ? <span className="px-1.5 py-0.5 rounded bg-indigo-950/70 border border-indigo-500/50 text-indigo-300 font-bold font-mono">X +{s.xBonus}</span> : null}
+                              {s.damage?.mult ? <span className="px-1.5 py-0.5 rounded bg-purple-950/70 border border-purple-500/50 text-purple-300 font-bold font-mono">DMG +{Math.round(s.damage.mult * 100)}%</span> : null}
+                              {s.time?.flat ? <span className="px-1.5 py-0.5 rounded bg-yellow-950/70 border border-yellow-500/50 text-yellow-300 font-bold font-mono">+{s.time.flat}s Time</span> : null}
+                            </div>
+                          )}
+
                           {gameItem?.description && (
-                            <p className="text-[10px] text-gray-400 truncate max-w-xs">{gameItem.description}</p>
+                            <p className="text-[10px] text-gray-400 truncate max-w-xs mt-0.5">{gameItem.description}</p>
                           )}
                         </div>
                       </div>
 
                       <button
                         onClick={() => onUse(item)}
-                        disabled={isHpFull}
+                        disabled={!canDrink}
                         className={`font-bold py-1.5 px-4 rounded-xl text-xs transition-all active:scale-95 shrink-0 ${
-                          isHpFull
+                          !canDrink
                             ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-60'
                             : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg'
                         }`}
                       >
-                        {isHpFull ? 'Full HP' : 'Drink'}
+                        {!canDrink ? 'Full HP' : 'Drink'}
                       </button>
                     </div>
                   );

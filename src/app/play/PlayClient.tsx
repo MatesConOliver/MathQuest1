@@ -107,6 +107,7 @@ export default function PlayClient() {
           isPhase2={battle.isPhase2}
           phase2SpeedPercent={battle.currentEncounter?.phase2TimeSpeedPercent || 25}
           onCompleteSpecialFight={battle.handleSpecialFightComplete}
+          combatBuffs={battle.combatBuffs}
         />
       );
     case 'win':

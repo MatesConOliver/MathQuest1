@@ -21,6 +21,32 @@ export interface CombatEffect {
   isCorrect: boolean;
 }
 
+export interface CombatBuffs {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  xBonus: number;
+  kBonus: number;
+  timeFlat: number;
+  timeMult: number;
+  maxHpFlat: number;
+  maxHpMult: number;
+}
+
+export const initialCombatBuffs: CombatBuffs = {
+  a: 0,
+  b: 0,
+  c: 0,
+  d: 0,
+  xBonus: 0,
+  kBonus: 0,
+  timeFlat: 0,
+  timeMult: 0,
+  maxHpFlat: 0,
+  maxHpMult: 0,
+};
+
 interface UseBattleProps {
   user: User | null;
   character: Character | null;
@@ -121,6 +147,9 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   const [activeSpecialFightId, setActiveSpecialFightId] = useState<string | null>(null);
   const [isPhase2, setIsPhase2] = useState(false);
 
+  // Temporary cumulative potion combat buffs active for the current battle
+  const [combatBuffs, setCombatBuffs] = useState<CombatBuffs>(initialCombatBuffs);
+
   useEffect(() => {
     if (character?.inventory) {
       setBattleInventory(character.inventory);
@@ -138,14 +167,15 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     const baseD = character.stats?.d || 0;
     const baseHp = character.maxHp;
 
-    let totalA = baseA;
-    let totalB = baseB;
-    let totalC = baseC;
-    let totalD = baseD;
-    let totalXBonus = 0;
-    let totalK = 1;
-    let hpFlat = baseHp;
-    let hpMult = 0;
+    // Start with base stats + temporary cumulative combat potion buffs
+    let totalA = baseA + combatBuffs.a;
+    let totalB = baseB + combatBuffs.b;
+    let totalC = baseC + combatBuffs.c;
+    let totalD = baseD + combatBuffs.d;
+    let totalXBonus = combatBuffs.xBonus;
+    let totalK = 1 + combatBuffs.kBonus;
+    let hpFlat = baseHp + combatBuffs.maxHpFlat;
+    let hpMult = combatBuffs.maxHpMult;
 
     const inventoryToUse = battleInventory.length > 0 ? battleInventory : character.inventory;
 
@@ -188,7 +218,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       xBonus: totalXBonus,
       maxHp: finalMaxHp,
     };
-  }, [character, gameItems, battleInventory]);
+  }, [character, gameItems, battleInventory, combatBuffs]);
 
   // Inventory as it should appear during the current battle: potions already used
   // in this fight are hidden, without touching the persisted character/Firestore.
@@ -322,6 +352,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         }
 
         setConsumedPotionInstanceIds([]);
+        setCombatBuffs(initialCombatBuffs);
         setIsBattleOver(true);
         setMode('win');
 
@@ -388,6 +419,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         setCharacter(p => p ? ({ ...p, hp: battleStats.maxHp, gold: p.gold - goldLoss, inventory: finalInventory }) : null);
 
         setConsumedPotionInstanceIds([]);
+        setCombatBuffs(initialCombatBuffs);
         router.push('/play', { scroll: false });
         setMsg(finalReason);
         setIsBattleOver(true);
@@ -712,6 +744,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
           setLootDrops([]);
           setSkillGains(null);
           setConsumedPotionInstanceIds([]);
+          setCombatBuffs(initialCombatBuffs);
           setMode('intro');
         } catch (error) {
           console.error('Error setting up battle:', error);
@@ -929,6 +962,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         prev ? { ...prev, hp: playerHp, inventory: finalInventory } : null
       );
       setConsumedPotionInstanceIds([]);
+      setCombatBuffs(initialCombatBuffs);
       setMsg('You successfully escaped!');
       setIsEscaping(true);
       setIsBattleOver(true);
@@ -947,27 +981,73 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   const usePotion = (item: InventoryItem) => {
     if (!user || !character || !gameItems[item.itemId] || isPaused) return;
 
-    if (playerHp >= battleStats.maxHp) {
+    const potion = gameItems[item.itemId];
+    const s = potion.stats || {};
+
+    const hasHeal = !!(s.heal?.flat || s.heal?.mult);
+    const hasBuffs = !!(
+      s.a || s.b || s.c || s.d || s.xBonus || s.damage?.mult || 
+      s.maxHp?.flat || s.maxHp?.mult || s.time?.flat || s.time?.mult
+    );
+
+    // If potion ONLY heals (no buffs) and HP is already full, block it.
+    // If it has ANY combat buff, allow drinking even when at full HP!
+    if (!hasBuffs && playerHp >= battleStats.maxHp) {
       setMsg('HP is already full.');
       setTimeout(() => setMsg(''), 2000);
       return;
     }
 
-    const potion = gameItems[item.itemId];
-    const healFlat = potion.stats?.heal?.flat || 0;
-    const healMult = potion.stats?.heal?.mult || 0;
+    const healFlat = s.heal?.flat || 0;
+    const healMult = s.heal?.mult || 0;
     const healAmount = (healFlat > 0 || healMult > 0)
       ? Math.round(healFlat + (battleStats.maxHp * (healMult > 1 ? healMult - 1 : healMult)))
-      : 20;
+      : (hasBuffs ? 0 : 20);
+
     const newHp = Math.min(battleStats.maxHp, playerHp + healAmount);
 
     // Temporary, combat-only state: nothing is written to Firestore or to the
     // persisted character until the battle is consolidated (win/loss).
     setPlayerHp(newHp);
+
+    // Cumulative combat buffs (stacking across multiple potions)
+    if (hasBuffs) {
+      setCombatBuffs((prev) => ({
+        a: prev.a + (s.a || 0),
+        b: prev.b + (s.b || 0),
+        c: prev.c + (s.c || 0),
+        d: prev.d + (s.d || 0),
+        xBonus: prev.xBonus + (s.xBonus || 0),
+        kBonus: prev.kBonus + (s.damage?.mult || 0),
+        timeFlat: prev.timeFlat + (s.time?.flat || 0),
+        timeMult: prev.timeMult + (s.time?.mult || 0),
+        maxHpFlat: prev.maxHpFlat + (s.maxHp?.flat || 0),
+        maxHpMult: prev.maxHpMult + (s.maxHp?.mult || 0),
+      }));
+
+      // If potion has time bonus, add directly to current question timer
+      if (s.time?.flat) {
+        setTimeLeft((prev) => prev + (s.time?.flat || 0));
+      }
+    }
+
     setConsumedPotionInstanceIds((prev) => [...prev, item.instanceId]);
     setShowInventory(false);
-    setMsg(`Healed for ${healAmount} HP! (${newHp}/${battleStats.maxHp})`);
-    setTimeout(() => setMsg(''), 2500);
+
+    // Construct clear summary message of applied buffs and heal
+    const buffList: string[] = [];
+    if (healAmount > 0) buffList.push(`+${healAmount} HP`);
+    if (s.d) buffList.push(`D ${s.d > 0 ? '+' : ''}${s.d}`);
+    if (s.c) buffList.push(`C ${s.c > 0 ? '+' : ''}${s.c}`);
+    if (s.b) buffList.push(`B ${s.b > 0 ? '+' : ''}${s.b}`);
+    if (s.a) buffList.push(`A ${s.a > 0 ? '+' : ''}${s.a}`);
+    if (s.xBonus) buffList.push(`X +${s.xBonus}`);
+    if (s.damage?.mult) buffList.push(`DMG +${Math.round(s.damage.mult * 100)}%`);
+    if (s.time?.flat) buffList.push(`+${s.time.flat}s Time`);
+
+    const summary = buffList.length > 0 ? buffList.join(', ') : 'Restored health';
+    setMsg(`🧪 Drank ${potion.name}! (${summary})`);
+    setTimeout(() => setMsg(''), 3000);
   };
 
   return {
@@ -1019,5 +1099,6 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     activeSpecialFightId,
     isPhase2,
     handleSpecialFightComplete,
+    combatBuffs,
   };
 }
