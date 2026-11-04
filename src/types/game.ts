@@ -32,6 +32,7 @@ export interface GameItem {
   maxDurability?: number;
   inShop?: boolean;
   goldValue?: number; // Consuming/opening grants this amount of gold
+  order?: number; // Sorting order within its subgroup (default: 1)
 }
 
 export interface InventoryItem {

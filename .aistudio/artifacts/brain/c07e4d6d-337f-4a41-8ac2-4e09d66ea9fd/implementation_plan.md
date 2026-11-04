@@ -1,56 +1,56 @@
-# System Icons Manager & Universal Asset Replacement
+# Implementation Plan - Tab Visibility Audio & Variable Speed Timer Continuity
 
-A comprehensive icon management system that enables the Game Master to replace hardcoded game emojis (World Map, Character, Gold, Fight, Escape, Store, HP, XP, Potions, etc.) with custom visual assets, featuring client-side 128×128px image auto-optimization, a dedicated GM Assets panel, Firestore live persistence, and a universal `<GameIcon />` component.
+Mute/pause game sound effects and background music smoothly whenever the player switches away from the browser tab, and resume smoothly upon return, while ensuring in-game battle question timers continue ticking down accurately using wall-clock time scaled by any active speed multipliers (e.g. Special Fights and Phase 2 accelerated countdowns).
 
-## Implementation Status: COMPLETED ✅
+## User Review Required
 
-All architectural decisions and features have been fully implemented and verified with successful Next.js compilation and lint checks.
-
-| Feature / Component | Status | Details |
-| :--- | :---: | :--- |
-| **Client-Side Image Auto-Optimizer** (`src/lib/imageOptimizer.ts`) | ✅ Complete | Auto-resizes any upload to max 128×128px PNG with alpha transparency & high-quality smoothing |
-| **System Icons Real-Time Context** (`src/context/SystemIconsContext.tsx`) | ✅ Complete | Listens via Firestore `onSnapshot` to `system_settings/icons` with local cache fallback |
-| **Universal `<GameIcon />` Component** (`src/components/GameIcon.tsx`) | ✅ Complete | Renders custom sprite if available; gracefully falls back to default emoji with zero broken images |
-| **GM Asset Manager "System Icons" Hub** (`src/app/gm/panels/AssetManagerPanel.tsx`) | ✅ Complete | Category selector, search filter, auto-downscaling notification, live preview, 1-click upload & reset |
-| **Backend Asset Handler** (`src/app/api/gm/assets/route.ts`) | ✅ Complete | Supports `Assets/Icons` in summary counts, uploads, and file listings with safe path verification |
-| **Firestore Security Rules** (`firestore.rules`) | ✅ Complete | Unrestricted read for players (`allow read: if true;`), GM-only write for system icons (`isGM()`) |
-| **World & Area Map Integration** (`src/app/map/page.tsx`) | ✅ Complete | Replaced map, character, home, store, fight, xp, and gold emojis with `<GameIcon>` |
-| **Store & Merchant Outpost Integration** (`src/app/shop/page.tsx`) | ✅ Complete | Replaced store title, coin purse, character link, purchase CTA, and skeleton with `<GameIcon>` |
-| **Battle Commands & Combat Effects** (`src/app/play/components/BattleScreen.tsx`) | ✅ Complete | Replaced fight, objects bag, retreat/escape, weapon slash, and solution buttons with `<GameIcon>` |
-| **Victory & Defeat Screens** (`VictoryScreen.tsx`, `DefeatScreen.tsx`) | ✅ Complete | Replaced victory trophy, gold, xp, health bonus, defeat skull, and return buttons with `<GameIcon>` |
+> [!IMPORTANT]
+> - **Variable Speed & Special Fights**: Special fights and Phase 2 encounters have an added speed multiplier (`phase2TimeSpeedPercent`, e.g., +25% or higher), causing the timer to tick **faster** than 1 tick per second.
+> - **Wall-Clock Speed Scaling**: The background time tracking will multiply elapsed real-world milliseconds by the active speed factor (`1 + speedBonus / 100`), ensuring that even when a browser throttles background intervals, accelerated countdowns expire at the exact accelerated game speed.
+> - **Audio behavior**: BGM smoothly fades out over ~200ms and pauses upon switching tabs; smoothly unpauses and fades back in upon returning. SFX are completely suppressed while hidden.
 
 ---
 
-## 1. Catalog of Supported System Icons
+## Proposed Changes
 
-| Icon Key | Default Fallback | Category | Primary In-Game Usage |
-| :--- | :---: | :---: | :--- |
-| `map` | 🗺️ | Navigation | World Map header, top navigation, and return to map buttons |
-| `character` | 🦉 | Navigation | Character profile quick-links, stats sheet, equipment |
-| `home` | 🏠 | Navigation | Home button and main entrance links |
-| `shop` | 🏪 | Economy | Outpost store headers, merchant visit buttons, and shopping links |
-| `gold` | 🪙 | Economy | Coin purses, item pricing, reward displays, and treasury counters |
-| `fight` | ⚔️ | Combat | Battle encounter cards, fight CTA buttons, and attack commands |
-| `escape` | 🏃 | Combat | Battle retreat buttons, flee prompts, and escape confirmation modals |
-| `inventory` | 🎒 | Combat | Battle objects button, inventory bag triggers, and item slots |
-| `potion` | 🧪 | Combat | Healing potions, elixir triggers, and consumable slots |
-| `hp` | ❤️ | Status | Health bars, player/foe vitality indicators, and level-up HP bonuses |
-| `xp` | ⭐ | Status | XP bars, victory experience tallies, and progression badges |
-| `victory` | 🏆 | Status | Battle triumph screen banner, victory medals, and quest clears |
-| `defeat` | 💀 | Status | Battle defeat screen banner, combatant fallen notice, and revival prompts |
-| `lock` | 🔒 | Meta | Locked sub-area pins, sealed regions, and prerequisite gate indicators |
-| `hint` | 💡 | Meta | Ask for explanation buttons and question solution modals |
-| `timer` | ⏳ | Meta | Turn timers, speed challenges, and countdown clocks |
+### Audio Management (`src/context/AudioContext.tsx`)
+- Add a Page Visibility API listener (`document.addEventListener('visibilitychange', ...)`) inside `AudioProvider`.
+- Track tab visibility state with a ref (`isTabHiddenRef`) and music state (`wasPlayingOnHideRef`).
+- Add a smooth fade utility (`fadeVolume(from, to, durationMs, onComplete)`):
+  - **When tab is hidden (`document.hidden === true`)**:
+    - If music is actively playing, fade volume smoothly down to 0 over ~200ms, then call `.pause()`.
+    - Mark `isTabHiddenRef.current = true` so any sound effects (`playSfx`) or Web Audio synthesizers are suppressed while the player is on another tab.
+  - **When tab returns (`document.hidden === false`)**:
+    - Mark `isTabHiddenRef.current = false`.
+    - If `wasPlayingOnHideRef.current` was true, call `musicRef.current.play()` and ramp volume smoothly from 0 back up to the user's volume preference over ~200ms.
+- Clean up listeners and any running fade intervals on unmount.
+
+### Battle Timer with Variable Speed Scaling (`src/app/play/hooks/useBattle.ts`)
+- Replace rigid interval decrementing with timestamp-delta tracking that accounts for speed multipliers:
+  - Record `questionStartTimestamp` and baseline `initialQuestionTime`.
+  - Calculate `speedMultiplier = 1 + (speedBonus / 100)`.
+  - In each tick (and immediately upon tab re-focus via `visibilitychange`), compute:
+    `elapsedGameSeconds = Math.floor(((Date.now() - questionStartTimestamp) * speedMultiplier) / 1000)`
+    `remainingSeconds = Math.max(0, initialQuestionTime - elapsedGameSeconds)`
+  - If `remainingSeconds <= 0`, cleanly trigger timeout damage (`handleAnswer(-1)`).
+  - This guarantees 100% precision regardless of whether the timer runs at standard speed, 25% faster, 50% faster, or any custom special fight speed factor.
 
 ---
 
-## 2. Technical Summary
+## Verification Plan
 
-1. **Auto-Downscaling Guarantee**:
-   Uploaded images of any resolution (even 4K or 10MB camera uploads) are drawn onto an offscreen HTML5 canvas, downscaled with high-quality smoothing to fit within 128×128px, and encoded as a transparent PNG. Files end up between 5KB and 20KB, guaranteeing instant asset loading and zero frame drops.
+### Automated Tests
+- Run `compile_applet` to verify compilation and type checks.
+- Run `lint_applet` to verify zero linting regressions.
 
-2. **Zero Broken Image Fallback**:
-   `<GameIcon name="gold" fallback="🪙" />` attempts to load the custom asset. If an image error occurs or if no custom image is assigned in Firestore, it instantly renders the default emoji without shifting page layout.
-
-3. **Instant Live Updates**:
-   When a Game Master uploads or resets an icon in the GM panel, the change is written to `system_settings/icons` in Firestore. All active players receive the update in real-time via `onSnapshot` without needing to refresh their browsers.
+### Manual Verification
+1. **Audio Fade on Tab Switch**:
+   - Start background music.
+   - Switch away to another tab; verify the audio gently fades out and goes completely silent without any speaker pops.
+   - Return to the game tab; verify the audio gently fades back in from the exact moment it left off.
+2. **SFX Silencing**:
+   - Verify no level up or battle sounds trigger audibly in the background.
+3. **Standard Countdown Accuracy**:
+   - Switch tabs during a standard question for 5 seconds; verify the countdown has advanced by exactly 5 seconds upon return.
+4. **Accelerated Special Fight Countdown**:
+   - In a special fight / Phase 2 encounter with elevated speed (e.g. +25%), verify the timer burns through 1.25x game time for every real second elapsed while switched away, timing out fairly and accurately.

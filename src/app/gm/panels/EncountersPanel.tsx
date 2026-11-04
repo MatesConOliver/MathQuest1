@@ -16,6 +16,7 @@ import {
   where,
 } from "firebase/firestore";
 import { EncounterDoc, GameLocation, SubArea, FoeDoc, GameItem } from "@/types/game";
+import { compareStoreItems } from "@/lib/itemSorting";
 import { Input } from "@/app/gm/components/Input";
 import { SPECIAL_FIGHTS_LIST } from "@/app/play/components/specialFights/registry";
 import SpecialFightModal from "@/app/play/components/specialFights/SpecialFightModal";
@@ -78,7 +79,9 @@ export function EncountersPanel() {
             setFoes(snap.docs.map(d => ({ ...d.data(), id: d.id } as FoeDoc)));
         });
         const unsubItems = onSnapshot(collection(db, "items"), (snap) => {
-            setAvailableItems(snap.docs.map(d => ({ ...d.data(), id: d.id } as GameItem)));
+            const loaded = snap.docs.map(d => ({ ...d.data(), id: d.id } as GameItem));
+            loaded.sort(compareStoreItems);
+            setAvailableItems(loaded);
         });
         return () => { unsub(); unsubLocs(); unsubFoes(); unsubItems(); };
     }, []);

@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAudio } from "@/context/AudioContext";
 import Link from "next/link";
 import { GameIcon } from "@/components/GameIcon";
+import { compareStoreItems, getCategoryLabel, getCategoryIcon } from "@/lib/itemSorting";
 
 function ShopContent() {
   const { playTrack } = useAudio()!; 
@@ -84,6 +85,7 @@ function ShopContent() {
         const allowedSet = new Set(activeEncounter.shopItemIds);
         finalItems = loadedItems.filter(item => allowedSet.has(item.id));
       }
+      finalItems.sort(compareStoreItems);
       setItems(finalItems);
       if (finalItems.length > 0) {
         setSelectedItem(finalItems[0]);
@@ -285,34 +287,51 @@ function ShopContent() {
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-3 max-h-[420px] overflow-y-auto custom-scrollbar pr-1">
-              {items.map((item) => {
+              {items.map((item, idx) => {
+                const prevItem = idx > 0 ? items[idx - 1] : null;
+                const showCategoryHeader = !prevItem || prevItem.type !== item.type;
                 const isSelected = selectedItem?.id === item.id;
                 const canAfford = (character?.gold || 0) >= item.price;
                 return (
-                  <button
-                    key={item.id}
-                    onClick={() => setSelectedItem(item)}
-                    className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-amber-400/20 border-amber-400 text-white shadow-inner scale-[1.02]'
-                        : 'bg-black/50 border-white/10 text-gray-300 hover:border-white/30 hover:bg-black/70'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="w-8 h-8 rounded-lg bg-black/60 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
-                        {item.imageUrl ? (
-                          <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-base">📦</span>
-                        )}
+                  <div key={item.id} className="contents">
+                    {showCategoryHeader && (
+                      <div className="col-span-full pt-3 pb-1 first:pt-0 flex items-center justify-between border-b border-white/10 text-[11px] font-mono font-bold tracking-wider text-amber-300 uppercase">
+                        <span className="flex items-center gap-1.5">
+                          <span>{getCategoryIcon(item.type)}</span>
+                          <span>{getCategoryLabel(item.type)}</span>
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-mono lowercase">
+                          ({items.filter(i => i.type === item.type).length})
+                        </span>
                       </div>
-                      <span className={`text-[10px] font-mono font-bold flex items-center gap-1 ${canAfford ? 'text-amber-300' : 'text-gray-500'}`}>
-                        <GameIcon name="gold" fallback="🪙" size="sm" /> {item.price}
-                      </span>
-                    </div>
-                    <p className="text-xs font-bold truncate text-white">{item.name}</p>
-                    <p className="text-[10px] text-gray-400 uppercase truncate mt-0.5">{item.type}</p>
-                  </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedItem(item)}
+                      className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-amber-400/20 border-amber-400 text-white shadow-inner scale-[1.02]'
+                          : 'bg-black/50 border-white/10 text-gray-300 hover:border-white/30 hover:bg-black/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 rounded-lg bg-black/60 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-base">📦</span>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-mono font-bold flex items-center gap-1 ${canAfford ? 'text-amber-300' : 'text-gray-500'}`}>
+                          <GameIcon name="gold" fallback="🪙" size="sm" /> {item.price}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold truncate text-white">{item.name}</p>
+                      <p className="text-[10px] text-gray-400 uppercase truncate mt-0.5">
+                        {item.type} {item.slot ? `· ${item.slot}` : ''}
+                      </p>
+                    </button>
+                  </div>
                 );
               })}
             </div>

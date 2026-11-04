@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { User } from 'firebase/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -56,8 +56,14 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   const [msg, setMsg] = useState('');
   const [isBattleOver, setIsBattleOver] = useState(false);
 
-  const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
+  const timeLeftRef = useRef(timeLeft);
+  const lastQuestionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    timeLeftRef.current = timeLeft;
+  }, [timeLeft]);
+
   const totalTime = useMemo(
     () => currentQuestion?.timeLimit || 30,
     [currentQuestion]
@@ -825,23 +831,69 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       return;
     }
 
-    // Phase 2 timer speed: ticks faster if isPhase2 is active
+    // Phase 2 / special encounter timer speed multiplier (ticks faster if speedBonus > 0)
     const speedBonus = isPhase2 ? (currentEncounter?.phase2TimeSpeedPercent || 25) : 0;
-    const intervalMs = Math.max(200, Math.round(1000 / (1 + speedBonus / 100)));
+    const speedMultiplier = 1 + speedBonus / 100;
+    const tickIntervalMs = Math.max(100, Math.round(500 / speedMultiplier));
+
+    const isNewQuestion = currentQuestion.id !== lastQuestionIdRef.current;
+    lastQuestionIdRef.current = currentQuestion.id || null;
+    const startingSeconds = isNewQuestion ? (currentQuestion.timeLimit || 30) : timeLeftRef.current;
+    const startWallTime = Date.now();
+    let hasTimedOut = false;
+
+    const checkTime = () => {
+      if (hasTimedOut) return false;
+      const elapsedRealMs = Date.now() - startWallTime;
+      const elapsedGameSec = (elapsedRealMs * speedMultiplier) / 1000;
+      const remaining = Math.max(0, Math.ceil(startingSeconds - elapsedGameSec));
+
+      setTimeLeft(remaining);
+
+      if (remaining <= 0) {
+        hasTimedOut = true;
+        setTimeout(() => handleAnswer(-1), 0);
+        return false;
+      }
+      return true;
+    };
 
     const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setTimeout(() => handleAnswer(-1), 0);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, intervalMs);
+      const continueTicking = checkTime();
+      if (!continueTicking) {
+        clearInterval(interval);
+      }
+    }, tickIntervalMs);
 
-    return () => clearInterval(interval);
-  }, [mode, isPaused, currentQuestion, handleAnswer, isPhase2, currentEncounter?.phase2TimeSpeedPercent, specialFightActive]);
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        // Tab restored: immediately re-sync remaining time without waiting for throttled interval
+        const continueTicking = checkTime();
+        if (!continueTicking) {
+          clearInterval(interval);
+        }
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
+  }, [
+    mode,
+    isPaused,
+    currentQuestion,
+    handleAnswer,
+    isPhase2,
+    currentEncounter?.phase2TimeSpeedPercent,
+    specialFightActive
+  ]);
 
   const handleStartBattle = () => setMode('battle');
 

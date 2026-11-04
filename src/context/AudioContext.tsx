@@ -17,6 +17,7 @@ const AudioContext = createContext<AudioContextType | null>(null);
 
 // Fallback Web Audio synthesizer for instant, crisp RPG sound effects
 function playSynthesizedSfx(type: string) {
+  if (typeof document !== "undefined" && document.hidden) return;
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) return;
@@ -76,6 +77,44 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [currentTrack, setCurrentTrack] = useState<string>("");
   const [volume, setVolumeState] = useState<number>(0.3);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const wasPlayingBeforeHideRef = useRef(false);
+  const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Smooth volume transition helper
+  const fadeVolume = useCallback((targetVol: number, durationMs: number, onComplete?: () => void) => {
+    if (fadeIntervalRef.current) {
+      clearInterval(fadeIntervalRef.current);
+      fadeIntervalRef.current = null;
+    }
+    const audio = musicRef.current;
+    if (!audio) {
+      onComplete?.();
+      return;
+    }
+    const startVol = audio.volume;
+    const steps = 12;
+    const stepTime = Math.max(10, Math.floor(durationMs / steps));
+    let step = 0;
+
+    fadeIntervalRef.current = setInterval(() => {
+      step++;
+      const progress = Math.min(1, step / steps);
+      const current = startVol + (targetVol - startVol) * progress;
+      if (audio) {
+        audio.volume = Math.max(0, Math.min(1, current));
+      }
+      if (step >= steps) {
+        if (fadeIntervalRef.current) {
+          clearInterval(fadeIntervalRef.current);
+          fadeIntervalRef.current = null;
+        }
+        if (audio) {
+          audio.volume = Math.max(0, Math.min(1, targetVol));
+        }
+        onComplete?.();
+      }
+    }, stepTime);
+  }, []);
 
   // Restore volume preferences on mount
   useEffect(() => {
@@ -116,6 +155,53 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     });
   }, [volume]);
 
+  // Tab visibility listener: smooth fade out & pause on tab hide, smooth fade in & resume on return
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (typeof document === "undefined") return;
+      const audio = musicRef.current;
+
+      if (document.hidden) {
+        // Tab is hidden
+        if (audio && !audio.paused && audio.src && currentTrackRef.current) {
+          wasPlayingBeforeHideRef.current = true;
+          fadeVolume(0, 180, () => {
+            if (typeof document !== "undefined" && document.hidden && audio) {
+              audio.pause();
+            }
+          });
+        } else {
+          wasPlayingBeforeHideRef.current = false;
+        }
+      } else {
+        // Tab became visible again
+        if (audio && wasPlayingBeforeHideRef.current && currentTrackRef.current) {
+          wasPlayingBeforeHideRef.current = false;
+          audio.volume = 0;
+          const targetVol = isMuted ? 0 : volume;
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                fadeVolume(targetVol, 200);
+              })
+              .catch(() => {
+                // If autoplay policy deferred, global click/key listener will unlock
+              });
+          }
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (fadeIntervalRef.current) {
+        clearInterval(fadeIntervalRef.current);
+      }
+    };
+  }, [fadeVolume, isMuted, volume]);
+
   // Play Background Music (Loops)
   const playTrack = useCallback((url: string) => {
     if (!musicRef.current) return;
@@ -125,19 +211,30 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setCurrentTrack(url);
     musicRef.current.src = url;
     musicRef.current.volume = isMuted ? 0 : volume;
+
+    if (typeof document !== "undefined" && document.hidden) {
+      wasPlayingBeforeHideRef.current = true;
+      return;
+    }
+
     musicRef.current.play().catch(() => console.log("BGM waiting for interaction..."));
   }, [isMuted, volume]);
 
   const stopTrack = useCallback(() => {
+    wasPlayingBeforeHideRef.current = false;
+    if (fadeIntervalRef.current) {
+      clearInterval(fadeIntervalRef.current);
+      fadeIntervalRef.current = null;
+    }
     if (!musicRef.current || !currentTrackRef.current) return;
     musicRef.current.pause();
     currentTrackRef.current = "";
     setCurrentTrack("");
   }, []);
 
-  // Play Sound Effect with Web Audio fallback
+  // Play Sound Effect with Web Audio fallback (suppressed if tab is hidden)
   const playSfx = useCallback((url: string) => {
-    if (isMuted) return;
+    if (isMuted || (typeof document !== "undefined" && document.hidden)) return;
 
     // Check if it's a symbolic sfx or missing asset
     if (url.includes("upgrade") || url.includes("levelup") || url === "hit" || url === "attack" || url === "slash") {
@@ -160,6 +257,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   // Global unlocker for Background Music
   useEffect(() => {
     const unlockAudio = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       if (musicRef.current && musicRef.current.paused && currentTrack) {
         musicRef.current.play().catch(() => {});
       }
