@@ -502,7 +502,7 @@ export default function HomePage() {
                           setPinInput(e.target.value);
                           setPinError("");
                         }}
-                        placeholder="Enter PIN (e.g. CBA)"
+                        placeholder="Enter PIN"
                         className="input text-xs font-mono py-1.5"
                       />
                       <button
