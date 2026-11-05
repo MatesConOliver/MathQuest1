@@ -1,6 +1,6 @@
 {
-  "summary": "Revised implementation plan accounting for accelerated countdown speeds in special fights and phase 2 encounters during tab backgrounding, alongside audio fade transitions.",
-  "updatedAt": "2026-11-03T09:46:04.402046091Z",
+  "summary": "Revised implementation plan incorporating English warning text, renaming the backpack item to 'Achievement Log', and integrating the canonical PKM 18-byte CRC-32 + CRC-8 Base36 specification.",
+  "updatedAt": "2026-11-05T13:55:21.898472231Z",
   "requestFeedback": true,
   "userFacing": true
 }

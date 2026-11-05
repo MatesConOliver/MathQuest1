@@ -11,6 +11,8 @@ import { BlockMath } from 'react-katex';
 import Link from "next/link";
 import { HealthBar } from "@/app/play/components/shared/Bars";
 import { GameIcon } from "@/components/GameIcon";
+import { Copy, Check, X } from "lucide-react";
+import { ACHIEVEMENT_LOG_ITEM_ID, ensureAchievementLogItem } from "@/lib/pkm";
 
 // --- COMPONENTS ---
 
@@ -94,7 +96,19 @@ function ItemStatsTooltip({
     };
   }, [anchorRef, isOpen]);
 
-  const tooltipContent = (
+  const isAchievementLog = def.id === 'achievement_log' || def.name?.toLowerCase() === 'achievement log';
+
+  const tooltipContent = isAchievementLog ? (
+    <div>
+      <div className="font-bold border-b border-purple-500/40 pb-1 mb-1.5 text-purple-300 uppercase tracking-widest text-[10px] flex items-center gap-1.5">
+        <span>📜</span>
+        <span>{def.name}</span>
+      </div>
+      <p className="text-gray-200 text-xs leading-relaxed">
+        {def.description || "An official journal recording your earned Pokemáticos achievement reward codes."}
+      </p>
+    </div>
+  ) : (
     <>
       <div className="font-bold border-b border-gray-700 pb-1 mb-1.5 text-gray-300 uppercase tracking-widest text-[10px]">
         {def.name} Stats
@@ -181,12 +195,13 @@ const InventoryItemCard = ({
   const cardRef = useRef<HTMLDivElement>(null);
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   const isGoldPouch = item.itemId === 'gift_gold_bounty' || !!item.customData?.goldAmount || !!def.goldValue;
+  const isAchievementLog = item.itemId === 'achievement_log' || def.id === 'achievement_log' || def.name.toLowerCase() === 'achievement log';
   const goldAmount = item.customData?.goldAmount || def.goldValue || 100;
-  const displayName = item.customData?.title || def.name;
+  const displayName = isAchievementLog ? "Achievement Log" : (item.customData?.title || def.name);
 
   const isWeapon = def.slot === "mainHand" || def.slot === "offHand" || def.type === "weapon";
   const isBroken = isWeapon && (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
-  const isGear = def.slot || ["armor", "head", "mainHand", "offHand", "weapon", "shield"].includes(def.type as string);
+  const isGear = !isAchievementLog && (def.slot || ["armor", "head", "mainHand", "offHand", "weapon", "shield"].includes(def.type as string));
 
   // Sell Price: Usual = 50%, Broken = half of usual (25%)
   const usualSellPrice = Math.max(1, Math.ceil(def.price * 0.5));
@@ -200,6 +215,8 @@ const InventoryItemCard = ({
       className={`group relative p-3 rounded-xl flex flex-col gap-2 transition-all ${
       isGoldPouch
         ? "bg-amber-50/80 border-2 border-amber-400 dark:bg-amber-950/40 dark:border-amber-500/70 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+        : isAchievementLog
+        ? "bg-purple-50/90 border-2 border-purple-400 dark:bg-purple-950/40 dark:border-purple-500/70 shadow-[0_0_12px_rgba(168,85,247,0.25)]"
         : isBroken 
         ? "bg-red-950/30 border-2 border-red-600/70 dark:bg-red-950/40 dark:border-red-600/80 shadow-[0_0_12px_rgba(220,38,38,0.25)]" 
         : "border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-700/50"
@@ -215,11 +232,12 @@ const InventoryItemCard = ({
               <div className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">
                   {displayName} 
                   {isGoldPouch && <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 px-1.5 py-0.5 rounded ml-1 font-black border border-amber-300 dark:border-amber-700">GIFT</span>}
+                  {isAchievementLog && <span className="text-[10px] bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 px-1.5 py-0.5 rounded ml-1 font-black border border-purple-300 dark:border-purple-700">LOG</span>}
                   {isEquipped && <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1 rounded ml-1 border border-green-200 dark:border-green-800">EQUIPPED</span>}
                   {isBroken && <span className="text-[10px] bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 px-1 rounded ml-1 font-black border border-red-200 dark:border-red-800 animate-pulse">BROKEN</span>}
               </div>
               <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
-                {isGoldPouch ? `Consumable Gift (+${goldAmount} Gold)` : def.slot || (def.type as string)}
+                {isGoldPouch ? `Consumable Gift (+${goldAmount} Gold)` : isAchievementLog ? "Pokemáticos Journal" : def.slot || (def.type as string)}
               </div>
               {item.customData?.reason && (
                 <div className="mt-1.5 p-2 rounded-lg bg-amber-100/90 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700/60 text-[11px] text-amber-950 dark:text-amber-200 leading-snug shadow-inner">
@@ -247,17 +265,23 @@ const InventoryItemCard = ({
             <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-950 flex items-center justify-center text-xl shrink-0 border border-amber-300">
               🎁
             </div>
+          ) : isAchievementLog ? (
+            <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-950/60 flex items-center justify-center text-xl shrink-0 border border-purple-300 dark:border-purple-700">
+              📜
+            </div>
           ) : null}
       </div>
 
       {/* BUTTONS */}
       <div className="flex gap-2 mt-auto pt-1">
           <button 
-            onClick={isGear ? () => onEquip(item) : () => onUse(item)}
-            disabled={isEquipped || (isGear && isBroken)}
+            onClick={isAchievementLog ? () => onUse(item) : (isGear ? () => onEquip(item) : () => onUse(item))}
+            disabled={!isAchievementLog && (isEquipped || (isGear && isBroken))}
             className={`flex-1 py-1.5 text-xs rounded-lg font-bold transition-all active:scale-95 ${
               isGoldPouch
                 ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black shadow-md"
+                : isAchievementLog
+                ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black shadow-md"
                 : isEquipped || (isGear && isBroken)
                 ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
                 : "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
@@ -265,6 +289,8 @@ const InventoryItemCard = ({
           >
             {isGoldPouch
               ? `Open Pouch (+${goldAmount}G)`
+              : isAchievementLog
+              ? "View Codes"
               : isEquipped
               ? "Equipped"
               : isGear && isBroken
@@ -274,7 +300,7 @@ const InventoryItemCard = ({
               : "Use"}
           </button>
 
-          {!isGoldPouch && (
+          {!isGoldPouch && !isAchievementLog && (
             <button 
               onClick={() => onSell(item)}
               disabled={isEquipped}
@@ -538,6 +564,8 @@ export default function CharacterPage() {
   const [pendingUpgrades, setPendingUpgrades] = useState({ a: 0, b: 0, c: 0, d: 0 });
   const [isSaving, setIsSaving] = useState(false);
   const [previewX, setPreviewX] = useState(1);
+  const [showAchievementLogModal, setShowAchievementLogModal] = useState(false);
+  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -549,9 +577,18 @@ export default function CharacterPage() {
       }
       setUser(u);
 
-      const unsubChar = onSnapshot(doc(db, "characters", u.uid), (charSnap) => {
+      const unsubChar = onSnapshot(doc(db, "characters", u.uid), async (charSnap) => {
         if (charSnap.exists()) {
-          setChar(charSnap.data() as Character);
+          const charData = charSnap.data() as Character;
+          if (charData.pkmStudentId || (charData.pkmAchievements && Object.keys(charData.pkmAchievements).length > 0)) {
+            const hasLog = charData.inventory?.some(i => i.itemId === ACHIEVEMENT_LOG_ITEM_ID);
+            if (!hasLog) {
+              const updatedInv = ensureAchievementLogItem(charData.inventory || []);
+              charData.inventory = updatedInv;
+              updateDoc(doc(db, "characters", u.uid), { inventory: updatedInv }).catch(console.error);
+            }
+          }
+          setChar(charData);
         } else {
           // This handles the case where the character document might not be created yet.
           console.log("Character document not found.");
@@ -792,6 +829,14 @@ export default function CharacterPage() {
   const handleSell = async (item: InventoryItem) => {
     if (!char || !user) return;
     const def = gameItems[item.itemId];
+
+    // Achievement Log cannot be sold
+    if (item.itemId === 'achievement_log' || def?.id === 'achievement_log' || def?.name.toLowerCase() === 'achievement log') {
+      setMsg("⚠️ The Achievement Log cannot be sold.");
+      setTimeout(() => setMsg(""), 2500);
+      return;
+    }
+
     if (!def) return;
 
     const isEquipped = Object.values(char.equipment || {}).includes(item.instanceId);
@@ -822,9 +867,25 @@ export default function CharacterPage() {
     setTimeout(() => setMsg(""), 2500);
   };
 
+  const handleCopyCode = async (activityId: string, code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedCodeId(activityId);
+      setTimeout(() => setCopiedCodeId(null), 2500);
+    } catch (err) {
+      console.error("Failed to copy code", err);
+    }
+  };
+
   const handleUse = async (item: InventoryItem) => {
     if (!char || !user) return;
     const def = gameItems[item.itemId];
+
+    // Achievement Log
+    if (item.itemId === 'achievement_log' || def?.id === 'achievement_log' || def?.name.toLowerCase() === 'achievement log') {
+      setShowAchievementLogModal(true);
+      return;
+    }
 
     // Gold Bounty Pouch / Gift Consumable
     if (item.itemId === 'gift_gold_bounty' || item.customData?.goldAmount || def?.goldValue) {
@@ -1203,7 +1264,13 @@ export default function CharacterPage() {
                     )}
                     
                     {char.inventory.map((item) => {
-                        const def = gameItems[item.itemId];
+                        const def = gameItems[item.itemId] || (item.itemId === 'achievement_log' ? {
+                            id: 'achievement_log',
+                            name: 'Achievement Log',
+                            type: 'misc' as const,
+                            price: 0,
+                            description: 'An official journal recording your earned Pokemáticos achievement reward codes.',
+                        } : null);
                         if (!def) return null; 
                         const isEquipped = Object.values(char.equipment || {}).includes(item.instanceId);
 
@@ -1255,6 +1322,130 @@ export default function CharacterPage() {
             </section>
         </div>
       </div>
+
+      {/* ACHIEVEMENT LOG MODAL */}
+      {showAchievementLogModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-2xl bg-white dark:bg-gray-900 border border-purple-500/40 rounded-2xl shadow-2xl p-6 overflow-hidden flex flex-col max-h-[85vh]">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-950/60 border border-purple-300 dark:border-purple-700 flex items-center justify-center text-xl shrink-0">
+                  📜
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+                    Achievement Log
+                    <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
+                      Pokemáticos
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Your earned Pokemáticos achievement reward codes
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAchievementLogModal(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Student ID Info Banner */}
+            <div className="my-4 p-3.5 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="text-gray-500 dark:text-gray-400 font-semibold uppercase text-[10px] tracking-wider block">
+                  Linked Pokemáticos ID
+                </span>
+                <span className="font-mono font-bold text-sm text-purple-900 dark:text-purple-200">
+                  {char?.pkmStudentId || "None registered"}
+                </span>
+              </div>
+              {!char?.pkmStudentId ? (
+                <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                  Configure your ID in Main Menu &gt; Settings to link new achievements.
+                </div>
+              ) : (
+                <div className="text-[11px] text-green-700 dark:text-green-400 font-medium flex items-center gap-1">
+                  <Check className="w-3.5 h-3.5" /> Synchronized with Pokemáticos
+                </div>
+              )}
+            </div>
+
+            {/* Achievement Codes List */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+              {(!char?.pkmAchievements || Object.keys(char.pkmAchievements).length === 0) ? (
+                <div className="py-12 text-center text-gray-500 dark:text-gray-400 space-y-2">
+                  <div className="text-3xl">🏆</div>
+                  <p className="font-semibold text-sm">No achievement codes earned yet.</p>
+                  <p className="text-xs max-w-sm mx-auto text-gray-400">
+                    Defeat designated bosses and trials in combat to earn official Pokemáticos achievement codes!
+                  </p>
+                </div>
+              ) : (
+                Object.values(char.pkmAchievements).map((entry) => (
+                  <div
+                    key={entry.activityId}
+                    className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/50 hover:border-purple-400/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm text-gray-900 dark:text-white">
+                          {entry.activityName || entry.activityId}
+                        </span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                          {entry.activityId}
+                        </span>
+                      </div>
+                      {entry.earnedAt && (
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                          Earned: {new Date(entry.earnedAt).toLocaleString()}
+                        </div>
+                      )}
+                      <div className="font-mono font-bold text-xs sm:text-sm text-purple-700 dark:text-purple-300 tracking-wider select-all pt-1">
+                        {entry.code}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleCopyCode(entry.activityId, entry.code)}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold shrink-0 flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
+                        copiedCodeId === entry.activityId
+                          ? "bg-green-600 text-white shadow-md shadow-green-600/30"
+                          : "bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/20"
+                      }`}
+                    >
+                      {copiedCodeId === entry.activityId ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" /> Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" /> Copy Code
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-800 flex justify-end">
+              <button
+                onClick={() => setShowAchievementLogModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

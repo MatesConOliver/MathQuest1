@@ -9,16 +9,24 @@ import {
   QuestionDoc,
   GameItem,
   InventoryItem,
+  PkmAchievementEntry,
 } from '@/types/game';
 import { getDoc, updateDoc, db } from '@/lib/firebase';
 import { arrayUnion, collection, getDocs as getFirebaseDocs, query, where, orderBy, increment } from 'firebase/firestore';
 import { useAudio } from '@/context/AudioContext';
+import { generatePkmRewardCode, ensureAchievementLogItem } from '@/lib/pkm';
 
 export interface CombatEffect {
   target: 'foe' | 'player';
   amount: number;
   id: number;
   isCorrect: boolean;
+}
+
+export interface EarnedPkmReward {
+  code: string;
+  activityId: string;
+  activityName: string;
 }
 
 export interface CombatBuffs {
@@ -130,6 +138,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   const [skillGains, setSkillGains] = useState<{[key: string]: number} | null>(null);
   const [xpReward, setXpReward] = useState(0);
   const [goldReward, setGoldReward] = useState(0);
+  const [earnedPkmReward, setEarnedPkmReward] = useState<EarnedPkmReward | null>(null);
 
   const [isLoading, setIsLoading] = useState(false); // Battle-specific loading
   const [showInventory, setShowInventory] = useState(false);
@@ -288,7 +297,36 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       (i) => !consumedPotionInstanceIds.includes(i.instanceId)
     );
 
+    // Check for Pokemáticos (PKM) Reward Code generation
+    let newlyEarnedPkmReward: EarnedPkmReward | null = null;
+    const pkmActivityId = currentEncounter.pkmActivityId?.trim();
+    if (character.pkmStudentId && pkmActivityId) {
+      const pkmCode = generatePkmRewardCode(character.pkmStudentId, pkmActivityId);
+      newlyEarnedPkmReward = {
+        code: pkmCode,
+        activityId: pkmActivityId,
+        activityName: currentEncounter.title || pkmActivityId,
+      };
+      setEarnedPkmReward(newlyEarnedPkmReward);
+    } else {
+      setEarnedPkmReward(null);
+    }
+
     try {
+        const baseInventory = [
+            ...finalInventory,
+            ...(currentEncounter.winRewardItems || []).map(itemId => ({
+                itemId,
+                instanceId: Date.now().toString() + Math.random(),
+                obtainedAt: Date.now()
+            })),
+        ];
+
+        // Ensure the player has the Achievement Log item in their backpack if a PKM code was earned
+        const updatedInventory = newlyEarnedPkmReward
+          ? ensureAchievementLogItem(baseInventory)
+          : baseInventory;
+
         const updates: { [key:string]: any } = {
             hp: playerHp + hpGain,
             xp: newXp,
@@ -296,20 +334,22 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
             gold: increment(goldGain),
             maxHp: increment(hpGain),
             unspentPoints: increment(pointsGain),
-            inventory: [
-                ...finalInventory,
-                ...(currentEncounter.winRewardItems || []).map(itemId => ({
-                    itemId,
-                    instanceId: Date.now().toString() + Math.random(),
-                    obtainedAt: Date.now()
-                })),
-            ],
+            inventory: updatedInventory,
             [`encounterWins.${encounterId}`]: increment(1)
         };
 
-          if (currentEncounter.winRewardStoryFlag) {
-            updates.pendingProgressionFlags = arrayUnion(currentEncounter.winRewardStoryFlag);
-          }
+        if (newlyEarnedPkmReward) {
+          updates[`pkmAchievements.${newlyEarnedPkmReward.activityId}`] = {
+            activityId: newlyEarnedPkmReward.activityId,
+            activityName: newlyEarnedPkmReward.activityName,
+            code: newlyEarnedPkmReward.code,
+            earnedAt: Date.now(),
+          };
+        }
+
+        if (currentEncounter.winRewardStoryFlag) {
+          updates.pendingProgressionFlags = arrayUnion(currentEncounter.winRewardStoryFlag);
+        }
 
         for (const [skill, amount] of Object.entries(skillsGained)) {
             if (amount && amount > 0) {
@@ -343,7 +383,18 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
                 storyFlags: prev.storyFlags,
                 pendingProgressionFlags: currentEncounter.winRewardStoryFlag
                   ? [...new Set([...(prev.pendingProgressionFlags || []), currentEncounter.winRewardStoryFlag])]
-                  : prev.pendingProgressionFlags
+                  : prev.pendingProgressionFlags,
+                pkmAchievements: newlyEarnedPkmReward
+                  ? {
+                      ...(prev.pkmAchievements || {}),
+                      [newlyEarnedPkmReward.activityId]: {
+                        activityId: newlyEarnedPkmReward.activityId,
+                        activityName: newlyEarnedPkmReward.activityName,
+                        code: newlyEarnedPkmReward.code,
+                        earnedAt: Date.now(),
+                      }
+                    }
+                  : prev.pkmAchievements
             };
         });
 
@@ -745,6 +796,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
           setSkillGains(null);
           setConsumedPotionInstanceIds([]);
           setCombatBuffs(initialCombatBuffs);
+          setEarnedPkmReward(null);
           setMode('intro');
         } catch (error) {
           console.error('Error setting up battle:', error);
@@ -1100,5 +1152,6 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     isPhase2,
     handleSpecialFightComplete,
     combatBuffs,
+    earnedPkmReward,
   };
 }

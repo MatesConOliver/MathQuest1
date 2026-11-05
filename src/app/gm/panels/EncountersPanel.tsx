@@ -81,6 +81,7 @@ export function EncountersPanel() {
     const [winRewardStoryFlag, setWinRewardStoryFlag] = useState("");
     const [specialFightId, setSpecialFightId] = useState("");
     const [phase2Speed, setPhase2Speed] = useState(25);
+    const [pkmActivityId, setPkmActivityId] = useState("");
 
     const [selectedLocationId, setSelectedLocationId] = useState("");
     const [selectedSubAreaId, setSelectedSubAreaId] = useState("");
@@ -131,6 +132,7 @@ export function EncountersPanel() {
       setWinRewardStoryFlag("");
       setSpecialFightId("");
       setPhase2Speed(25);
+      setPkmActivityId("");
       setMsg("");
     }
   
@@ -164,6 +166,7 @@ export function EncountersPanel() {
       setWinRewardStoryFlag(enc.winRewardStoryFlag || "");
       setSpecialFightId(enc.specialFightId || "");
       setPhase2Speed(enc.phase2TimeSpeedPercent !== undefined ? enc.phase2TimeSpeedPercent : 25);
+      setPkmActivityId(enc.pkmActivityId || "");
 
       setRewardAlgebra(enc.winRewardSkills?.algebra || 0);
       setRewardFunctions(enc.winRewardSkills?.functions || 0);
@@ -207,12 +210,16 @@ export function EncountersPanel() {
         questionTag: questionTag, //legacy
         ...(specialFightId && { specialFightId }),
         phase2TimeSpeedPercent: Number(phase2Speed) || 25,
+        ...(pkmActivityId.trim() && { pkmActivityId: pkmActivityId.trim() }),
       };
   
       try {
         const docRef = editingId ? doc(db, "encounters", editingId) : await addDoc(collection(db, "encounters"), {});
-        // Firestore rejects undefined; explicitly remove the field when cleared
-        const payload = specialFightId ? docData : { ...docData, specialFightId: deleteField() };
+        // Firestore rejects undefined; explicitly remove fields when cleared
+        const payload: any = { ...docData };
+        if (!specialFightId) payload.specialFightId = deleteField();
+        if (!pkmActivityId.trim()) payload.pkmActivityId = deleteField();
+
         await setDoc(docRef, payload, { merge: true });
         
         setMsg(editingId ? "✅ Updated Encounter!" : "✅ Created New Encounter!");
@@ -453,6 +460,29 @@ export function EncountersPanel() {
               </div>
 
               <Input label="Win Reward Story Flag" value={winRewardStoryFlag} onChange={(e: ChangeEvent<HTMLInputElement>) => setWinRewardStoryFlag(e.target.value)} placeholder="e.g., DEFEATED_GOBLIN_KING" />
+
+              {/* POKEMÁTICOS (PKM) ACHIEVEMENT REWARD SECTION */}
+              <div className="bg-purple-50 dark:bg-purple-950/40 p-4 rounded-xl border border-purple-200 dark:border-purple-800/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="label-sm text-purple-800 dark:text-purple-300 font-bold flex items-center gap-1.5">
+                    <span>🏆</span> Pokemáticos (PKM) Reward Activity
+                  </h3>
+                  {pkmActivityId.trim() && (
+                    <span className="text-[10px] bg-purple-200 dark:bg-purple-900/60 text-purple-800 dark:text-purple-300 font-mono px-2 py-0.5 rounded font-bold">
+                      Code Key: {pkmActivityId.trim().slice(0, 6)}
+                    </span>
+                  )}
+                </div>
+                <Input 
+                  label="Activity Identifier (e.g. library_guardian, algebra_trial_01)" 
+                  value={pkmActivityId} 
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setPkmActivityId(e.target.value)} 
+                  placeholder="e.g. library_guardian, algebra_trial_01" 
+                />
+                <p className="text-[11px] text-purple-700/90 dark:text-purple-300/80">
+                  When a student defeats this encounter, MathQuest will generate their deterministic 28-character Pokemáticos reward code (Source ID: <code className="font-mono bg-purple-100 dark:bg-purple-900 px-1 py-0.2 rounded font-bold">DP4DP</code>) if they have entered their Pokemáticos Public ID in settings.
+                </p>
+              </div>
       
               <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border dark:border-gray-600 space-y-3">
                   <h3 className="label-sm">Visuals & Logic</h3>
@@ -621,6 +651,11 @@ export function EncountersPanel() {
                                 {enc.encounterType === 'shop' && (
                                   <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-1.5 py-0.2 rounded font-bold shrink-0">
                                     🏪 Store ({enc.shopItemIds?.length || 0} items)
+                                  </span>
+                                )}
+                                {enc.pkmActivityId && (
+                                  <span className="text-[10px] bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-400/40 px-1.5 py-0.2 rounded font-bold shrink-0">
+                                    🏆 PKM
                                   </span>
                                 )}
                               </div>

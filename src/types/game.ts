@@ -63,6 +63,13 @@ export interface CharacterSkills {
   calculus: number;
 }
 
+export interface PkmAchievementEntry {
+  activityId: string;
+  activityName: string;
+  code: string;
+  earnedAt: number;
+}
+
 export interface Character {
   ownerUid: string;
   name: string;
@@ -89,6 +96,8 @@ export interface Character {
   unlockedContinents: string[];   // List of IDs like ["cont_1", "cont_2"]
   encounterWins: { [encounterId: string]: number };
   imageUrl?: string;
+  pkmStudentId?: string; // Pokemáticos Public Identifier
+  pkmAchievements?: Record<string, PkmAchievementEntry>; // Saved achievement codes keyed by activityId
 }
 
 export interface Monster {
@@ -255,6 +264,8 @@ export type EncounterDoc = {
   encounterType?: 'battle' | 'shop'; // 'battle' (default) or 'shop'
   shopItemIds?: string[]; // Specific item IDs sold in this store encounter
   shopGreeting?: string; // Merchant dialogue
+  // Pokemáticos Reward Code field
+  pkmActivityId?: string; // Stable activity identifier (e.g. 'library_guardian', 'algebra_trial_01')
 };
 
 export type UnlockedSubArea = {

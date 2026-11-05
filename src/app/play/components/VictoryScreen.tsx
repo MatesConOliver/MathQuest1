@@ -1,6 +1,8 @@
 
+import { useState } from "react";
 import { Character } from "@/types/game";
 import { GameIcon } from "@/components/GameIcon";
+import { EarnedPkmReward } from "../hooks/useBattle";
 
 interface VictoryScreenProps {
   character: Character | null;
@@ -11,9 +13,11 @@ interface VictoryScreenProps {
   xpReward: number;
   goldReward: number;
   skillGains: {[key: string]: number} | null;
+  earnedPkmReward?: EarnedPkmReward | null;
 }
 
-export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain, onReturnToMap, xpReward, goldReward, skillGains }: VictoryScreenProps) {
+export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain, onReturnToMap, xpReward, goldReward, skillGains, earnedPkmReward }: VictoryScreenProps) {
+  const [copiedPkmCode, setCopiedPkmCode] = useState(false);
   const data = levelUpData as any;
 
   const hpGain = data?.hpGain || 0;
@@ -75,6 +79,37 @@ export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain,
            <div className="text-sm font-bold text-gray-500 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 p-2 rounded">
               Found: {lootDrops.join(", ")}
            </div>
+        )}
+
+        {earnedPkmReward && (
+          <div className="bg-gradient-to-r from-purple-100 via-indigo-50 to-purple-100 dark:from-purple-950/60 dark:via-indigo-950/50 dark:to-purple-950/60 rounded-2xl p-4 border-2 border-purple-400 dark:border-purple-600 shadow-md space-y-2.5 text-center">
+            <div className="flex items-center justify-center gap-1.5 text-xs font-black uppercase tracking-wider text-purple-700 dark:text-purple-300">
+              <span className="text-base">🏆</span>
+              <span>Pokemáticos Achievement!</span>
+            </div>
+            <div className="text-xs font-bold text-gray-900 dark:text-white truncate">
+              {earnedPkmReward.activityName}
+            </div>
+            <div className="bg-white/90 dark:bg-black/60 px-2.5 py-1.5 rounded-xl border border-purple-300 dark:border-purple-700 font-mono font-black text-xs sm:text-sm tracking-wider text-purple-900 dark:text-purple-200 select-all break-all">
+              {earnedPkmReward.code}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                  navigator.clipboard.writeText(earnedPkmReward.code);
+                  setCopiedPkmCode(true);
+                  setTimeout(() => setCopiedPkmCode(false), 2500);
+                }
+              }}
+              className="w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-all active:scale-95 bg-purple-600 hover:bg-purple-500 text-white shadow-sm flex items-center justify-center gap-1.5"
+            >
+              {copiedPkmCode ? '✓ Copied to Clipboard!' : '📋 Copy Reward Code'}
+            </button>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400">
+              Saved to your <span className="font-bold text-purple-700 dark:text-purple-300">Achievement Log</span> in your backpack.
+            </p>
+          </div>
         )}
 
         <div className="pt-4 flex flex-col gap-2">
