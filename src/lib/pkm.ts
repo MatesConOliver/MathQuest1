@@ -115,7 +115,6 @@ export function ensureAchievementLogItem(inventory: InventoryItem[] = []): Inven
     obtainedAt: Date.now(),
     customData: {
       title: "Achievement Log",
-      reason: "Official record of your Pokemáticos achievement reward codes.",
     },
   };
 

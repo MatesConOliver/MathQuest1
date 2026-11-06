@@ -105,7 +105,7 @@ function ItemStatsTooltip({
         <span>{def.name}</span>
       </div>
       <p className="text-gray-200 text-xs leading-relaxed">
-        {def.description || "An official journal recording your earned Pokemáticos achievement reward codes."}
+        {def.description || "An official record of your earned Pokemáticos achievement reward codes."}
       </p>
     </div>
   ) : (
@@ -215,8 +215,6 @@ const InventoryItemCard = ({
       className={`group relative p-3 rounded-xl flex flex-col gap-2 transition-all ${
       isGoldPouch
         ? "bg-amber-50/80 border-2 border-amber-400 dark:bg-amber-950/40 dark:border-amber-500/70 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
-        : isAchievementLog
-        ? "bg-purple-50/90 border-2 border-purple-400 dark:bg-purple-950/40 dark:border-purple-500/70 shadow-[0_0_12px_rgba(168,85,247,0.25)]"
         : isBroken 
         ? "bg-red-950/30 border-2 border-red-600/70 dark:bg-red-950/40 dark:border-red-600/80 shadow-[0_0_12px_rgba(220,38,38,0.25)]" 
         : "border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-700/50"
@@ -232,14 +230,14 @@ const InventoryItemCard = ({
               <div className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">
                   {displayName} 
                   {isGoldPouch && <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 px-1.5 py-0.5 rounded ml-1 font-black border border-amber-300 dark:border-amber-700">GIFT</span>}
-                  {isAchievementLog && <span className="text-[10px] bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 px-1.5 py-0.5 rounded ml-1 font-black border border-purple-300 dark:border-purple-700">LOG</span>}
+                  {isAchievementLog && <span className="text-[10px] bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded ml-1 font-semibold border border-gray-200 dark:border-gray-600">LOG</span>}
                   {isEquipped && <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1 rounded ml-1 border border-green-200 dark:border-green-800">EQUIPPED</span>}
                   {isBroken && <span className="text-[10px] bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 px-1 rounded ml-1 font-black border border-red-200 dark:border-red-800 animate-pulse">BROKEN</span>}
               </div>
               <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
-                {isGoldPouch ? `Consumable Gift (+${goldAmount} Gold)` : isAchievementLog ? "Pokemáticos Journal" : def.slot || (def.type as string)}
+                {isGoldPouch ? `Consumable Gift (+${goldAmount} Gold)` : isAchievementLog ? "JOURNAL" : def.slot || (def.type as string)}
               </div>
-              {item.customData?.reason && (
+              {!isAchievementLog && item.customData?.reason && (
                 <div className="mt-1.5 p-2 rounded-lg bg-amber-100/90 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700/60 text-[11px] text-amber-950 dark:text-amber-200 leading-snug shadow-inner">
                   <div className="font-black flex items-center gap-1 text-[9px] uppercase tracking-wider text-amber-800 dark:text-amber-400 mb-0.5">
                     <span>📜</span>
@@ -266,7 +264,7 @@ const InventoryItemCard = ({
               🎁
             </div>
           ) : isAchievementLog ? (
-            <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-950/60 flex items-center justify-center text-xl shrink-0 border border-purple-300 dark:border-purple-700">
+            <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700/60 flex items-center justify-center text-xl shrink-0 border border-gray-200 dark:border-gray-600">
               📜
             </div>
           ) : null}
@@ -280,8 +278,6 @@ const InventoryItemCard = ({
             className={`flex-1 py-1.5 text-xs rounded-lg font-bold transition-all active:scale-95 ${
               isGoldPouch
                 ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black shadow-md"
-                : isAchievementLog
-                ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black shadow-md"
                 : isEquipped || (isGear && isBroken)
                 ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
                 : "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
@@ -468,7 +464,8 @@ const SkillCircle = ({
   value: number;
   color: string;
 }) => {
-  const glowIntensity = Math.min(value / 1000, 1);
+  // Normalize progress between 0 and 1 (maximum is 100)
+  const progress = Math.min(Math.max(value || 0, 0), 100) / 100;
 
   // Define HSL colors for easier programmatic manipulation
   const colorConfig: { [key: string]: { hsl: string } } = {
@@ -479,13 +476,19 @@ const SkillCircle = ({
     violet: { hsl: '255, 90%, 68%' },  // approx. text-violet-400
   };
 
-  const { hsl } = colorConfig[color as keyof typeof colorConfig];
+  const { hsl } = colorConfig[color as keyof typeof colorConfig] || { hsl: '217, 91%, 60%' };
 
-  // Dynamically calculate colors based on skill value
-  const circleBgColor = `hsla(${hsl}, ${0.05 + glowIntensity * 0.2})`; // alpha from 5% -> 25%
-  const borderColor   = `hsla(${hsl}, ${0.1 + glowIntensity * 0.3})`;   // alpha from 10% -> 40%
-  const textColor     = `hsla(${hsl}, ${0.7 + glowIntensity * 0.3})`;   // lightness from 70% -> 100%
-  const shadowColor   = `hsla(${hsl}, ${glowIntensity * 0.6})`;         // alpha from 0% -> 60%
+  // At 0: completely transparent, no glow at all.
+  // Above 0: subtly glows brighter and becomes less transparent as it approaches 100.
+  const circleBgColor = progress === 0 ? 'transparent' : `hsla(${hsl}, ${progress * 0.22})`;
+  const borderColor   = progress === 0 ? 'rgba(156, 163, 175, 0.25)' : `hsla(${hsl}, ${0.2 + progress * 0.65})`;
+  const textColor     = progress === 0 ? 'rgba(156, 163, 175, 0.5)' : `hsla(${hsl}, ${0.5 + progress * 0.5})`;
+  const boxShadow     = progress === 0 
+    ? 'none' 
+    : `0 0 ${Math.round(6 + progress * 16)}px ${Math.round(progress * 2)}px hsla(${hsl}, ${progress * 0.45}), inset 0 0 ${Math.round(4 + progress * 10)}px hsla(${hsl}, ${progress * 0.2})`;
+  const textShadow    = progress === 0 
+    ? 'none' 
+    : `0 0 ${Math.round(progress * 8)}px hsla(${hsl}, ${progress * 0.4})`;
 
   return (
     <div className="relative text-center flex flex-col items-center gap-2">
@@ -495,15 +498,15 @@ const SkillCircle = ({
           backgroundColor: circleBgColor,
           borderColor: borderColor,
           borderWidth: '2px',
-          boxShadow: `0 0 18px 2px ${shadowColor}, inset 0 0 12px 1px hsla(${hsl}, 0.15)`,
+          boxShadow: boxShadow,
         }}
       >
         <div className="z-10">
           <div
-            className="font-black text-3xl"
+            className="font-black text-3xl transition-all duration-500"
             style={{
               color: textColor,
-              textShadow: `0 0 8px hsla(0, 0%, 100%, ${0.3 * glowIntensity})`
+              textShadow: textShadow,
             }}
           >
             {value}
@@ -1269,7 +1272,7 @@ export default function CharacterPage() {
                             name: 'Achievement Log',
                             type: 'misc' as const,
                             price: 0,
-                            description: 'An official journal recording your earned Pokemáticos achievement reward codes.',
+                            description: 'An official record of your earned Pokemáticos achievement reward codes.',
                         } : null);
                         if (!def) return null; 
                         const isEquipped = Object.values(char.equipment || {}).includes(item.instanceId);
