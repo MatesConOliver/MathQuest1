@@ -5,6 +5,7 @@ import { db } from "@/lib/firebase";
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   setDoc,
   addDoc,
@@ -209,7 +210,12 @@ async function generateAiSolutionForQuestion(
   };
 }
 
-export function QuestionsPanel() {
+interface QuestionsPanelProps {
+  initialQuestionId?: string | null;
+  onClearInitialQuestion?: () => void;
+}
+
+export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: QuestionsPanelProps = {}) {
     const [msg, setMsg] = useState("");
     const [editingId, setEditingId] = useState("");
   
@@ -540,6 +546,52 @@ export function QuestionsPanel() {
       setSingleLocOrder(null);
       setMsg("");
     }
+
+    const handledInitialIdRef = useRef<string | null>(null);
+
+    useEffect(() => {
+      if (!initialQuestionId) return;
+      if (handledInitialIdRef.current === initialQuestionId && editingId === initialQuestionId) return;
+
+      // Clear search filters so the selected question is guaranteed to be visible in the list
+      setSelectedDropdownTag("");
+      setDbTagSearch("");
+      setLocalFilter("");
+      setDebouncedFilter("");
+
+      const targetQ = allQuestions.find((q) => q.id === initialQuestionId);
+      if (targetQ) {
+        handledInitialIdRef.current = initialQuestionId;
+        loadQuestionToEdit(targetQ);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        setTimeout(() => {
+          const el = document.getElementById(`question-card-${initialQuestionId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 150);
+        onClearInitialQuestion?.();
+        return;
+      }
+
+      // If allQuestions has not loaded targetQ yet (e.g., initial snapshot pending), fetch doc directly
+      const fetchDirect = async () => {
+        try {
+          const snap = await getDoc(doc(db, "questions", initialQuestionId));
+          if (snap.exists()) {
+            const qData = { ...snap.data(), id: snap.id } as QuestionDoc;
+            handledInitialIdRef.current = initialQuestionId;
+            loadQuestionToEdit(qData);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            onClearInitialQuestion?.();
+          }
+        } catch (err) {
+          console.error("Failed to load question directly", err);
+        }
+      };
+
+      fetchDirect();
+    }, [initialQuestionId, allQuestions, editingId, onClearInitialQuestion]);
   
     async function saveQuestion() {
       setMsg("Saving...");
@@ -1420,6 +1472,7 @@ export function QuestionsPanel() {
               return (
                 <div 
                   key={q.id} 
+                  id={q.id ? `question-card-${q.id}` : undefined}
                   onClick={() => loadQuestionToEdit(q)} 
                   className={`p-3 border rounded-lg cursor-pointer transition-all flex items-start gap-2.5 
                           ${editingId === q.id 

@@ -32,6 +32,14 @@ export default function GMPage() {
   const [loading, setLoading] = useState(true);
   
   const [activeTab, setActiveTab] = useState<ActiveTab>("locations");
+  const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
+
+  const handleSwitchToQuestions = (questionId?: string) => {
+    if (questionId) {
+      setSelectedQuestionId(questionId);
+    }
+    setActiveTab("questions");
+  };
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -69,8 +77,13 @@ export default function GMPage() {
       </header>
 
       <div className="bg-gray-50 dark:bg-gray-800/50 p-1 rounded-2xl min-h-[600px] border dark:border-gray-700">
-        {activeTab === "reports" && <ReportsPanel onSwitchToQuestions={() => setActiveTab("questions")} />}
-        {activeTab === "questions" && <QuestionsPanel />}
+        {activeTab === "reports" && <ReportsPanel onSwitchToQuestions={handleSwitchToQuestions} />}
+        {activeTab === "questions" && (
+          <QuestionsPanel 
+            initialQuestionId={selectedQuestionId} 
+            onClearInitialQuestion={() => setSelectedQuestionId(null)} 
+          />
+        )}
         {activeTab === "foes" && <FoesPanel />}
         {activeTab === "locations" && <LocationsPanel />}
         {/* Render the new SubAreasPanel when the tab is active */}
