@@ -322,6 +322,40 @@ export function SolutionModal({
             }
           }
         }
+
+        // Process any leftover trailing events in streamBuffer when stream ends
+        if (streamBuffer.trim()) {
+          const lines = streamBuffer.split("\n");
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data: ")) continue;
+            const jsonStr = trimmed.slice(6);
+            try {
+              const data = JSON.parse(jsonStr);
+              if (data.type === "chunk" && data.text) {
+                rawAccumulated += data.text;
+                const parsed = parseStreamingContent(rawAccumulated);
+                setSolutionText(parsed.displayText);
+                if (parsed.verifiedIndex !== null) {
+                  finalVerifiedIndex = parsed.verifiedIndex;
+                  setVerifiedCorrectIndex(parsed.verifiedIndex);
+                }
+                if (parsed.hasVerification) {
+                  finalIsDiscrepancy = parsed.isDiscrepancy;
+                  setIsDiscrepancy(parsed.isDiscrepancy);
+                  finalDiscrepancyNote = parsed.discrepancyNote || null;
+                  setDiscrepancyNote(parsed.discrepancyNote || null);
+                }
+              } else if (data.type === "error") {
+                streamHasError = true;
+                setErrorMsg(cleanErrorMessage(data.error || "Streaming error occurred"));
+                if (data.needsApiKey || data.isBillingError) {
+                  setShowApiKeyConfig(true);
+                }
+              }
+            } catch {}
+          }
+        }
       }
 
       setIsStreaming(false);

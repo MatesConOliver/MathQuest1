@@ -192,6 +192,24 @@ async function generateAiSolutionForQuestion(
     }
   }
 
+  // Process any leftover trailing events in streamBuffer when stream ends
+  if (streamBuffer.trim()) {
+    const lines = streamBuffer.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) continue;
+      const jsonStr = trimmed.slice(6);
+      try {
+        const data = JSON.parse(jsonStr);
+        if (data.type === "chunk" && data.text) {
+          rawAccumulated += data.text;
+        } else if (data.type === "error") {
+          streamError = data.error || "Streaming error";
+        }
+      } catch {}
+    }
+  }
+
   if (streamError && !rawAccumulated.trim()) {
     throw new Error(streamError);
   }
@@ -199,7 +217,7 @@ async function generateAiSolutionForQuestion(
   const parsed = parseStreamingContent(rawAccumulated);
   const cleanSolutionText = (parsed.displayText || rawAccumulated).trim();
   if (!cleanSolutionText) {
-    throw new Error(streamError || "AI returned empty solution");
+    throw new Error(streamError || "AI returned empty solution (no text received from model stream)");
   }
 
   return {
@@ -900,10 +918,46 @@ export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: Qu
           currentStatus: `Generating AI answer [${locSourceNote}] (${i + 1}/${targetList.length})...`,
         }));
 
-        try {
-          const result = await generateAiSolutionForQuestion(q, effectiveLocOrder, signal);
-          if (signal.aborted) break;
+        let result: { text: string; verifiedIndex: number; isDiscrepancy: boolean; discrepancyNote: string } | null = null;
+        let attempt = 0;
+        const maxAttempts = 2;
+        let lastBatchErr: any = null;
 
+        while (attempt < maxAttempts) {
+          try {
+            attempt++;
+            result = await generateAiSolutionForQuestion(q, effectiveLocOrder, signal);
+            break;
+          } catch (genErr: any) {
+            lastBatchErr = genErr;
+            if (signal.aborted) break;
+            if (attempt < maxAttempts) {
+              setBatchStats((prev) => ({
+                ...prev,
+                currentStatus: `Network/API hiccup on #${i + 1}. Retrying in 2.5s (attempt 2/2)...`,
+              }));
+              await new Promise((r) => setTimeout(r, 2500));
+            }
+          }
+        }
+
+        if (signal.aborted) break;
+
+        if (!result) {
+          errCount++;
+          console.warn(`[Batch AI] Error on question ${q.id}:`, lastBatchErr);
+          setBatchStats((prev) => ({
+            ...prev,
+            errors: errCount,
+            currentStatus: `⚠️ Error on #${i + 1} (${qTitle}): ${lastBatchErr?.message || "Failed"}. Moving to next question...`,
+          }));
+          if (i < targetList.length - 1 && !signal.aborted) {
+            await new Promise((r) => setTimeout(r, 3500));
+          }
+          continue;
+        }
+
+        try {
           const aiPayload = {
             text: result.text,
             verifiedCorrectIndex: result.verifiedIndex,
@@ -939,14 +993,13 @@ export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: Qu
             }));
             await new Promise((r) => setTimeout(r, 3500));
           }
-        } catch (err: any) {
-          if (signal.aborted) break;
+        } catch (saveErr: any) {
           errCount++;
-          console.warn(`[Batch AI] Error on question ${q.id}:`, err);
+          console.warn(`[Batch AI] Firestore save error on ${q.id}:`, saveErr);
           setBatchStats((prev) => ({
             ...prev,
             errors: errCount,
-            currentStatus: `⚠️ Error: ${err.message || "Failed"}. Moving to next question...`,
+            currentStatus: `⚠️ Firestore save error on #${i + 1}: ${saveErr?.message || "Save failed"}. Moving on...`,
           }));
           if (i < targetList.length - 1 && !signal.aborted) {
             await new Promise((r) => setTimeout(r, 3500));

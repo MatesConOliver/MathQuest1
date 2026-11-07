@@ -120,7 +120,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
 
     // Build question representation
     const promptText = questionData.promptContent
@@ -201,11 +208,15 @@ MANDATORY INSTRUCTIONS:
 You MUST structure your response into the following two sections in order:
 
 ### Step-by-Step Derivation & Explanation
-1. NOTE ON ALTERNATIVE METHODS: If there are alternative, more obvious, or more direct ways to solve this question (such as direct inspection, testing choice options, symmetry, or intuitive shortcuts), include a brief 1-2 sentence note right at the very beginning (e.g., "**Alternative Approaches:** While this problem can also be solved more directly by [mention alternative method], here is a full step-by-step derivation:"), so the student does not feel this derivation is the only way to reach the solution.
-2. Provide a rigorous, crystal-clear, step-by-step mathematical derivation from first principles/allowed tools to reach the correct answer.
-3. PEDAGOGICAL NARRATIVE: You MUST include clear explanatory sentences BETWEEN intermediate mathematical steps. Explain WHY each step is done, what theorem, identity, or formula is being applied, and how it directly advances the solution toward the answer. Do not merely list raw equations without narrative explanation.
-4. FORMATTING: Use standard LaTeX formatting ($...$ for inline expressions, $$...$$ for standalone display equations).
-5. Verify all options carefully against your derivation. Compute which option is mathematically correct (Option A, B, C, or D).
+1. PROPORTIONAL BREVITY (NEVER WRITE AN ESSAY FOR SIMPLE QUESTIONS):
+   - Strictly calibrate the length of the explanation to the complexity of the question.
+   - For simple or standard questions (e.g., finding vertical/horizontal asymptotes of a rational function, basic function evaluations, direct formula applications, simple algebraic solutions), keep the explanation concise, direct, and focused—typically 2 to 5 lines. State the key principle (e.g. "Vertical asymptotes occur where the denominator is zero and the numerator is non-zero"), show the calculation, and state the result.
+   - Do NOT write lengthy essays, do NOT over-complicate trivial concepts, and avoid unnecessary filler or verbose preambles.
+   - Only provide longer derivations when the problem genuinely involves multi-step reasoning, trigonometric identities, or complex proofs.
+2. ALTERNATIVE APPROACHES: Only include a brief note if an inspection shortcut or trick is genuinely insightful and distinct from the standard method. For routine direct problems, skip this note entirely.
+3. CLEAR PEDAGOGY: State the relevant rule or theorem concisely, show the intermediate math, and conclude directly.
+4. FORMATTING: Use standard LaTeX ($...$ for inline, $$...$$ for display equations).
+5. Verify which option is mathematically correct (Option A, B, C, or D).
 
 ### Verification
 CORRECT_OPTION: [A, B, C, or D]
@@ -220,103 +231,162 @@ DISCREPANCY_NOTE: [If IS_DISCREPANCY is TRUE, explain author error here. If FALS
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        // 1. Immediate heartbeat comment flushes HTTP headers to Vercel and browser instantly
-        controller.enqueue(encoder.encode(": connected\n\n"));
+        try {
+          // 1. Immediate heartbeat comment flushes HTTP headers to client instantly
+          controller.enqueue(encoder.encode(": connected\n\n"));
 
-        // Models to try in order: stable production flash first, then 3.8 flash, then flash-lite
-        const candidateModels = [
-          { name: "gemini-flash-latest", thinking: false },
-          { name: "gemini-3.8-flash", thinking: true },
-          { name: "gemini-3.1-flash-lite", thinking: false },
-        ];
+          // Candidate models to try in order: flagship 3.8 flash with low thinking, then flash-latest, then flash-lite
+          const candidateModels: Array<{
+            name: string;
+            thinkingConfig?: { thinkingLevel: ThinkingLevel };
+          }> = [
+            {
+              name: "gemini-3.8-flash",
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            },
+            {
+              name: "gemini-flash-latest",
+              thinkingConfig: undefined,
+            },
+            {
+              name: "gemini-3.1-flash-lite",
+              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+            },
+          ];
 
-        let streamedAnyChunk = false;
-        let lastErrorMsg = "";
-        let isBillingExhausted = false;
-        let isKeyDenied = false;
+          let streamedAnyChunk = false;
+          let lastErrorMsg = "";
+          let isBillingExhausted = false;
+          let isKeyDenied = false;
 
-        for (const candidate of candidateModels) {
-          try {
-            console.log(`[Gemini Solver] Attempting model ${candidate.name}...`);
-            const config: any = {
-              systemInstruction:
-                "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. If there are more obvious or alternative ways to solve the problem, you always note them briefly at the top of '### Step-by-Step Derivation & Explanation' so students recognize multiple valid paths, then provide the complete step-by-step mathematical derivation with pedagogical explanations between steps, followed by the short '### Verification' block.",
-              temperature: 0.1,
-              maxOutputTokens: 1500,
-            };
+          for (const candidate of candidateModels) {
+            try {
+              console.log(`[Gemini Solver] Attempting model ${candidate.name}...`);
+              const config: any = {
+                systemInstruction:
+                  "You are an expert mathematics professor and curriculum auditor for the IB DP Mathematics AA HL curriculum. Calibrate explanation length strictly to question difficulty: provide brief, crisp solutions (2-5 lines) for direct/routine questions (such as finding asymptotes, basic function evaluations, or formula applications) without unnecessary preamble or fluff, and reserve fuller derivations for genuinely multi-step or complex problems, followed by the short '### Verification' block.",
+                maxOutputTokens: 8192,
+              };
 
-            if (candidate.thinking) {
-              config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
-            }
+              if (candidate.thinkingConfig) {
+                config.thinkingConfig = candidate.thinkingConfig;
+              }
 
-            const responseStream = await ai.models.generateContentStream({
-              model: candidate.name,
-              contents: formattedContents,
-              config,
-            });
+              const responseStream = await ai.models.generateContentStream({
+                model: candidate.name,
+                contents: formattedContents,
+                config,
+              });
 
-            for await (const chunk of responseStream) {
-              if (chunk.text) {
-                streamedAnyChunk = true;
+              let lastFinishReason = "";
+
+              for await (const chunk of responseStream) {
+                if (chunk.candidates?.[0]?.finishReason) {
+                  lastFinishReason = chunk.candidates[0].finishReason;
+                }
+
+                // In @google/genai, chunk.text returns text excluding thought parts
+                let text = chunk.text || "";
+                if (!text && chunk.candidates?.[0]?.content?.parts) {
+                  text = chunk.candidates[0].content.parts
+                    .filter((p: any) => !p.thought && typeof p.text === "string")
+                    .map((p: any) => p.text)
+                    .join("");
+                }
+
+                if (text) {
+                  streamedAnyChunk = true;
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ type: "chunk", text })}\n\n`)
+                  );
+                }
+              }
+
+              if (streamedAnyChunk) {
+                const durationMs = Date.now() - startTime;
+                console.log(`[Gemini Solver] Completed with ${candidate.name} in ${durationMs}ms`);
                 controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ type: "chunk", text: chunk.text })}\n\n`)
+                  encoder.encode(
+                    `data: ${JSON.stringify({ type: "done", locationOrder: reqLocationOrder })}\n\n`
+                  )
                 );
+                controller.close();
+                return;
+              } else {
+                console.warn(
+                  `[Gemini Solver] Model ${candidate.name} produced 0 text chunks. Finish reason: ${lastFinishReason || "NONE"}`
+                );
+                lastErrorMsg = `Model ${candidate.name} completed with 0 text tokens (finish reason: ${lastFinishReason || "exhausted/empty"}).`;
+              }
+            } catch (modelErr: any) {
+              const rawMsg = modelErr?.message || String(modelErr);
+              console.warn(`[Gemini Solver] Model ${candidate.name} error:`, rawMsg);
+
+              if (
+                rawMsg.includes("402") ||
+                rawMsg.includes("prepay") ||
+                rawMsg.includes("prepago") ||
+                rawMsg.includes("RESOURCE_EXHAUSTED")
+              ) {
+                isBillingExhausted = true;
+              }
+              if (
+                rawMsg.includes("denied access") ||
+                rawMsg.includes("PERMISSION_DENIED") ||
+                rawMsg.includes("403") ||
+                rawMsg.includes("API_KEY_INVALID")
+              ) {
+                isKeyDenied = true;
+              }
+
+              const matchMsg = rawMsg.match(/"message":\s*"([^"]+)"/);
+              lastErrorMsg = matchMsg ? matchMsg[1].replace(/\\n/g, " ") : rawMsg;
+
+              // If we already started streaming text to the user, we cannot switch models mid-stream
+              if (streamedAnyChunk) {
+                break;
               }
             }
-
-            if (streamedAnyChunk) {
-              const durationMs = Date.now() - startTime;
-              console.log(`[Gemini Solver] Completed with ${candidate.name} in ${durationMs}ms`);
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ type: "done", locationOrder: reqLocationOrder })}\n\n`
-                )
-              );
-              controller.close();
-              return;
-            }
-          } catch (modelErr: any) {
-            const rawMsg = modelErr?.message || String(modelErr);
-            console.warn(`[Gemini Solver] Model ${candidate.name} error:`, rawMsg);
-
-            if (rawMsg.includes("402") || rawMsg.includes("prepay") || rawMsg.includes("prepago") || rawMsg.includes("RESOURCE_EXHAUSTED")) {
-              isBillingExhausted = true;
-            }
-            if (rawMsg.includes("denied access") || rawMsg.includes("PERMISSION_DENIED") || rawMsg.includes("403") || rawMsg.includes("API_KEY_INVALID")) {
-              isKeyDenied = true;
-            }
-
-            // Extract cleaner text from JSON if present
-            const matchMsg = rawMsg.match(/"message":\s*"([^"]+)"/);
-            lastErrorMsg = matchMsg ? matchMsg[1].replace(/\\n/g, " ") : rawMsg;
-
-            // If we already started streaming text to the user, we cannot switch models mid-stream
-            if (streamedAnyChunk) {
-              break;
-            }
-            // Otherwise, continue to the next candidate model in the list!
           }
-        }
 
-        // If we reach here and no text was streamed, report clean error
-        let finalUserError = lastErrorMsg || "All available models are temporarily busy. Please try again in a few moments.";
-        if (isBillingExhausted) {
-          finalUserError = "Google AI Error 402: Project billing quota exhausted. In Google AI Studio (aistudio.google.com), create a key in a project without billing for 1,500 free requests/day.";
-        } else if (isKeyDenied) {
-          finalUserError = "Google AI API key error: Key is invalid or denied permission. Please check your GEMINI_API_KEY.";
-        }
+          // If we reach here and no text was streamed, report clean error
+          let finalUserError =
+            lastErrorMsg || "All available models are temporarily busy. Please try again in a few moments.";
+          if (isBillingExhausted) {
+            finalUserError =
+              "Google AI Error 402: Project billing quota exhausted. In Google AI Studio (aistudio.google.com), create a key in a project without billing for 1,500 free requests/day.";
+          } else if (isKeyDenied) {
+            finalUserError =
+              "Google AI API key error: Key is invalid or denied permission. Please check your GEMINI_API_KEY.";
+          }
 
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({
-              type: "error",
-              error: finalUserError,
-              needsApiKey: isKeyDenied || isBillingExhausted,
-              isBillingError: isBillingExhausted,
-            })}\n\n`
-          )
-        );
-        controller.close();
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "error",
+                error: finalUserError,
+                needsApiKey: isKeyDenied || isBillingExhausted,
+                isBillingError: isBillingExhausted,
+              })}\n\n`
+            )
+          );
+          controller.close();
+        } catch (globalStreamErr: any) {
+          console.error("[Gemini Solver Stream Fatal Error]:", globalStreamErr);
+          try {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "error",
+                  error: globalStreamErr?.message || "Internal stream error",
+                })}\n\n`
+              )
+            );
+          } catch {}
+          try {
+            controller.close();
+          } catch {}
+        }
       },
     });
 
