@@ -511,13 +511,20 @@ export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: Qu
           return true;
         })
         .sort((a, b) => {
-          if (a.order != null && b.order != null && a.order !== b.order) {
-            return a.order - b.order;
+          // If in the same multi-part question group, sort by order within that group
+          if (a.groupId && b.groupId && a.groupId === b.groupId) {
+            if (a.order != null && b.order != null && a.order !== b.order) {
+              return a.order - b.order;
+            }
           }
-          return (a.title || "").localeCompare(b.title || "", undefined, {
+          // Otherwise, sort naturally by title
+          const titleComparison = (a.title || "").localeCompare(b.title || "", undefined, {
             numeric: true,
             sensitivity: "base",
           });
+          if (titleComparison !== 0) return titleComparison;
+
+          return (a.order ?? 0) - (b.order ?? 0);
         });
     }, [allQuestions, selectedDropdownTag, dbTagSearch, debouncedFilter, getQuestionLocation]);
   
@@ -829,7 +836,23 @@ export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: Qu
     }
 
     function startBatchGeneration() {
-      const targetQuestions = allQuestions.filter((q) => q.id && selectedQIds.has(q.id));
+      const selectedSet = selectedQIds;
+      const targetQuestions = allQuestions
+        .filter((q) => q.id && selectedSet.has(q.id))
+        .sort((a, b) => {
+          if (a.groupId && b.groupId && a.groupId === b.groupId) {
+            if (a.order != null && b.order != null && a.order !== b.order) {
+              return a.order - b.order;
+            }
+          }
+          const comp = (a.title || "").localeCompare(b.title || "", undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+          if (comp !== 0) return comp;
+          return (a.order ?? 0) - (b.order ?? 0);
+        });
+
       if (targetQuestions.length === 0) {
         setMsg("⚠️ No questions selected for batch AI generation.");
         return;
