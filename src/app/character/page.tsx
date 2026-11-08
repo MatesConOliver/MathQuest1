@@ -194,18 +194,19 @@ const InventoryItemCard = ({
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
-  const isGoldPouch = item.itemId === 'gift_gold_bounty' || !!item.customData?.goldAmount || !!def.goldValue;
+  const isGoldPouch = item.itemId === 'gift_gold_bounty' || item.itemId === 'gift_gm_note' || item.customData?.goldAmount !== undefined || !!def.goldValue;
+  const isGmNoteOnly = item.itemId === 'gift_gm_note' || item.customData?.goldAmount === 0;
   const isAchievementLog = item.itemId === 'achievement_log' || def.id === 'achievement_log' || def.name.toLowerCase() === 'achievement log';
-  const goldAmount = item.customData?.goldAmount || def.goldValue || 100;
+  const goldAmount = item.customData?.goldAmount ?? (def.goldValue ?? 0);
   const displayName = isAchievementLog ? "Achievement Log" : (item.customData?.title || def.name);
 
   const isWeapon = def.slot === "mainHand" || def.slot === "offHand" || def.type === "weapon";
   const isBroken = isWeapon && (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
   const isGear = !isAchievementLog && (def.slot || ["armor", "head", "mainHand", "offHand", "weapon", "shield"].includes(def.type as string));
 
-  // Sell Price: Usual = 50%, Broken = half of usual (25%)
-  const usualSellPrice = Math.max(1, Math.ceil(def.price * 0.5));
-  const sellValue = isBroken ? Math.max(1, Math.floor(usualSellPrice / 2)) : usualSellPrice;
+  // Sell Price: Usual = 50% of original price, Broken = 10% of original price (20% of usual sell price)
+  const usualSellPrice = Math.max(1, Math.floor(def.price * 0.5));
+  const sellValue = isBroken ? Math.max(1, Math.floor(def.price * 0.1)) : usualSellPrice;
 
   return (
     <div
@@ -214,7 +215,9 @@ const InventoryItemCard = ({
       onMouseLeave={() => setIsTooltipOpen(false)}
       className={`group relative p-3 rounded-xl flex flex-col gap-2 transition-all ${
       isGoldPouch
-        ? "bg-amber-50/80 border-2 border-amber-400 dark:bg-amber-950/40 dark:border-amber-500/70 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+        ? (isGmNoteOnly 
+            ? "bg-indigo-50/80 border-2 border-indigo-400 dark:bg-indigo-950/40 dark:border-indigo-500/70 shadow-[0_0_12px_rgba(99,102,241,0.2)]"
+            : "bg-amber-50/80 border-2 border-amber-400 dark:bg-amber-950/40 dark:border-amber-500/70 shadow-[0_0_12px_rgba(245,158,11,0.2)]")
         : isBroken 
         ? "bg-red-950/30 border-2 border-red-600/70 dark:bg-red-950/40 dark:border-red-600/80 shadow-[0_0_12px_rgba(220,38,38,0.25)]" 
         : "border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-700/50"
@@ -229,19 +232,27 @@ const InventoryItemCard = ({
           <div className="flex-1 min-w-0">
               <div className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">
                   {displayName} 
-                  {isGoldPouch && <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 px-1.5 py-0.5 rounded ml-1 font-black border border-amber-300 dark:border-amber-700">GIFT</span>}
+                  {isGoldPouch && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ml-1 font-black border ${
+                      isGmNoteOnly 
+                        ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700" 
+                        : "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300 dark:border-amber-700"
+                    }`}>
+                      {isGmNoteOnly ? "REPLY" : "GIFT"}
+                    </span>
+                  )}
                   {isAchievementLog && <span className="text-[10px] bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded ml-1 font-semibold border border-gray-200 dark:border-gray-600">LOG</span>}
                   {isEquipped && <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1 rounded ml-1 border border-green-200 dark:border-green-800">EQUIPPED</span>}
                   {isBroken && <span className="text-[10px] bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 px-1 rounded ml-1 font-black border border-red-200 dark:border-red-800 animate-pulse">BROKEN</span>}
               </div>
               <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
-                {isGoldPouch ? `Consumable Gift (+${goldAmount} Gold)` : isAchievementLog ? "JOURNAL" : def.slot || (def.type as string)}
+                {isGoldPouch ? (isGmNoteOnly ? "GM Response Scroll (0 Gold)" : `Consumable Gift (+${goldAmount} Gold)`) : isAchievementLog ? "JOURNAL" : def.slot || (def.type as string)}
               </div>
               {!isAchievementLog && item.customData?.reason && (
                 <div className="mt-1.5 p-2 rounded-lg bg-amber-100/90 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700/60 text-[11px] text-amber-950 dark:text-amber-200 leading-snug shadow-inner">
                   <div className="font-black flex items-center gap-1 text-[9px] uppercase tracking-wider text-amber-800 dark:text-amber-400 mb-0.5">
                     <span>📜</span>
-                    <span>Note from GM:</span>
+                    <span>{isGmNoteOnly ? "GM Answer & Explanation:" : "Note from GM:"}</span>
                   </div>
                   <div className="italic break-words">&ldquo;{item.customData.reason}&rdquo;</div>
                 </div>
@@ -849,11 +860,11 @@ export default function CharacterPage() {
         return;
     }
 
-    // Broken objects are sellable for half of usual selling price (usual is 50%, broken is 25%)
+    // Broken objects are sellable for 10% of original price (20% of 50% usual sell price)
     const isWeapon = def.slot === "mainHand" || def.slot === "offHand" || def.type === "weapon";
     const isBroken = isWeapon && (item.maxDurability || 0) > 0 && (item.durability || 0) <= 0;
-    const usualSellPrice = Math.max(1, Math.ceil(def.price * 0.5));
-    const sellPrice = isBroken ? Math.max(1, Math.floor(usualSellPrice / 2)) : usualSellPrice;
+    const usualSellPrice = Math.max(1, Math.floor(def.price * 0.5));
+    const sellPrice = isBroken ? Math.max(1, Math.floor(def.price * 0.1)) : usualSellPrice;
 
     const newInventory = char.inventory.filter(i => i.instanceId !== item.instanceId);
     const newGold = (char.gold || 0) + sellPrice;
@@ -890,21 +901,25 @@ export default function CharacterPage() {
       return;
     }
 
-    // Gold Bounty Pouch / Gift Consumable
-    if (item.itemId === 'gift_gold_bounty' || item.customData?.goldAmount || def?.goldValue) {
-        const goldAmt = item.customData?.goldAmount || def?.goldValue || 100;
+    // Gold Bounty Pouch / GM Message Consumable
+    if (item.itemId === 'gift_gold_bounty' || item.itemId === 'gift_gm_note' || item.customData?.goldAmount !== undefined || def?.goldValue) {
+        const goldAmt = item.customData?.goldAmount ?? (def?.goldValue ?? 0);
         const newGold = (char.gold || 0) + goldAmt;
         const newInventory = char.inventory.filter(i => (i.instanceId ? i.instanceId !== item.instanceId : i.itemId !== item.itemId));
 
         setChar({ ...char, gold: newGold, inventory: newInventory });
         await updateDoc(doc(db, "characters", user.uid), {
-            gold: increment(goldAmt),
+            ...(goldAmt > 0 ? { gold: increment(goldAmt) } : {}),
             inventory: newInventory
         });
         playSfx("/item-sold.mp3");
-        const gmNote = item.customData?.reason ? ` • Note: "${item.customData.reason}"` : "";
-        setMsg(`💰 Opened ${item.customData?.title || def?.name || "Gold Bounty Pouch"}! Claimed +${goldAmt} Gold!${gmNote}`);
-        setTimeout(() => setMsg(""), 5000);
+        const gmNote = item.customData?.reason ? ` • "${item.customData.reason}"` : "";
+        if (goldAmt > 0) {
+          setMsg(`💰 Opened ${item.customData?.title || def?.name || "Gold Bounty Pouch"}! Claimed +${goldAmt} Gold!${gmNote}`);
+        } else {
+          setMsg(`📜 Read ${item.customData?.title || "GM Message Scroll"}!${gmNote}`);
+        }
+        setTimeout(() => setMsg(""), 6000);
         return;
     }
 

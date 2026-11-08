@@ -137,30 +137,46 @@ export function ReportsPanel({ onSwitchToQuestions }: ReportsPanelProps) {
   // Action: Compensate student with in-game gold delivered as a consumable item to their backpack
   const handleSendReward = async () => {
     if (!rewardReport || !rewardReport.userId) return;
-    if (rewardGold <= 0) {
-      alert("Please enter a positive gold amount.");
+    if (rewardGold < 0 || isNaN(rewardGold)) {
+      alert("Please enter a valid gold amount (0 or more).");
+      return;
+    }
+    if (rewardGold === 0 && !rewardReason.trim()) {
+      alert("Please provide an answer or note to the student when giving 0 gold.");
       return;
     }
 
     setIsRewarding(true);
-    setMsg("Sending reward to player's backpack...");
+    setMsg(rewardGold > 0 ? "Sending reward pouch to player's backpack..." : "Sending answer scroll to player's backpack...");
 
     try {
       // 1. Ensure the item template exists in the 'items' collection so the shop/inventory can resolve its metadata
-      const giftItemId = "gift_gold_bounty";
+      const giftItemId = rewardGold > 0 ? "gift_gold_bounty" : "gift_gm_note";
       const itemRef = doc(db, "items", giftItemId);
       const itemSnap = await getDoc(itemRef);
 
       if (!itemSnap.exists()) {
-        await setDoc(itemRef, {
-          name: "Gold Bounty Pouch",
-          description: "A special compensation pouch sent directly by the Game Master for reporting an issue. Open it in your backpack to claim your gold!",
-          type: "misc",
-          price: 0,
-          goldValue: 100,
-          imageUrl: "https://cdn-icons-png.flaticon.com/512/272/272525.png",
-          inShop: false,
-        });
+        if (giftItemId === "gift_gm_note") {
+          await setDoc(itemRef, {
+            name: "GM Message Scroll",
+            description: "A personal response scroll from the Game Master answering your question report. Open it to read the GM's reply!",
+            type: "misc",
+            price: 0,
+            goldValue: 0,
+            imageUrl: "https://cdn-icons-png.flaticon.com/512/3209/3209265.png",
+            inShop: false,
+          });
+        } else {
+          await setDoc(itemRef, {
+            name: "Gold Bounty Pouch",
+            description: "A special compensation pouch sent directly by the Game Master for reporting an issue. Open it in your backpack to claim your gold!",
+            type: "misc",
+            price: 0,
+            goldValue: 100,
+            imageUrl: "https://cdn-icons-png.flaticon.com/512/272/272525.png",
+            inShop: false,
+          });
+        }
       }
 
       // 2. Create the unique consumable item instance for the player's backpack
@@ -171,8 +187,10 @@ export function ReportsPanel({ onSwitchToQuestions }: ReportsPanelProps) {
         obtainedAt: Date.now(),
         customData: {
           goldAmount: rewardGold,
-          reason: rewardReason,
-          title: `Gold Bounty Pouch (+${rewardGold} G)`,
+          reason: rewardReason.trim(),
+          title: rewardGold > 0 
+            ? `Gold Bounty Pouch (+${rewardGold} G)` 
+            : `GM Answer: ${rewardReport.questionTitle || "Question Feedback"}`,
         },
       };
 
@@ -185,7 +203,7 @@ export function ReportsPanel({ onSwitchToQuestions }: ReportsPanelProps) {
       // 4. Update the report status to 'rewarded'
       saveLocalOverride(rewardReport.id, "rewarded");
       setReports((prev) =>
-        prev.map((r) => (r.id === rewardReport.id ? { ...r, status: "rewarded", rewardGold } : r))
+        prev.map((r) => (r.id === rewardReport.id ? { ...r, status: "rewarded", rewardGold, gmNotes: rewardReason } : r))
       );
 
       const targetCol = (rewardReport as any)._collectionName || "reports";
@@ -202,7 +220,11 @@ export function ReportsPanel({ onSwitchToQuestions }: ReportsPanelProps) {
         console.warn("Could not sync rewarded status to remote Firestore:", remoteErr);
       }
 
-      setMsg(`✅ Dispatched ${rewardGold} Gold Pouch to ${rewardReport.characterName || "player"}'s backpack!`);
+      if (rewardGold > 0) {
+        setMsg(`✅ Dispatched ${rewardGold} Gold Pouch to ${rewardReport.characterName || "player"}'s backpack!`);
+      } else {
+        setMsg(`✅ Dispatched GM Answer Scroll to ${rewardReport.characterName || "player"}'s backpack!`);
+      }
       setRewardReport(null);
       setTimeout(() => setMsg(""), 3500);
     } catch (err: any) {
@@ -505,8 +527,10 @@ export function ReportsPanel({ onSwitchToQuestions }: ReportsPanelProps) {
                 <div className="mt-4 pt-3 border-t dark:border-gray-700 flex flex-wrap justify-between items-center gap-2">
                   <div className="text-[11px] text-gray-500 dark:text-gray-400">
                     {isRewarded
-                      ? `✓ Rewarded with ${report.rewardGold} Gold (delivered to backpack)`
-                      : "Review answer accuracy or award a Gold Bounty pouch."}
+                      ? (report.rewardGold && report.rewardGold > 0
+                          ? `✓ Rewarded with ${report.rewardGold} Gold (delivered to backpack)`
+                          : "✓ Answered by GM (scroll delivered to backpack)")
+                      : "Review report, reply to student, or award a Gold Bounty."}
                   </div>
 
                   <div className="flex gap-2">
@@ -522,8 +546,8 @@ export function ReportsPanel({ onSwitchToQuestions }: ReportsPanelProps) {
                           }}
                           className="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs rounded-xl shadow transition-transform hover:scale-105 active:scale-95 flex items-center gap-1.5"
                         >
-                          <span>💰</span>
-                          <span>Compensate with Gold Pouch</span>
+                          <span>💬</span>
+                          <span>Reply & Bounty</span>
                         </button>
 
                         <button
@@ -558,16 +582,20 @@ export function ReportsPanel({ onSwitchToQuestions }: ReportsPanelProps) {
         </div>
       )}
 
-      {/* REWARD / COMPENSATION MODAL */}
+      {/* REWARD / COMPENSATION / ANSWER MODAL */}
       {rewardReport && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 border-2 border-amber-500 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 text-gray-900 dark:text-white animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3">
-              <span className="text-3xl">🎁</span>
+              <span className="text-3xl">{rewardGold === 0 ? "📜" : "🎁"}</span>
               <div>
-                <h3 className="font-black text-lg text-amber-500">Send Gold Bounty to Player</h3>
+                <h3 className="font-black text-lg text-amber-500">
+                  {rewardGold === 0 ? "Send GM Answer (0 Gold)" : "Send Gold Bounty & Answer"}
+                </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Deliver a consumable reward pouch directly into {rewardReport.characterName}&apos;s backpack.
+                  {rewardGold === 0
+                    ? `Deliver an answer scroll directly into ${rewardReport.characterName}'s backpack.`
+                    : `Deliver a consumable reward pouch directly into ${rewardReport.characterName}'s backpack.`}
                 </p>
               </div>
             </div>
@@ -581,38 +609,55 @@ export function ReportsPanel({ onSwitchToQuestions }: ReportsPanelProps) {
                 <span className="text-gray-500">Related Question:</span>
                 <span className="font-bold truncate max-w-[200px]">{rewardReport.questionTitle}</span>
               </div>
+              {rewardReport.problemDescription && (
+                <div className="pt-1.5 border-t dark:border-gray-700/60 text-gray-600 dark:text-gray-300 italic">
+                  &ldquo;{rewardReport.problemDescription}&rdquo;
+                </div>
+              )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase text-gray-600 dark:text-gray-300 mb-1">
-                Gold Amount (Delivered via Pouch):
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-xs font-bold uppercase text-gray-600 dark:text-gray-300">
+                  Gold Bounty:
+                </label>
+                <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                  {rewardGold === 0 ? "0 G (Answer only, no gold)" : `+${rewardGold} G bounty`}
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
-                  min="1"
+                  min="0"
                   step="10"
                   value={rewardGold}
-                  onChange={(e) => setRewardGold(Math.max(1, parseInt(e.target.value) || 0))}
+                  onChange={(e) => setRewardGold(Math.max(0, parseInt(e.target.value) || 0))}
                   className="flex-1 p-2.5 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-950 font-mono font-bold text-base focus:ring-2 focus:ring-amber-400 outline-none"
                 />
                 <span className="font-black text-yellow-500 text-sm">GOLD</span>
               </div>
 
-              {/* Quick presets */}
-              <div className="flex gap-2 mt-2">
-                {[50, 100, 200, 500].map((preset) => (
+              {/* Quick presets including 0 G */}
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {[0, 50, 100, 200, 500].map((preset) => (
                   <button
                     key={preset}
                     type="button"
-                    onClick={() => setRewardGold(preset)}
+                    onClick={() => {
+                      setRewardGold(preset);
+                      if (preset === 0 && (!rewardReason || rewardReason.startsWith("Bug Bounty:"))) {
+                        setRewardReason(`Regarding ${rewardReport.questionTitle || "your question report"}: `);
+                      } else if (preset > 0 && rewardReason.startsWith("Regarding ")) {
+                        setRewardReason(`Bug Bounty: Thank you for identifying an issue in ${rewardReport.questionTitle || "our questions"}!`);
+                      }
+                    }}
                     className={`px-2.5 py-1 text-xs rounded-lg font-bold border transition-colors ${
                       rewardGold === preset
-                        ? "bg-amber-400 text-black border-amber-500"
-                        : "bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
+                        ? "bg-amber-400 text-black border-amber-500 shadow-sm"
+                        : "bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                     }`}
                   >
-                    +{preset} G
+                    {preset === 0 ? "0 G (No Gold)" : `+${preset} G`}
                   </button>
                 ))}
               </div>
@@ -620,14 +665,25 @@ export function ReportsPanel({ onSwitchToQuestions }: ReportsPanelProps) {
 
             <div>
               <label className="block text-xs font-bold uppercase text-gray-600 dark:text-gray-300 mb-1">
-                Note / Description on Pouch:
+                {rewardGold === 0 ? "Answer / Explanation to Student:" : "Note / Description on Pouch:"}
               </label>
               <textarea
                 value={rewardReason}
                 onChange={(e) => setRewardReason(e.target.value)}
-                rows={2}
-                className="w-full p-2.5 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-950 text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                rows={3}
+                placeholder={
+                  rewardGold === 0
+                    ? "Explain why the question or answer is configured this way, or provide the correct derivation..."
+                    : "Note explaining the reward to the student..."
+                }
+                className="w-full p-2.5 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-950 text-xs focus:ring-2 focus:ring-amber-400 outline-none custom-scrollbar"
+                required
               />
+              {rewardGold === 0 && (
+                <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-1 font-medium">
+                  📜 The student will receive this answer as a readable scroll in their backpack.
+                </p>
+              )}
             </div>
 
             <div className="flex justify-end gap-2.5 pt-2 border-t dark:border-gray-800">
@@ -645,7 +701,11 @@ export function ReportsPanel({ onSwitchToQuestions }: ReportsPanelProps) {
                 disabled={isRewarding}
                 className="px-5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black shadow-lg shadow-amber-500/20 transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
               >
-                {isRewarding ? "Delivering..." : `Dispatch ${rewardGold}G Pouch`}
+                {isRewarding
+                  ? "Delivering..."
+                  : rewardGold === 0
+                  ? "Dispatch Answer (0 G)"
+                  : `Dispatch ${rewardGold}G Pouch + Answer`}
               </button>
             </div>
           </div>

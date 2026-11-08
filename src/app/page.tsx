@@ -27,6 +27,10 @@ export default function HomePage() {
 
   // --- SETTINGS MODAL & PKM STATE ---
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [charNameInput, setCharNameInput] = useState("");
+  const [isSavingCharName, setIsSavingCharName] = useState(false);
+  const [charNameSuccessMsg, setCharNameSuccessMsg] = useState("");
+  const [charNameErrorMsg, setCharNameErrorMsg] = useState("");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [isPinUnlocked, setIsPinUnlocked] = useState(false);
@@ -228,6 +232,45 @@ export default function HomePage() {
     }
   }, [character?.pkmStudentId]);
 
+  // Sync character name from document
+  useEffect(() => {
+    if (character?.name) {
+      setCharNameInput(character.name);
+    }
+  }, [character?.name]);
+
+  const handleSaveCharacterName = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!user || !character) return;
+    const cleanName = charNameInput.trim();
+    if (!cleanName) {
+      setCharNameErrorMsg("Character name cannot be blank.");
+      return;
+    }
+    if (cleanName.length > 25) {
+      setCharNameErrorMsg("Character name is too long (max 25 characters).");
+      return;
+    }
+    setIsSavingCharName(true);
+    setCharNameErrorMsg("");
+    setCharNameSuccessMsg("");
+    try {
+      const charRef = doc(db, "characters", user.uid);
+      await updateDoc(charRef, {
+        name: cleanName,
+        updatedAt: Date.now()
+      });
+      setCharacter(prev => prev ? { ...prev, name: cleanName } : null);
+      setCharNameSuccessMsg("Character name saved successfully!");
+      setTimeout(() => setCharNameSuccessMsg(""), 3000);
+    } catch (error) {
+      console.error("Error updating character name:", error);
+      setCharNameErrorMsg("Failed to update character name. Please try again.");
+    } finally {
+      setIsSavingCharName(false);
+    }
+  };
+
   // Sync theme mode on mount
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -425,6 +468,45 @@ export default function HomePage() {
 
             {/* Modal Body */}
             <div className="p-5 overflow-y-auto space-y-6">
+              {/* 0. Character Name Setting */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Character Name
+                </label>
+                <form onSubmit={handleSaveCharacterName} className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={charNameInput}
+                      onChange={(e) => {
+                        setCharNameInput(e.target.value);
+                        setCharNameErrorMsg("");
+                      }}
+                      placeholder="Enter character name"
+                      maxLength={25}
+                      className="input text-xs font-bold py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSavingCharName || !charNameInput.trim() || charNameInput.trim() === character?.name}
+                      className="py-2 px-3.5 rounded-lg text-xs font-bold bg-black text-white dark:bg-white dark:text-black hover:opacity-90 disabled:opacity-40 transition shrink-0"
+                    >
+                      {isSavingCharName ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                  {charNameErrorMsg && (
+                    <p className="text-[11px] text-red-500 dark:text-red-400 font-bold">
+                      {charNameErrorMsg}
+                    </p>
+                  )}
+                  {charNameSuccessMsg && (
+                    <p className="text-[11px] text-green-600 dark:text-green-400 font-bold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> {charNameSuccessMsg}
+                    </p>
+                  )}
+                </form>
+              </div>
+
               {/* 1. Theme Setting */}
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
