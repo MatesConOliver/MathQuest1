@@ -11,7 +11,7 @@ import { StoryPlayer } from "@/components/StoryPlayer";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { GameIcon } from "@/components/GameIcon";
 import { Character, StoryEvent } from "@/types/game";
-import { recalculateAllPkmCodes, ensureAchievementLogItem, isValidPkmId } from "@/lib/pkm";
+import { recalculateAllPkmCodes, ensureAchievementLogItem, isValidPkmId, getMissingLevelMilestoneAchievements } from "@/lib/pkm";
 
 export default function HomePage() {
   const router = useRouter();
@@ -321,7 +321,16 @@ export default function HomePage() {
     setSettingsMsg("");
     try {
       const oldAchievements = character.pkmAchievements || {};
-      const updatedAchievements = recalculateAllPkmCodes(oldAchievements, cleanId);
+      const recalculatedAchievements = recalculateAllPkmCodes(oldAchievements, cleanId);
+      const missingMilestones = getMissingLevelMilestoneAchievements(
+        character.level || 1,
+        cleanId,
+        recalculatedAchievements
+      );
+      const updatedAchievements = {
+        ...recalculatedAchievements,
+        ...missingMilestones,
+      };
       const updatedInventory = ensureAchievementLogItem(character.inventory || []);
 
       await updateDoc(doc(db, "characters", user.uid), {

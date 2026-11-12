@@ -14,10 +14,12 @@ interface VictoryScreenProps {
   goldReward: number;
   skillGains: {[key: string]: number} | null;
   earnedPkmReward?: EarnedPkmReward | null;
+  levelUpPkmRewards?: EarnedPkmReward[];
 }
 
-export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain, onReturnToMap, xpReward, goldReward, skillGains, earnedPkmReward }: VictoryScreenProps) {
+export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain, onReturnToMap, xpReward, goldReward, skillGains, earnedPkmReward, levelUpPkmRewards = [] }: VictoryScreenProps) {
   const [copiedPkmCode, setCopiedPkmCode] = useState(false);
+  const [copiedMilestoneId, setCopiedMilestoneId] = useState<string | null>(null);
   const data = levelUpData as any;
 
   const hpGain = data?.hpGain || 0;
@@ -71,6 +73,33 @@ export function VictoryScreen({ character, levelUpData, lootDrops, onFightAgain,
                 <span className="font-bold text-gray-700 dark:text-gray-300">Upgrade Points</span>
                 <span className="font-black text-yellow-700 dark:text-yellow-400 text-xl">+{data.pointsGain} 🆙</span>
               </div>
+              {levelUpPkmRewards.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-yellow-200 dark:border-yellow-700/50">
+                  {levelUpPkmRewards.map((reward) => (
+                    <div key={reward.activityId} className="bg-gradient-to-r from-purple-100 via-indigo-50 to-purple-100 dark:from-purple-950/60 dark:via-indigo-950/50 dark:to-purple-950/60 rounded-xl p-3 border border-purple-400 dark:border-purple-600 space-y-1.5 text-center">
+                      <div className="text-[11px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                        🏆 {reward.activityName}
+                      </div>
+                      <div className="bg-white/90 dark:bg-black/60 px-2 py-1 rounded-lg border border-purple-300 dark:border-purple-700 font-mono font-black text-xs tracking-wider text-purple-900 dark:text-purple-200 select-all break-all">
+                        {reward.code}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                            navigator.clipboard.writeText(reward.code);
+                            setCopiedMilestoneId(reward.activityId);
+                            setTimeout(() => setCopiedMilestoneId(null), 2500);
+                          }
+                        }}
+                        className="w-full py-1 px-2.5 rounded-lg text-[11px] font-bold transition-all active:scale-95 bg-purple-600 hover:bg-purple-500 text-white shadow-sm"
+                      >
+                        {copiedMilestoneId === reward.activityId ? '✓ Copied!' : '📋 Copy Milestone Code'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="text-[10px] text-center text-gray-400 italic">Visit Character Page to spend points!</div>
           </div>
         )}

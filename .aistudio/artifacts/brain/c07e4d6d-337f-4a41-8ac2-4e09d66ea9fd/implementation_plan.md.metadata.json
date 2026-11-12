@@ -1,6 +1,0 @@
-{
-  "summary": "Revised implementation plan incorporating English warning text, renaming the backpack item to 'Achievement Log', and integrating the canonical PKM 18-byte CRC-32 + CRC-8 Base36 specification.",
-  "updatedAt": "2026-11-05T13:55:21.898472231Z",
-  "requestFeedback": true,
-  "userFacing": true
-}

@@ -141,3 +141,44 @@ export function recalculateAllPkmCodes(
 
   return updated;
 }
+
+export const PKM_LEVEL_MILESTONES: Record<number, string> = {
+  10: "lvl10",
+  20: "20lvl",
+  30: "l303l",
+  40: "4lvl0",
+  50: "mid100",
+  60: "3rdage",
+  70: "sixsev",
+  80: "8lvl10",
+  90: "almost",
+  100: "100yay",
+};
+
+/**
+ * Returns any Pokemáticos level-milestone achievements (10, 20, ..., 100)
+ * that the player has reached by level but does not yet have in existingAchievements.
+ */
+export function getMissingLevelMilestoneAchievements(
+  level: number,
+  studentId: string,
+  existingAchievements: Record<string, PkmAchievementEntry> = {}
+): Record<string, PkmAchievementEntry> {
+  const missing: Record<string, PkmAchievementEntry> = {};
+  if (!studentId || !studentId.trim() || level < 10) return missing;
+
+  const now = Date.now();
+  for (const [lvlStr, activityId] of Object.entries(PKM_LEVEL_MILESTONES)) {
+    const milestoneLvl = Number(lvlStr);
+    if (level >= milestoneLvl && !existingAchievements[activityId]) {
+      missing[activityId] = {
+        activityId,
+        activityName: `Level ${milestoneLvl} Milestone`,
+        code: generatePkmRewardCode(studentId, activityId),
+        earnedAt: now,
+      };
+    }
+  }
+
+  return missing;
+}

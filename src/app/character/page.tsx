@@ -12,7 +12,7 @@ import Link from "next/link";
 import { HealthBar } from "@/app/play/components/shared/Bars";
 import { GameIcon } from "@/components/GameIcon";
 import { Copy, Check, X } from "lucide-react";
-import { ACHIEVEMENT_LOG_ITEM_ID, ensureAchievementLogItem } from "@/lib/pkm";
+import { ACHIEVEMENT_LOG_ITEM_ID, ensureAchievementLogItem, getMissingLevelMilestoneAchievements } from "@/lib/pkm";
 
 // --- COMPONENTS ---
 
@@ -596,10 +596,32 @@ export default function CharacterPage() {
           const charData = charSnap.data() as Character;
           if (charData.pkmStudentId || (charData.pkmAchievements && Object.keys(charData.pkmAchievements).length > 0)) {
             const hasLog = charData.inventory?.some(i => i.itemId === ACHIEVEMENT_LOG_ITEM_ID);
-            if (!hasLog) {
-              const updatedInv = ensureAchievementLogItem(charData.inventory || []);
-              charData.inventory = updatedInv;
-              updateDoc(doc(db, "characters", u.uid), { inventory: updatedInv }).catch(console.error);
+            const missingMilestones = charData.pkmStudentId
+              ? getMissingLevelMilestoneAchievements(
+                  charData.level || 1,
+                  charData.pkmStudentId,
+                  charData.pkmAchievements || {}
+                )
+              : {};
+            const hasMissingMilestones = Object.keys(missingMilestones).length > 0;
+
+            if (!hasLog || hasMissingMilestones) {
+              const syncUpdates: Record<string, any> = {};
+              if (!hasLog) {
+                const updatedInv = ensureAchievementLogItem(charData.inventory || []);
+                charData.inventory = updatedInv;
+                syncUpdates.inventory = updatedInv;
+              }
+              if (hasMissingMilestones) {
+                charData.pkmAchievements = {
+                  ...(charData.pkmAchievements || {}),
+                  ...missingMilestones,
+                };
+                for (const [actId, entry] of Object.entries(missingMilestones)) {
+                  syncUpdates[`pkmAchievements.${actId}`] = entry;
+                }
+              }
+              updateDoc(doc(db, "characters", u.uid), syncUpdates).catch(console.error);
             }
           }
           setChar(charData);
@@ -929,17 +951,43 @@ export default function CharacterPage() {
     if (item.itemId === 'rare-candy' || def.name.toLowerCase() === 'rare candy') {
         const newLevel = char.level + 1;
         const newHp = char.maxHp + 5;
-        const newInventory = char.inventory.filter(i => i.instanceId !== item.instanceId);
-        
-        setChar({ ...char, level: newLevel, maxHp: newHp, inventory: newInventory });
-        await updateDoc(doc(db, "characters", user.uid), {
-            level: increment(1),
-            maxHp: increment(5),
-            inventory: newInventory
+        let newInventory = char.inventory.filter(i => i.instanceId !== item.instanceId);
+        const missingMilestones = char.pkmStudentId
+          ? getMissingLevelMilestoneAchievements(newLevel, char.pkmStudentId, char.pkmAchievements || {})
+          : {};
+        const hasNewMilestone = Object.keys(missingMilestones).length > 0;
+        if (hasNewMilestone) {
+          newInventory = ensureAchievementLogItem(newInventory);
+        }
+
+        const updatedAchievements = hasNewMilestone
+          ? { ...(char.pkmAchievements || {}), ...missingMilestones }
+          : char.pkmAchievements;
+
+        setChar({
+          ...char,
+          level: newLevel,
+          maxHp: newHp,
+          inventory: newInventory,
+          ...(updatedAchievements ? { pkmAchievements: updatedAchievements } : {}),
         });
+
+        const candyUpdates: Record<string, any> = {
+          level: increment(1),
+          maxHp: increment(5),
+          inventory: newInventory,
+        };
+        for (const [actId, entry] of Object.entries(missingMilestones)) {
+          candyUpdates[`pkmAchievements.${actId}`] = entry;
+        }
+        await updateDoc(doc(db, "characters", user.uid), candyUpdates);
         playSfx("/upgrade-sfx.mp3");
-        setMsg("✨ LEVEL UP!");
-        setTimeout(() => setMsg(""), 2500);
+        setMsg(
+          hasNewMilestone
+            ? `✨ LEVEL UP! Earned Pokemáticos Level ${newLevel} code in your Achievement Log!`
+            : "✨ LEVEL UP!"
+        );
+        setTimeout(() => setMsg(""), hasNewMilestone ? 4500 : 2500);
         return;
     }
 

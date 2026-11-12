@@ -14,7 +14,7 @@ import {
 import { getDoc, updateDoc, db } from '@/lib/firebase';
 import { arrayUnion, collection, getDocs as getFirebaseDocs, query, where, orderBy, increment } from 'firebase/firestore';
 import { useAudio } from '@/context/AudioContext';
-import { generatePkmRewardCode, ensureAchievementLogItem } from '@/lib/pkm';
+import { generatePkmRewardCode, ensureAchievementLogItem, getMissingLevelMilestoneAchievements } from '@/lib/pkm';
 
 export interface CombatEffect {
   target: 'foe' | 'player';
@@ -139,6 +139,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   const [xpReward, setXpReward] = useState(0);
   const [goldReward, setGoldReward] = useState(0);
   const [earnedPkmReward, setEarnedPkmReward] = useState<EarnedPkmReward | null>(null);
+  const [levelUpPkmRewards, setLevelUpPkmRewards] = useState<EarnedPkmReward[]>([]);
 
   const [isLoading, setIsLoading] = useState(false); // Battle-specific loading
   const [showInventory, setShowInventory] = useState(false);
@@ -297,7 +298,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       (i) => !consumedPotionInstanceIds.includes(i.instanceId)
     );
 
-    // Check for Pokemáticos (PKM) Reward Code generation
+    // Check for Pokemáticos (PKM) Reward Code generation (encounter + level milestones)
     let newlyEarnedPkmReward: EarnedPkmReward | null = null;
     const pkmActivityId = currentEncounter.pkmActivityId?.trim();
     if (character.pkmStudentId && pkmActivityId) {
@@ -312,6 +313,16 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       setEarnedPkmReward(null);
     }
 
+    const missingLevelMilestones = character.pkmStudentId
+      ? getMissingLevelMilestoneAchievements(newLvl, character.pkmStudentId, character.pkmAchievements || {})
+      : {};
+    const newlyEarnedLevelPkmRewards: EarnedPkmReward[] = Object.values(missingLevelMilestones).map(entry => ({
+      code: entry.code,
+      activityId: entry.activityId,
+      activityName: entry.activityName,
+    }));
+    setLevelUpPkmRewards(newlyEarnedLevelPkmRewards);
+
     try {
         const baseInventory = [
             ...finalInventory,
@@ -322,8 +333,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
             })),
         ];
 
-        // Ensure the player has the Achievement Log item in their backpack if a PKM code was earned
-        const updatedInventory = newlyEarnedPkmReward
+        // Ensure the player has the Achievement Log item in their backpack if any PKM code was earned
+        const updatedInventory = (newlyEarnedPkmReward || newlyEarnedLevelPkmRewards.length > 0)
           ? ensureAchievementLogItem(baseInventory)
           : baseInventory;
 
@@ -345,6 +356,10 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
             code: newlyEarnedPkmReward.code,
             earnedAt: Date.now(),
           };
+        }
+
+        for (const [actId, entry] of Object.entries(missingLevelMilestones)) {
+          updates[`pkmAchievements.${actId}`] = entry;
         }
 
         if (currentEncounter.winRewardStoryFlag) {
@@ -1153,5 +1168,6 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     handleSpecialFightComplete,
     combatBuffs,
     earnedPkmReward,
+    levelUpPkmRewards,
   };
 }

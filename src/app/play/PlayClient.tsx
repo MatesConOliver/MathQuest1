@@ -122,6 +122,7 @@ export default function PlayClient() {
           goldReward={battle.goldReward}
           skillGains={battle.skillGains}
           earnedPkmReward={battle.earnedPkmReward}
+          levelUpPkmRewards={battle.levelUpPkmRewards}
         />
       );
     case 'lose':
