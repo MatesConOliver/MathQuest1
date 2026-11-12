@@ -64,6 +64,13 @@ export const SYSTEM_ICON_DEFINITIONS: SystemIconDef[] = [
     description: 'Battle encounter cards, fight CTA buttons, and attack commands',
   },
   {
+    key: 'bareFight',
+    name: 'Bare Fighting (Unarmed)',
+    category: 'combat',
+    defaultEmoji: '👊',
+    description: 'Attack strike animation effect over foe when fighting with bare hands (no weapon equipped in main hand)',
+  },
+  {
     key: 'escape',
     name: 'Escape / Retreat',
     category: 'combat',

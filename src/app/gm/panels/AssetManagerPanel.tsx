@@ -33,6 +33,7 @@ import {
   Search,
   Shield,
   AlertTriangle,
+  Link2,
 } from 'lucide-react';
 import { SYSTEM_ICON_DEFINITIONS, useSystemIcons, SystemIconDef } from '@/context/SystemIconsContext';
 import { optimizeIconImage } from '@/lib/imageOptimizer';
@@ -96,6 +97,31 @@ export function AssetManagerPanel() {
   const [iconFeedback, setIconFeedback] = useState<{ key: string; msg: string; type: 'success' | 'error' } | null>(null);
   const iconFileInputRef = useRef<HTMLInputElement | null>(null);
   const targetIconKeyRef = useRef<string | null>(null);
+  const [editingUrlKey, setEditingUrlKey] = useState<string | null>(null);
+  const [customUrlInput, setCustomUrlInput] = useState<string>('');
+
+  const handleSaveCustomUrl = async (key: string) => {
+    const url = customUrlInput.trim();
+    if (!url) return;
+    setOptimizingKey(key);
+    try {
+      const result = await updateIcon(key, url);
+      setIconFeedback({
+        key,
+        msg: result.permissionNotice
+          ? 'Saved locally & cached for this session!'
+          : 'Icon asset path updated & synchronized!',
+        type: 'success',
+      });
+      setEditingUrlKey(null);
+      setCustomUrlInput('');
+      setTimeout(() => setIconFeedback((prev) => (prev?.key === key ? null : prev)), 3500);
+    } catch {
+      setIconFeedback({ key, msg: 'Failed to update icon asset', type: 'error' });
+    } finally {
+      setOptimizingKey(null);
+    }
+  };
 
   // Helper to format bytes
   const formatBytes = (bytes: number): string => {
@@ -803,6 +829,46 @@ export function AssetManagerPanel() {
                       </div>
                     )}
 
+                    {/* Inline Custom Path Editor */}
+                    {editingUrlKey === def.key && (
+                      <div className="bg-gray-100 dark:bg-black/60 p-2.5 rounded-xl border border-amber-500/30 space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                          <span>Set Asset Path or Image URL:</span>
+                          <button
+                            type="button"
+                            onClick={() => { setEditingUrlKey(null); setCustomUrlInput(''); }}
+                            className="text-gray-400 hover:text-white text-xs"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={customUrlInput}
+                          onChange={(e) => setCustomUrlInput(e.target.value)}
+                          placeholder="e.g. /Assets/General/gear/fist.png or https://..."
+                          className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-amber-400"
+                        />
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => { setEditingUrlKey(null); setCustomUrlInput(''); }}
+                            className="px-2.5 py-1 text-xs rounded-lg text-gray-400 hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveCustomUrl(def.key)}
+                            disabled={!customUrlInput.trim() || isOptimizing}
+                            className="px-3 py-1 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-gray-950 shadow-sm"
+                          >
+                            Save Path
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Action Buttons */}
                     <div className="flex items-center gap-2 pt-1">
                       <button
@@ -814,11 +880,31 @@ export function AssetManagerPanel() {
                         <span>{isOptimizing ? 'Optimizing...' : currentCustomUrl ? 'Replace Sprite' : 'Upload Sprite'}</span>
                       </button>
 
+                      <button
+                        onClick={() => {
+                          if (editingUrlKey === def.key) {
+                            setEditingUrlKey(null);
+                            setCustomUrlInput('');
+                          } else {
+                            setEditingUrlKey(def.key);
+                            setCustomUrlInput(currentCustomUrl || '');
+                          }
+                        }}
+                        title="Set custom URL or file path directly"
+                        className={`py-2 px-2.5 rounded-xl border transition-all flex items-center justify-center ${
+                          editingUrlKey === def.key
+                            ? 'bg-amber-500/20 border-amber-400 text-amber-300'
+                            : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-white'
+                        }`}
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                      </button>
+
                       {currentCustomUrl && (
                         <button
                           onClick={() => handleResetIcon(def.key)}
                           title="Reset to default emoji"
-                          className="py-2 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-white text-xs font-bold transition-all flex items-center gap-1"
+                          className="py-2 px-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-white text-xs font-bold transition-all flex items-center gap-1"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
                           <span className="hidden sm:inline">Reset</span>

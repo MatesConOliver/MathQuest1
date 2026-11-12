@@ -406,6 +406,12 @@ export function BattleScreen(props: BattleScreenProps) {
   const mainHandEquippedId = character?.equipment?.mainHand;
   const mainHandInstance = mainHandEquippedId ? inventory.find(i => i.instanceId === mainHandEquippedId) : null;
   const mainHandWeapon = mainHandInstance ? gameItems[mainHandInstance.itemId] : null;
+  const isMainHandBroken = Boolean(
+    mainHandWeapon &&
+    mainHandInstance &&
+    (mainHandInstance.maxDurability || 0) > 0 &&
+    (mainHandInstance.durability || 0) <= 0
+  );
 
   // Background styling with dynamic fallback
   const bgStyle: React.CSSProperties = subArea?.imageUrl
@@ -497,14 +503,14 @@ export function BattleScreen(props: BattleScreenProps) {
         {/* Weapon Strike Slash Effect over Foe */}
         {combatEffect?.target === 'foe' && (
           <div className="animate-weapon-slash absolute top-[16%] sm:top-[18%] right-[16%] sm:right-[20%] pointer-events-none z-30 flex items-center justify-center">
-            {mainHandWeapon?.imageUrl ? (
+            {mainHandWeapon?.imageUrl && !isMainHandBroken ? (
               <img
                 src={mainHandWeapon.imageUrl}
                 alt={mainHandWeapon.name}
                 className="w-20 h-20 sm:w-24 sm:h-24 drop-shadow-[0_0_20px_rgba(255,255,255,1)] object-contain"
               />
             ) : (
-              <GameIcon name="fight" fallback="⚔️" size={72} className="drop-shadow-[0_0_25px_rgba(255,255,255,1)]" />
+              <GameIcon name="bareFight" fallback="👊" size={72} className="drop-shadow-[0_0_25px_rgba(255,255,255,1)]" />
             )}
           </div>
         )}
