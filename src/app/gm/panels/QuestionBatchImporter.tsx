@@ -37,11 +37,17 @@ function validateQuestions(): string | null {
     if (!Number.isInteger(question.correctIndex) || question.correctIndex < 0 || question.correctIndex > 3) {
       return `Question ${number} must have a correctIndex from 0 to 3.`;
     }
-    if (!Number.isFinite(question.difficulty) || question.difficulty < 1 || question.difficulty > 5) {
-      return `Question ${number} must have a difficulty from 1 to 5.`;
-    }
     if (!Array.isArray(question.tags) || question.tags.some((tag) => typeof tag !== "string")) {
       return `Question ${number} must have an array of string tags.`;
+    }
+    if (!Number.isFinite(question.time) || question.time <= 0) {
+      return `Question ${number} must have a positive time limit (in seconds).`;
+    }
+    if (question.groupId !== undefined && question.groupId !== null && typeof question.groupId !== "string") {
+      return `Question ${number} groupId must be a string if provided.`;
+    }
+    if (question.order !== undefined && question.order !== null && !Number.isFinite(question.order)) {
+      return `Question ${number} order must be a number if provided.`;
     }
   }
 
@@ -80,11 +86,10 @@ export function QuestionBatchImporter() {
               content: stringToContentBlocks(choice),
             })),
             correctIndex: question.correctIndex,
-            difficulty: question.difficulty,
             tags: question.tags.map((tag) => tag.trim()).filter(Boolean),
-            timeLimit: 30,
-            order: null,
-            groupId: null,
+            timeLimit: Math.round(question.time),
+            order: typeof question.order === "number" ? question.order : null,
+            groupId: question.groupId?.trim() || null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });

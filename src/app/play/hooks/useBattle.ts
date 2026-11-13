@@ -241,9 +241,10 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
   }, [character, battleInventory, consumedPotionInstanceIds]);
 
   const calculatePlayerDamage = useCallback(
-    (questionDifficulty: number) => {
+    (questionTimeMinutes: number) => {
       const { a, b, c, d, k, xBonus } = battleStats;
-      const x = (questionDifficulty || 1) + xBonus;
+      const baseX = Math.max(1, Number.isFinite(questionTimeMinutes) ? questionTimeMinutes : 1);
+      const x = baseX + xBonus;
 
       const termA = (a / 400) * Math.pow(x, 3);
       const termB = (b / 40) * Math.pow(x, 2);
@@ -615,7 +616,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       });
 
       if (correct) {
-        const foeDamage = calculatePlayerDamage(currentQuestion.difficulty || 1);
+        const foeDamage = calculatePlayerDamage(Math.max(1, (currentQuestion.timeLimit || 30) / 60));
         const calculatedFoeHp = foeHp - foeDamage;
         const maxHp = foe?.maxHp || 50;
         const halfHp = maxHp * 0.5;

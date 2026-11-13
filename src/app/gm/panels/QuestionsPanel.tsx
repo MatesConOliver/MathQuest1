@@ -251,7 +251,6 @@ export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: Qu
     const [promptString, setPromptString] = useState("");
     const [choices, setChoices] = useState(["", "", "", ""]);
     const [correctIndex, setCorrectIndex] = useState(0);
-    const [difficulty, setDifficulty] = useState(1);
     const [tagsText, setTagsText] = useState("");
     const [order, setOrder] = useState("");
     const [groupId, setGroupId] = useState("");
@@ -546,7 +545,6 @@ export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: Qu
       }
 
       setCorrectIndex(q.correctIndex || 0);
-      setDifficulty(q.difficulty || 1);
       setTagsText(q.tags ? q.tags.join(", ") : "");
       setOrder(q.order ? String(q.order) : "");
       setGroupId(q.groupId || "");
@@ -566,7 +564,7 @@ export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: Qu
       setChoices(["", "", "", ""]);
       setCorrectIndex(0); 
       setQMinutes(0); setQSeconds(30);
-      setDifficulty(1); setTagsText(""); setOrder(""); setGroupId("");
+      setTagsText(""); setOrder(""); setGroupId("");
       setSolutionUrl(""); setSolutionText(""); setCurrentAiSolution("");
       setSingleLocOrder(null);
       setMsg("");
@@ -629,7 +627,6 @@ export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: Qu
         promptContent: stringToContentBlocks(promptString),
         choicesContent: choices.map(c => ({ content: stringToContentBlocks(c) })),
         correctIndex,
-        difficulty: Number(difficulty),
         tags: tagsArray,
         timeLimit: safeTime,
         order: order ? Number(order) : null,
@@ -757,7 +754,6 @@ export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: Qu
           promptContent: stringToContentBlocks(promptString),
           choicesContent: choices.map((c) => ({ content: stringToContentBlocks(c) })),
           correctIndex,
-          difficulty: Number(difficulty),
           tags: tagsText.split(",").map((s) => s.trim()).filter(Boolean),
           timeLimit: Number(qMinutes) * 60 + Number(qSeconds),
           order: order ? Number(order) : undefined,
@@ -1092,8 +1088,7 @@ export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: Qu
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input type="number" label="Difficulty (1-5)" value={difficulty} onChange={(e:any) => setDifficulty(Number(e.target.value))} />
+          <div>
             <Input label="Tags (comma sep)" value={tagsText} onChange={(e:any) => setTagsText(e.target.value)} placeholder="e.g. algebra, functions" />
           </div>
 
@@ -1619,7 +1614,7 @@ export function QuestionsPanel({ initialQuestionId, onClearInitialQuestion }: Qu
                           </span>
                         );
                       })()}
-                      <span className="font-bold text-orange-400 text-[10px]">★{q.difficulty}</span>
+                      <span className="font-bold text-blue-500 dark:text-blue-400 text-[10px]">⏱ {q.timeLimit || 30}s</span>
                       {hasGm && (
                         <span className="bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
                           👑 GM Sol

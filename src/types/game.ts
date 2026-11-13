@@ -115,7 +115,6 @@ export interface Question {
   id:string;
   text: string;
   answer: number;
-  difficulty: number;
   packId?: string;
   order?: number;
   timeLimit?: number;
@@ -151,7 +150,6 @@ export type QuestionDoc = {
   correctIndex: number;
   rewardXp?: number;
   rewardGold?: number;
-  difficulty?: number;
   tags: string[];
   packId?: string;
   order?: number;
