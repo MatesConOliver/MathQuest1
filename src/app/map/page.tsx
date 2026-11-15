@@ -6,7 +6,7 @@ import { auth, callApi, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { arrayRemove, arrayUnion, collection, getDocs, orderBy, query, doc, getDoc, where, updateDoc, onSnapshot } from "firebase/firestore";
 import Link from "next/link";
-import { GameLocation, EncounterDoc, Character, SubArea, UnlockedSubArea, CharacterSkills, StoryEvent, SubAreaNodeType } from "@/types/game";
+import { GameLocation, EncounterDoc, FoeDoc, Character, SubArea, UnlockedSubArea, CharacterSkills, StoryEvent, SubAreaNodeType } from "@/types/game";
 import { useAudio } from "@/context/AudioContext";
 import { MAP_LOCATIONS, MapLocationMeta } from "@/config/mapLayout";
 import classNames from "classnames";
@@ -14,6 +14,7 @@ import { UnlockStatus, getUnlockStatus } from "@/lib/unlock";
 import { StoryPlayer } from "@/components/StoryPlayer";
 import { buildMapPath } from "@/lib/mapPath";
 import { GameIcon } from "@/components/GameIcon";
+import { getEncounterWaveConfigs, getPrimaryFoeId, resolveEncounterDisplay } from "@/lib/encounterDisplay";
 
 // --- HELPER FUNCTIONS ---
 
@@ -38,6 +39,53 @@ const formatSkillName = (skill: string) => {
 const isStoryLockedStatus = (status: UnlockStatus) => status.locked && status.reason === 'story';
 
 const SKILL_ORDER: (keyof CharacterSkills)[] = ['algebra', 'functions', 'geometry', 'probabilityAndStatistics', 'calculus'];
+
+function EncounterThumb({
+  imageUrl,
+  emoji,
+  hasCustomEmoji,
+  isShop,
+  title,
+}: {
+  imageUrl?: string;
+  emoji: string;
+  hasCustomEmoji: boolean;
+  isShop: boolean;
+  title: string;
+}) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  if (imageUrl && !imgFailed) {
+    return (
+      <div className="w-10 h-10 rounded-lg bg-gray-800 border border-white/10 overflow-hidden flex items-center justify-center shrink-0 shadow-inner p-0.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={title}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setImgFailed(true)}
+          className="w-full h-full object-contain"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-10 h-10 rounded-lg bg-gray-800 border border-white/10 flex items-center justify-center text-xl shrink-0 shadow-inner">
+      {hasCustomEmoji ? (
+        emoji
+      ) : (
+        <GameIcon
+          name={isShop ? 'shop' : 'fight'}
+          fallback={isShop ? '🏪' : '⚔️'}
+          size="md"
+        />
+      )}
+    </div>
+  );
+}
 
 // =========================================================================
 // 5-CLOUD FOG-OF-WAR EMOJI COMPONENT (Expanded 2x2 Grid + Large Center Cloud)
@@ -125,6 +173,7 @@ function MapContent() {
   
   const [panelSubAreas, setPanelSubAreas] = useState<SubArea[]>([]);
   const [panelEncounters, setPanelEncounters] = useState<EncounterDoc[]>([]);
+  const [foesById, setFoesById] = useState<Record<string, FoeDoc>>({});
   const [panelLoading, setPanelLoading] = useState(false);
 
   const [mapMounted, setMapMounted] = useState(false);
@@ -440,6 +489,37 @@ function MapContent() {
         const snap = await getDocs(q);
         const encounters = snap.docs.map(d => ({ ...d.data(), id: d.id } as EncounterDoc));
         setPanelEncounters(encounters);
+
+        // Ensure primary foes for encounters are loaded for display fallback resolution
+        const neededFoeIds = Array.from(
+          new Set(
+            encounters
+              .map((enc) => getPrimaryFoeId(enc))
+              .filter(Boolean)
+          )
+        );
+        if (neededFoeIds.length > 0) {
+          const loadedEntries = await Promise.all(
+            neededFoeIds.map(async (fId) => {
+              try {
+                const fSnap = await getDoc(doc(db, "foes", fId));
+                if (fSnap.exists()) {
+                  return [fId, { ...fSnap.data(), id: fSnap.id } as FoeDoc] as const;
+                }
+              } catch {
+                // Ignore individual foe lookup failure
+              }
+              return null;
+            })
+          );
+          setFoesById((prev) => {
+            const next = { ...prev };
+            for (const entry of loadedEntries) {
+              if (entry) next[entry[0]] = entry[1];
+            }
+            return next;
+          });
+        }
       } catch (err) {
         console.error("Error fetching encounters:", err);
         setPanelEncounters([]);
@@ -1025,6 +1105,10 @@ function MapContent() {
                                 const skillRewards = enc.winRewardSkills
                                   ? Object.entries(enc.winRewardSkills).filter(([, val]) => (val as number) > 0)
                                   : [];
+                                const waveConfigs = getEncounterWaveConfigs(enc);
+                                const primaryFoe = waveConfigs[0] ? foesById[waveConfigs[0].foeId] : undefined;
+                                const resolved = resolveEncounterDisplay(enc, primaryFoe);
+                                const hasCustomEmoji = Boolean(enc.emoji?.trim() || primaryFoe?.emoji?.trim());
 
                                 return (
                                   <div
@@ -1032,20 +1116,21 @@ function MapContent() {
                                     className="p-2.5 sm:p-3 rounded-xl bg-gray-900/90 border border-white/10 flex items-center justify-between gap-2.5 hover:border-yellow-400/50 transition-all shadow-md"
                                   >
                                     <div className="flex items-center gap-2.5 min-w-0">
-                                      <div className="w-10 h-10 rounded-lg bg-gray-800 border border-white/10 flex items-center justify-center text-xl shrink-0 shadow-inner">
-                                        {enc.emoji ? (
-                                          enc.emoji
-                                        ) : (
-                                          <GameIcon
-                                            name={enc.encounterType === 'shop' ? 'shop' : 'fight'}
-                                            fallback={enc.encounterType === 'shop' ? '🏪' : '⚔️'}
-                                            size="md"
-                                          />
-                                        )}
-                                      </div>
+                                      <EncounterThumb
+                                        imageUrl={resolved.imageUrl}
+                                        emoji={resolved.emoji}
+                                        hasCustomEmoji={hasCustomEmoji}
+                                        isShop={enc.encounterType === 'shop'}
+                                        title={resolved.title}
+                                      />
                                       <div className="min-w-0">
                                         <div className="flex items-center gap-1.5">
-                                          <h4 className="font-bold text-white text-xs sm:text-sm truncate">{enc.title}</h4>
+                                          <h4 className="font-bold text-white text-xs sm:text-sm truncate">{resolved.title}</h4>
+                                          {waveConfigs.length > 1 && (
+                                            <span className="text-[10px] font-mono tabular-nums text-amber-300 shrink-0">
+                                              · {waveConfigs.length} waves
+                                            </span>
+                                          )}
                                           {winCount > 0 && (
                                             <span className="text-[9px] font-bold text-green-400 bg-green-950/80 px-1.5 py-0.2 rounded border border-green-800 shrink-0 inline-flex items-center gap-1">
                                               <GameIcon name="victory" fallback="🏆" size="xs" /> {winCount}
@@ -1060,7 +1145,7 @@ function MapContent() {
                                               <GameIcon name="shop" fallback="🏪" size="xs" /> Merchant Shop ({enc.shopItemIds?.length ?? 'All'} items)
                                             </span>
                                           </div>
-                                        ) : (
+                                        ) : winCount > 0 ? (
                                           <div className="flex flex-wrap gap-1 mt-1 text-[9px] sm:text-[10px]">
                                             {enc.winRewardXp ? (
                                               <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-purple-300 font-bold flex items-center gap-1">
@@ -1078,7 +1163,7 @@ function MapContent() {
                                               </span>
                                             ))}
                                           </div>
-                                        )}
+                                        ) : null}
                                       </div>
                                     </div>
 
@@ -1183,21 +1268,22 @@ function MapContent() {
                     </div>
                     <p className="text-xs text-gray-400 mt-1">{selectedSubArea.description}</p>
                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {panelEncounters.map((enc) => (
+                      {panelEncounters.map((enc) => {
+                        const primaryFoeId = getPrimaryFoeId(enc);
+                        const primaryFoe = primaryFoeId ? foesById[primaryFoeId] : undefined;
+                        const resolved = resolveEncounterDisplay(enc, primaryFoe);
+                        const hasCustomEmoji = Boolean(enc.emoji?.trim() || primaryFoe?.emoji?.trim());
+                        return (
                         <div key={enc.id} className="p-3 rounded-xl bg-gray-800 border border-white/10 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xl">
-                              {enc.emoji ? (
-                                enc.emoji
-                              ) : (
-                                <GameIcon
-                                  name={enc.encounterType === 'shop' ? 'shop' : 'fight'}
-                                  fallback={enc.encounterType === 'shop' ? '🏪' : '⚔️'}
-                                  size="md"
-                                />
-                              )}
-                            </span>
-                            <span className="text-sm font-bold text-white">{enc.title}</span>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <EncounterThumb
+                              imageUrl={resolved.imageUrl}
+                              emoji={resolved.emoji}
+                              hasCustomEmoji={hasCustomEmoji}
+                              isShop={enc.encounterType === 'shop'}
+                              title={resolved.title}
+                            />
+                            <span className="text-sm font-bold text-white truncate">{resolved.title}</span>
                           </div>
                           {enc.encounterType === 'shop' ? (
                             <Link href={`/shop?encounterId=${enc.id}&locationId=${selectedLocation.id}`} className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-lg flex items-center gap-1.5 transition-colors">
@@ -1209,7 +1295,8 @@ function MapContent() {
                             </Link>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}

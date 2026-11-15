@@ -15,6 +15,12 @@ import { getDoc, updateDoc, db } from '@/lib/firebase';
 import { arrayUnion, collection, getDocs as getFirebaseDocs, query, where, orderBy, increment } from 'firebase/firestore';
 import { useAudio } from '@/context/AudioContext';
 import { generatePkmRewardCode, ensureAchievementLogItem, getMissingLevelMilestoneAchievements } from '@/lib/pkm';
+import { getEncounterWaveConfigs, resolveEncounterDisplay } from '@/lib/encounterDisplay';
+
+export interface ResolvedBattleWave {
+  foe: FoeDoc;
+  questionTags: string[];
+}
 
 export interface CombatEffect {
   target: 'foe' | 'player';
@@ -72,16 +78,19 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
 
   const [mode, setMode] = useState('lobby');
   const [currentEncounter, setCurrentEncounter] = useState<EncounterDoc | null>(null);
+  const [waves, setWaves] = useState<ResolvedBattleWave[]>([]);
+  const [currentWaveIndex, setCurrentWaveIndex] = useState(0);
   const [foe, setFoe] = useState<FoeDoc | null>(null);
-  // Full pool of questions matching the encounter tags (fetched once at battle start).
+  // Full pool of questions matching the encounter & wave tags (fetched once at battle start).
   // Its length is used as the total "turn budget" for the encounter.
   const [questions, setQuestions] = useState<QuestionDoc[]>([]);
   // Question currently displayed to the player.
   const [currentQuestion, setCurrentQuestion] = useState<QuestionDoc | null>(null);
   // Pending chained sub-questions (same groupId) waiting to be asked in order.
   const [questionQueue, setQuestionQueue] = useState<QuestionDoc[]>([]);
-  // IDs of questions already shown this battle (answered, failed, or skipped) so they don't repeat.
+  // IDs of questions already shown this battle (across all waves) so they don't repeat.
   const [usedQuestionIds, setUsedQuestionIds] = useState<string[]>([]);
+  const usedQuestionIdsRef = useRef<string[]>([]);
   // Turn counter (not an array index anymore since questions are drawn dynamically).
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [showSubquestionMenu, setShowSubquestionMenu] = useState(false);
@@ -103,16 +112,10 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     [currentQuestion]
   );
 
-  // Only questions with no groupId, or the first part (order 1) of a group, may be
-  // picked as a fresh random draw. Later parts can only appear via the chained queue.
-  // Already-used questions (answered, failed, or skipped this battle) are excluded so they don't repeat.
-  const eligibleStarterPool = useMemo(
-    () =>
-      questions.filter(
-        (q) => (!q.groupId || (q.order ?? 1) <= 1) && (!q.id || !usedQuestionIds.includes(q.id))
-      ),
-    [questions, usedQuestionIds]
-  );
+  const questionMatchesTags = useCallback((q: QuestionDoc, tags: string[]) => {
+    if (!tags || tags.length === 0) return true;
+    return Array.isArray(q.tags) && q.tags.some((t) => tags.includes(t));
+  }, []);
 
   const fetchGroupQuestions = useCallback(async (groupId: string, excludeId?: string) => {
     const groupQuery = query(
@@ -304,10 +307,11 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     const pkmActivityId = currentEncounter.pkmActivityId?.trim();
     if (character.pkmStudentId && pkmActivityId) {
       const pkmCode = generatePkmRewardCode(character.pkmStudentId, pkmActivityId);
+      const resolvedTitle = resolveEncounterDisplay(currentEncounter, waves[0]?.foe || foe).title;
       newlyEarnedPkmReward = {
         code: pkmCode,
         activityId: pkmActivityId,
-        activityName: currentEncounter.title || pkmActivityId,
+        activityName: resolvedTitle || pkmActivityId,
       };
       setEarnedPkmReward(newlyEarnedPkmReward);
     } else {
@@ -428,7 +432,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         setMsg('Could not save victory progress.');
         setMode('lobby');
     }
-  }, [user, character, currentEncounter, gameItems, playerHp, consumedPotionInstanceIds, battleInventory, setCharacter]);
+  }, [user, character, currentEncounter, waves, foe, gameItems, playerHp, consumedPotionInstanceIds, battleInventory, setCharacter]);
 
   const targetLocationId = useMemo(() => {
     const fromQuery = searchParams.get('locationId');
@@ -498,19 +502,34 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     }
   }, [user, character, battleStats, consumedPotionInstanceIds, battleInventory, router, setCharacter]);
 
-  // Draws a new random question from the eligible starter pool. If it belongs to a
-  // group, fetches and queues up the rest of that group's parts in order.
-  const drawRandomQuestion = useCallback(async (): Promise<QuestionDoc | null> => {
-    let pool = eligibleStarterPool;
+  // Draws a new random question from the eligible starter pool for the target wave.
+  // If it belongs to a group, fetches and queues up the rest of that group's parts in order.
+  const drawRandomQuestion = useCallback(async (overrideWaveIndex?: number): Promise<QuestionDoc | null> => {
+    const targetWaveIdx = overrideWaveIndex ?? currentWaveIndex;
+    const activeTags = waves[targetWaveIdx]?.questionTags || [];
+    const currentUsed = usedQuestionIdsRef.current;
+
+    let pool = questions.filter(
+      (q) =>
+        questionMatchesTags(q, activeTags) &&
+        (!q.groupId || (q.order ?? 1) <= 1) &&
+        (!q.id || !currentUsed.includes(q.id))
+    );
+
     if (pool.length === 0 && questions.length > 0) {
-      // Extended battle fallback: recycle questions except the current one
-      const recycled = questions.filter((q) => (!q.groupId || (q.order ?? 1) <= 1));
+      // Extended battle fallback: recycle questions for this wave's tags (except the current one)
+      const waveStarters = questions.filter(
+        (q) => questionMatchesTags(q, activeTags) && (!q.groupId || (q.order ?? 1) <= 1)
+      );
+      const recycled = waveStarters.length > 0
+        ? waveStarters
+        : questions.filter((q) => (!q.groupId || (q.order ?? 1) <= 1));
       const filtered = currentQuestion?.id ? recycled.filter((q) => q.id !== currentQuestion.id) : recycled;
       pool = filtered.length > 0 ? filtered : recycled;
     }
+
     if (pool.length === 0) return null;
-    const picked =
-      pool[Math.floor(Math.random() * pool.length)];
+    const picked = pool[Math.floor(Math.random() * pool.length)];
 
     if (picked.groupId) {
       try {
@@ -525,13 +544,44 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     }
 
     if (picked.id) {
-      setUsedQuestionIds((prev) => [...prev, picked.id as string]);
+      const nextUsed = currentUsed.includes(picked.id) ? currentUsed : [...currentUsed, picked.id];
+      usedQuestionIdsRef.current = nextUsed;
+      setUsedQuestionIds(nextUsed);
     }
     return picked;
-  }, [eligibleStarterPool, questions, currentQuestion, fetchGroupQuestions]);
+  }, [currentWaveIndex, waves, questions, currentQuestion, fetchGroupQuestions, questionMatchesTags]);
 
   const advanceQuestion = useCallback(async (abandonCurrentGroup: boolean) => {
     if (foeHp <= 0) {
+      // Check if there is another wave remaining in this encounter
+      if (currentWaveIndex < waves.length - 1) {
+        if (currentQIndex >= questions.length - 1) {
+          handleLoss('You ran out of turns before defeating all waves!');
+          return;
+        }
+        const nextWaveIdx = currentWaveIndex + 1;
+        const nextWave = waves[nextWaveIdx];
+        setCurrentWaveIndex(nextWaveIdx);
+        setFoe(nextWave.foe);
+        setFoeHp(nextWave.foe.maxHp);
+        setSelectedChoice(null);
+        setCombatEffect(null);
+        setShowSubquestionMenu(false);
+        setQuestionQueue([]);
+        setCurrentQIndex((prev) => prev + 1);
+
+        const drawn = await drawRandomQuestion(nextWaveIdx);
+        if (!drawn) {
+          handleLoss('No more questions available for the next wave!');
+          return;
+        }
+        setCurrentQuestion(drawn);
+        setTimeLeft(drawn.timeLimit || 30);
+        setMsg(`Wave ${currentWaveIndex + 1} cleared! Wave ${nextWaveIdx + 1}: ${nextWave.foe.name} appears!`);
+        setIsPaused(false);
+        return;
+      }
+
       handleWin();
       return;
     }
@@ -570,7 +620,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     setCurrentQuestion(drawn);
     setTimeLeft(drawn.timeLimit || 30);
     setIsPaused(false);
-  }, [foeHp, playerHp, currentQIndex, questions.length, questionQueue, drawRandomQuestion, handleWin, handleLoss]);
+  }, [foeHp, currentWaveIndex, waves, playerHp, currentQIndex, questions.length, questionQueue, drawRandomQuestion, handleWin, handleLoss]);
 
   const nextQuestion = useCallback(() => advanceQuestion(false), [advanceQuestion]);
 
@@ -621,9 +671,11 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         const maxHp = foe?.maxHp || 50;
         const halfHp = maxHp * 0.5;
 
-        // Check for special fight trigger: first time foe is below 50% HP (or 0% from 1-hit KO)
+        // Check for special fight trigger: first time final wave foe is below 50% HP (or 0% from 1-hit KO)
+        const isFinalWave = currentWaveIndex >= waves.length - 1;
         const shouldTriggerSpecial =
           Boolean(currentEncounter?.specialFightId) &&
+          isFinalWave &&
           !specialFightTriggered &&
           (calculatedFoeHp <= halfHp || calculatedFoeHp <= 0);
 
@@ -651,7 +703,12 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
           }, 700);
         } else {
           const newFoeHp = Math.max(0, calculatedFoeHp);
-          setMsg(`Correct! You dealt ${foeDamage} damage.`);
+          const hasMoreWaves = currentWaveIndex < waves.length - 1;
+          setMsg(
+            newFoeHp <= 0 && hasMoreWaves
+              ? `Correct! You dealt ${foeDamage} damage and defeated ${foe?.name || 'this foe'}! Another foe awaits!`
+              : `Correct! You dealt ${foeDamage} damage.`
+          );
           setFoeHp(newFoeHp);
           setCombatEffect({
             target: 'foe',
@@ -699,6 +756,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       playSfx,
       currentEncounter,
       specialFightTriggered,
+      currentWaveIndex,
+      waves.length,
     ]
   );
 
@@ -715,31 +774,68 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
         setIsLoading(true);
         setMsg('');
         try {
-          const foeToLoad = enc.foes && enc.foes.length > 0 ? enc.foes[0] : enc.foeId;
-          if (!foeToLoad) {
+          const waveConfigs = getEncounterWaveConfigs(enc);
+          if (waveConfigs.length === 0) {
             setMsg('Encounter has no foe assigned.');
             setMode('lobby');
             return;
           }
-          const foeData = await getDoc<FoeDoc>('foes', foeToLoad);
 
-          let questionData: QuestionDoc[] = [];
-          const tagsToFetch =
+          const encounterTags =
             enc.questionTags && enc.questionTags.length > 0
               ? enc.questionTags
               : enc.questionTag
               ? [enc.questionTag]
               : [];
 
-          if (tagsToFetch.length > 0) {
-            const questionsQuery = query(
-              collection(db, 'questions'),
-              where('tags', 'array-contains-any', tagsToFetch)
-            );
-            const questionSnap = await getFirebaseDocs(questionsQuery);
-            questionData = questionSnap.docs.map(
-              (d) => ({ ...d.data(), id: d.id } as QuestionDoc)
-            );
+          // Load every wave's foe in order
+          const loadedFoes = await Promise.all(
+            waveConfigs.map(async (w) => {
+              const cached = foes[w.foeId];
+              if (cached) return { ...cached, id: cached.id || w.foeId };
+              const fetched = await getDoc<FoeDoc>('foes', w.foeId);
+              return fetched ? { ...fetched, id: fetched.id || w.foeId } : null;
+            })
+          );
+
+          const missingIndex = loadedFoes.findIndex((f) => !f);
+          if (missingIndex !== -1) {
+            setMsg(`Foe with ID '${waveConfigs[missingIndex].foeId}' not found.`);
+            setMode('lobby');
+            return;
+          }
+
+          const resolvedWaves: ResolvedBattleWave[] = waveConfigs.map((w, idx) => ({
+            foe: loadedFoes[idx] as FoeDoc,
+            questionTags:
+              w.questionTags && w.questionTags.length > 0
+                ? w.questionTags
+                : encounterTags,
+          }));
+
+          // Fetch unique union of all question tags across the encounter & all waves
+          const allTagsSet = new Set<string>();
+          encounterTags.forEach((t) => allTagsSet.add(t));
+          resolvedWaves.forEach((rw) => rw.questionTags.forEach((t) => allTagsSet.add(t)));
+          const allTags = Array.from(allTagsSet);
+
+          let questionData: QuestionDoc[] = [];
+          if (allTags.length > 0) {
+            const seenIds = new Set<string>();
+            for (let i = 0; i < allTags.length; i += 30) {
+              const chunk = allTags.slice(i, i + 30);
+              const questionsQuery = query(
+                collection(db, 'questions'),
+                where('tags', 'array-contains-any', chunk)
+              );
+              const questionSnap = await getFirebaseDocs(questionsQuery);
+              questionSnap.docs.forEach((d) => {
+                if (!seenIds.has(d.id)) {
+                  seenIds.add(d.id);
+                  questionData.push({ ...d.data(), id: d.id } as QuestionDoc);
+                }
+              });
+            }
           }
 
           if (enc.shuffleQuestions) {
@@ -752,21 +848,22 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
             }
           }
 
-          const starterPool = questionData.filter((q) => !q.groupId || (q.order ?? 1) <= 1);
+          const wave1Tags = resolvedWaves[0].questionTags;
+          const starterPool = questionData.filter(
+            (q) =>
+              questionMatchesTags(q, wave1Tags) &&
+              (!q.groupId || (q.order ?? 1) <= 1)
+          );
           const starter =
             starterPool.length > 0
               ? starterPool[Math.floor(Math.random() * starterPool.length)]
               : null;
 
-          if (!foeData || questionData.length === 0 || !starter) {
-            let errorMsg = 'Failed to load battle data.';
-            if (!foeData) {
-              errorMsg = `Foe with ID '${foeToLoad}' not found.`;
-            } else if (questionData.length === 0) {
-              errorMsg = `No questions found for tags: ${tagsToFetch.join(', ')}.`;
-            } else if (!starter) {
-              errorMsg = 'No valid starting questions found (check groupId/order setup).';
-            }
+          if (questionData.length === 0 || !starter) {
+            const errorMsg =
+              questionData.length === 0
+                ? `No questions found for tags: ${allTags.join(', ')}.`
+                : 'No valid starting questions found for Wave 1 (check tags/groupId/order setup).';
             setMsg(errorMsg);
             setMode('lobby');
             return;
@@ -781,10 +878,12 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
             }
           }
 
-          setFoe(foeData);
+          setWaves(resolvedWaves);
+          setCurrentWaveIndex(0);
+          setFoe(resolvedWaves[0].foe);
           setQuestions(questionData);
           setCurrentEncounter(enc);
-          setFoeHp(foeData.maxHp);
+          setFoeHp(resolvedWaves[0].foe.maxHp);
           if (character) {
             const currentCharacterHp =
               character.hp > battleStats.maxHp
@@ -796,7 +895,9 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
           setCurrentQIndex(0);
           setCurrentQuestion(starter);
           setQuestionQueue(starterQueue);
-          setUsedQuestionIds(starter.id ? [starter.id] : []);
+          const initialUsed = starter.id ? [starter.id] : [];
+          usedQuestionIdsRef.current = initialUsed;
+          setUsedQuestionIds(initialUsed);
           setShowSubquestionMenu(false);
           setTimeLeft(starter.timeLimit || 30);
           setIsPaused(false);
@@ -825,7 +926,7 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
 
       setupBattle(encounter);
     },
-    [character, battleStats.maxHp, fetchGroupQuestions]
+    [character, battleStats.maxHp, fetchGroupQuestions, foes, questionMatchesTags]
   );
 
   const handleSpecialFightComplete = useCallback(
@@ -834,7 +935,11 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
 
       const answeredQuestionId = currentQuestion?.id;
       if (answeredQuestionId) {
-        setUsedQuestionIds((prev) => (prev.includes(answeredQuestionId) ? prev : [...prev, answeredQuestionId]));
+        const nextUsed = usedQuestionIdsRef.current.includes(answeredQuestionId)
+          ? usedQuestionIdsRef.current
+          : [...usedQuestionIdsRef.current, answeredQuestionId];
+        usedQuestionIdsRef.current = nextUsed;
+        setUsedQuestionIds(nextUsed);
       }
 
       if (result.success) {
@@ -878,14 +983,28 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
           setTimeLeft(drawn.timeLimit || 30);
           setIsPaused(false);
         } else {
-          // Fallback: Pick any starter question whose id is not answeredQuestionId
-          const fallbackPool = questions.filter(
-            (q) => (!q.groupId || (q.order ?? 1) <= 1) && q.id !== answeredQuestionId
+          // Fallback: Pick any starter question for this wave whose id is not answeredQuestionId
+          const activeTags = waves[currentWaveIndex]?.questionTags || [];
+          const waveFallback = questions.filter(
+            (q) =>
+              questionMatchesTags(q, activeTags) &&
+              (!q.groupId || (q.order ?? 1) <= 1) &&
+              q.id !== answeredQuestionId
           );
+          const fallbackPool =
+            waveFallback.length > 0
+              ? waveFallback
+              : questions.filter(
+                  (q) => (!q.groupId || (q.order ?? 1) <= 1) && q.id !== answeredQuestionId
+                );
           if (fallbackPool.length > 0) {
             const picked = fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
             if (picked.id) {
-              setUsedQuestionIds((prev) => (prev.includes(picked.id!) ? prev : [...prev, picked.id!]));
+              const nextUsed = usedQuestionIdsRef.current.includes(picked.id)
+                ? usedQuestionIdsRef.current
+                : [...usedQuestionIdsRef.current, picked.id];
+              usedQuestionIdsRef.current = nextUsed;
+              setUsedQuestionIds(nextUsed);
             }
             setCurrentQuestion(picked);
             setTimeLeft(picked.timeLimit || 30);
@@ -906,6 +1025,9 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
       questionQueue,
       drawRandomQuestion,
       questions,
+      waves,
+      currentWaveIndex,
+      questionMatchesTags,
       handleLoss,
     ]
   );
@@ -1124,6 +1246,8 @@ export function useBattle({ user, character, encounters, gameItems, foes, setCha
     msg,
     character,
     currentEncounter,
+    waves,
+    currentWaveIndex,
     foe,
     questions,
     currentQuestion,

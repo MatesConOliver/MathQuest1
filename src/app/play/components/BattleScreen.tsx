@@ -139,6 +139,9 @@ function getEmbeddableVideoUrl(url: string): string | null {
 interface BattleScreenProps {
   character: Character | null;
   foe: FoeDoc | null;
+  waveIndex?: number;
+  totalWaves?: number;
+  nextFoeName?: string;
   currentQuestion: QuestionDoc | null;
   currentQIndex: number;
   totalQuestions: number;
@@ -244,6 +247,7 @@ function StatusPlate({
   maxHp,
   isFoe = false,
   level,
+  waveLabel,
   isPhase2 = false,
   phase2SpeedPercent = 25,
   combatBuffs,
@@ -253,6 +257,7 @@ function StatusPlate({
   maxHp: number;
   isFoe?: boolean;
   level?: number;
+  waveLabel?: string;
   isPhase2?: boolean;
   phase2SpeedPercent?: number;
   combatBuffs?: CombatBuffs;
@@ -269,9 +274,12 @@ function StatusPlate({
     <div className={`p-2.5 sm:p-3 rounded-2xl bg-black/80 backdrop-blur-md border ${
       isFoe ? (isPhase2 ? 'border-red-500 shadow-[0_0_25px_rgba(239,68,68,0.5)]' : 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.25)]') : 'border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.25)]'
     } w-52 sm:w-64 text-white shadow-xl`}>
-      <div className="flex justify-between items-baseline mb-1">
+      <div className="flex justify-between items-baseline mb-1 gap-1">
         <span className="font-black text-xs sm:text-sm truncate max-w-[150px]">{name}</span>
         {level && <span className="text-[10px] font-bold text-yellow-400 font-mono">Lv.{level}</span>}
+        {isFoe && waveLabel && (
+          <span className="text-[10px] font-bold text-amber-300 font-mono tabular-nums shrink-0">{waveLabel}</span>
+        )}
       </div>
       
       <div className="flex items-center gap-1.5">
@@ -342,7 +350,7 @@ function StatusPlate({
 // MAIN BATTLE SCREEN COMPONENT
 export function BattleScreen(props: BattleScreenProps) {
   const {
-    character, foe, currentQuestion, currentQIndex, totalQuestions, playerHp, playerMaxHp, foeHp, msg, timeLeft, totalTime,
+    character, foe, waveIndex = 0, totalWaves = 1, nextFoeName, currentQuestion, currentQIndex, totalQuestions, playerHp, playerMaxHp, foeHp, msg, timeLeft, totalTime,
     isPaused, selectedChoice, gameItems, inventory, showInventory, setShowInventory, showEscapeConfirm,
     setShowEscapeConfirm, showSubquestionMenu, abandonGroupTurnCost, handleAnswer, nextQuestion, continueSubquestion, abandonGroup,
     skipQuestion, executeEscape, usePotion, subArea, locationOrder, locationName, combatEffect, user,
@@ -450,6 +458,7 @@ export function BattleScreen(props: BattleScreenProps) {
           hp={foeHp}
           maxHp={foe?.maxHp || 50}
           isFoe
+          waveLabel={totalWaves > 1 ? `Wave ${waveIndex + 1}/${totalWaves}` : undefined}
           isPhase2={isPhase2}
           phase2SpeedPercent={phase2SpeedPercent}
         />
@@ -459,7 +468,7 @@ export function BattleScreen(props: BattleScreenProps) {
       <div className="flex-1 relative w-full pointer-events-none z-10 min-h-0 overflow-hidden">
         
         {/* Foe Unit & Shadow (Upper Right Stage) */}
-        {foe?.imageUrl && (
+        {(foe?.imageUrl || foe?.emoji) && (
           <div className="absolute top-[8%] sm:top-[10%] right-[8%] sm:right-[14%] flex flex-col items-center">
             {/* Foe Sprite with Hit & Lunge Reactions & Special Fight Tremble */}
             <div className={`relative transition-transform duration-300 ${
@@ -471,11 +480,17 @@ export function BattleScreen(props: BattleScreenProps) {
                 ? 'animate-foe-lunge'
                 : ''
             }`}>
-              <img
-                src={foe.imageUrl}
-                alt="Foe"
-                className="w-[min(19rem,32vw)] h-[min(19rem,28vh)] object-contain object-bottom drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]"
-              />
+              {foe?.imageUrl ? (
+                <img
+                  src={foe.imageUrl}
+                  alt={foe?.name || "Foe"}
+                  className="w-[min(19rem,32vw)] h-[min(19rem,28vh)] object-contain object-bottom drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]"
+                />
+              ) : (
+                <div className="w-[min(14rem,28vw)] h-[min(14rem,22vh)] flex items-center justify-center text-[min(8rem,18vw)] drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)] select-none">
+                  {foe?.emoji || "👾"}
+                </div>
+              )}
               {/* Ominous magical auras when trembling */}
               {isFoeTrembling && (
                 <>
@@ -800,14 +815,26 @@ export function BattleScreen(props: BattleScreenProps) {
                         </button>
                       </div>
                     ) : foeHp <= 0 ? (
-                      <button
-                        onClick={nextQuestion}
-                        className="w-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:to-amber-300 text-black font-black py-3 px-4 rounded-xl shadow-xl text-sm sm:text-base tracking-wider uppercase transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        <GameIcon name="victory" fallback="🏆" size="sm" />
-                        <span>Claim Victory!</span>
-                        <span className="text-xl">🎉</span>
-                      </button>
+                      waveIndex < totalWaves - 1 ? (
+                        <button
+                          onClick={nextQuestion}
+                          className="w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 hover:from-indigo-400 hover:to-purple-400 text-white font-black py-3 px-4 rounded-xl shadow-xl text-sm sm:text-base tracking-wider uppercase transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <span>
+                            Next Wave ({waveIndex + 2}/{totalWaves}): {nextFoeName || "Next Foe"}
+                          </span>
+                          <span className="text-lg">➡️</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={nextQuestion}
+                          className="w-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:to-amber-300 text-black font-black py-3 px-4 rounded-xl shadow-xl text-sm sm:text-base tracking-wider uppercase transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <GameIcon name="victory" fallback="🏆" size="sm" />
+                          <span>Claim Victory!</span>
+                          <span className="text-xl">🎉</span>
+                        </button>
+                      )
                     ) : playerHp <= 0 ? (
                       <button
                         onClick={nextQuestion}

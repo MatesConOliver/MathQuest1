@@ -1,6 +1,7 @@
 
 import { EncounterDoc, FoeDoc } from "@/types/game";
 import { GameIcon } from "@/components/GameIcon";
+import { getEncounterWaveConfigs, resolveEncounterDisplay } from "@/lib/encounterDisplay";
 
 interface LobbyProps {
   encounters: EncounterDoc[];
@@ -35,6 +36,9 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
           const winCount = encounterWinCounts[enc.id] || 0;
           const canSeeRewards = winCount > 0;
           const skillRewards = enc.winRewardSkills ? Object.entries(enc.winRewardSkills).filter(([, val]) => val > 0) : [];
+          const waveConfigs = getEncounterWaveConfigs(enc);
+          const primaryFoe = waveConfigs[0] ? getFoe(waveConfigs[0].foeId) : undefined;
+          const resolved = resolveEncounterDisplay(enc, primaryFoe);
 
           return (
             <div 
@@ -43,9 +47,9 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
             >
               <div className="flex-1 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{enc.title}</h3>
+                    <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{resolved.title}</h3>
                     <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-gray-500 dark:text-gray-300 font-bold uppercase tracking-wider">
-                      {enc.questionTag}
+                      {enc.questionTags?.join(", ") || enc.questionTag}
                     </span>
                     {winCount > 0 && (
                         <span className="text-xs font-bold text-green-500 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded-full inline-flex items-center gap-1.5">
@@ -84,15 +88,19 @@ export function Lobby({ encounters, onStartEncounter, msg, encounterWinCounts, g
 
                 {/* Foes Section */}
                 <div className="pt-2">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Foes</h4>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                      {waveConfigs.length > 1 ? `Foes (${waveConfigs.length} Waves)` : "Foe"}
+                    </h4>
                     <div className="flex flex-wrap gap-2 mt-1">
-                        {enc.foes?.map(foeId => {
-                            const foe = getFoe(foeId);
-                            if (!foe) return <div key={foeId} className="text-xs text-gray-400 italic">...</div>;
+                        {waveConfigs.map((w, idx) => {
+                            const foe = getFoe(w.foeId);
+                            if (!foe) return <div key={`${w.foeId}-${idx}`} className="text-xs text-gray-400 italic">...</div>;
                             
                             return (
-                                <div key={foeId} className="bg-gray-100 dark:bg-gray-700/70 p-2 rounded-lg text-xs">
-                                    <span className="font-bold">{foe.name}</span>
+                                <div key={`${w.foeId}-${idx}`} className="bg-gray-100 dark:bg-gray-700/70 p-2 rounded-lg text-xs">
+                                    <span className="font-bold">
+                                      {waveConfigs.length > 1 ? `W${idx + 1}: ` : ""}{foe.name}
+                                    </span>
                                     {canSeeRewards ? (
                                         <div className="text-gray-500 dark:text-gray-400">
                                             HP: {foe.maxHp}, ATK: {foe.attackDamage}

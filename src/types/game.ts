@@ -235,6 +235,11 @@ export type SubArea = {
   };
 };
 
+export interface EncounterWave {
+  foeId: string;
+  questionTags?: string[]; // Optional per-wave tag override; inherits encounter questionTags if empty
+}
+
 export type EncounterDoc = {
   id?: string;
   title: string;
@@ -244,6 +249,7 @@ export type EncounterDoc = {
   locationId: string; // Legacy foreign key
   foeId: string;
   foes?: string[];
+  waves?: EncounterWave[];
   questionTag: string; //legacy
   questionTags?: string[];
   damagePerCorrect?: number;

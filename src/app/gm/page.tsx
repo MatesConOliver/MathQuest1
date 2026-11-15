@@ -7,7 +7,6 @@ import { onAuthStateChanged, User } from "firebase/auth";
 
 import { QuestionsPanel } from "./panels/QuestionsPanel";
 import { ItemsPanel } from "./panels/ItemsPanel";
-import { FoesPanel } from "./panels/FoesPanel";
 import { LocationsPanel } from "./panels/LocationsPanel";
 import SubAreasPanel from "./panels/SubAreasPanel"; // Import the new panel
 import { EncountersPanel } from "./panels/EncountersPanel";
@@ -25,7 +24,7 @@ const GM_EMAILS = [
 const isGMUser = (email?: string | null) => !!email && GM_EMAILS.includes(email.toLowerCase().trim());
 
 // Add "subareas", "reports", "loadingTips", "specialFights", and "assets" to the type definition for the active tab
-type ActiveTab = "questions" | "foes" | "locations" | "subareas" | "encounters" | "items" | "stories" | "reports" | "loadingTips" | "specialFights" | "assets";
+type ActiveTab = "questions" | "locations" | "subareas" | "encounters" | "items" | "stories" | "reports" | "loadingTips" | "specialFights" | "assets";
 
 export default function GMPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -65,11 +64,10 @@ export default function GMPage() {
           <TabButton label="Questions" active={activeTab === "questions"} onClick={() => setActiveTab("questions")} />
           <TabButton label="Stories" active={activeTab === "stories"} onClick={() => setActiveTab("stories")} />
           <TabButton label="Item Factory" active={activeTab === "items"} onClick={() => setActiveTab("items")} />
-          <TabButton label="Foes" active={activeTab === "foes"} onClick={() => setActiveTab("foes")} />
           <TabButton label="Locations" active={activeTab === "locations"} onClick={() => setActiveTab("locations")} />
           {/* Add the new Sub-Areas tab button */}
           <TabButton label="Sub-Areas" active={activeTab === "subareas"} onClick={() => setActiveTab("subareas")} />
-          <TabButton label="Encounters" active={activeTab === "encounters"} onClick={() => setActiveTab("encounters")} />
+          <TabButton label="Encounters & Foes" active={activeTab === "encounters"} onClick={() => setActiveTab("encounters")} />
           <TabButton label="⚔️ Special Fights" active={activeTab === "specialFights"} onClick={() => setActiveTab("specialFights")} />
           <TabButton label="📁 Assets" active={activeTab === "assets"} onClick={() => setActiveTab("assets")} />
           <TabButton label="Loading Tips 💭" active={activeTab === "loadingTips"} onClick={() => setActiveTab("loadingTips")} />
@@ -84,7 +82,6 @@ export default function GMPage() {
             onClearInitialQuestion={() => setSelectedQuestionId(null)} 
           />
         )}
-        {activeTab === "foes" && <FoesPanel />}
         {activeTab === "locations" && <LocationsPanel />}
         {/* Render the new SubAreasPanel when the tab is active */}
         {activeTab === "subareas" && <SubAreasPanel />}

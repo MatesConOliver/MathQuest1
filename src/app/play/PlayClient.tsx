@@ -60,6 +60,7 @@ export default function PlayClient() {
         <BattleIntro
           encounter={battle.currentEncounter}
           foe={battle.foe}
+          waveFoes={battle.waves.map((w) => w.foe)}
           questionCount={battle.questions.length}
           onStartBattle={battle.handleStartBattle}
           character={character}
@@ -70,6 +71,9 @@ export default function PlayClient() {
         <BattleScreen
           character={character}
           foe={battle.foe}
+          waveIndex={battle.currentWaveIndex}
+          totalWaves={battle.waves.length}
+          nextFoeName={battle.waves[battle.currentWaveIndex + 1]?.foe?.name}
           currentQuestion={battle.currentQuestion}
           currentQIndex={battle.currentQIndex}
           totalQuestions={battle.questions.length}

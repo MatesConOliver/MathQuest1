@@ -1,18 +1,22 @@
-
 import { Character, EncounterDoc, FoeDoc } from "@/types/game";
 import { GameIcon } from "@/components/GameIcon";
+import { resolveEncounterDisplay } from "@/lib/encounterDisplay";
 
 interface BattleIntroProps {
   encounter: EncounterDoc | null;
   foe: FoeDoc | null;
+  waveFoes?: FoeDoc[];
   questionCount: number;
   onStartBattle: () => void;
   character: Character | null;
 }
 
-export function BattleIntro({ encounter, foe, questionCount, onStartBattle, character }: BattleIntroProps) {
-  const heroImage = encounter?.imageUrl || foe?.imageUrl;
-  const displayEmoji = encounter?.emoji || "👹";
+export function BattleIntro({ encounter, foe, waveFoes, questionCount, onStartBattle, character }: BattleIntroProps) {
+  const primaryFoe = waveFoes?.[0] || foe;
+  const resolved = resolveEncounterDisplay(encounter, primaryFoe);
+  const heroImage = resolved.imageUrl;
+  const displayEmoji = resolved.emoji;
+  const totalWaves = waveFoes?.length || (foe ? 1 : 0);
 
   const winCount = (encounter?.id && character?.encounterWins?.[encounter.id]) || 0;
   const canSeeRewards = winCount > 0;
@@ -24,7 +28,7 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
           {heroImage ? (
             <img 
               src={heroImage} 
-              alt="Enemy" 
+              alt={resolved.title} 
               className="w-full h-full object-contain object-center p-2 opacity-90 hover:scale-105 transition-transform duration-700 ease-in-out" 
             />
           ) : (
@@ -39,7 +43,7 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
           <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/95 via-black/70 to-transparent pt-20 pb-6 px-8">
             <div className="flex items-center gap-3">
                 <h1 className="text-3xl font-black text-white uppercase tracking-wider drop-shadow-md">
-                  {encounter?.title || foe?.name || "Battle"}
+                  {resolved.title}
                 </h1>
                 {canSeeRewards && (
                    <span className="text-lg font-bold text-green-500 bg-green-900/50 px-3 py-1 rounded-full inline-flex items-center gap-2">
@@ -47,9 +51,15 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
                    </span>
                 )}
             </div>
-            <p className="text-slate-300 text-sm font-bold flex items-center gap-2 mt-1">
-              <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px] tracking-tighter">ENEMY</span> 
-              {foe?.name || "Unknown Foe"}
+            <p className="text-slate-300 text-sm font-bold flex items-center gap-2 mt-1 flex-wrap">
+              <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px] tracking-tighter">
+                {totalWaves > 1 ? `${totalWaves} WAVES` : "ENEMY"}
+              </span> 
+              <span>
+                {totalWaves > 1 && canSeeRewards && waveFoes
+                  ? waveFoes.map((wf) => wf.name).join(" → ")
+                  : primaryFoe?.name || "Unknown Foe"}
+              </span>
             </p>
           </div>
         </div>
@@ -57,20 +67,28 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
         <div className="p-8 space-y-6 bg-white dark:bg-gray-800">
           <div className="relative pl-4 border-l-4 border-slate-300 dark:border-slate-500">
             <p className="text-gray-600 dark:text-gray-300 text-lg leading-relaxed italic">
-              &ldquo;{encounter?.description || "A shadow moves in the darkness. Prepare yourself..."}&rdquo;
+              &ldquo;{resolved.description || "A shadow moves in the darkness. Prepare yourself..."}&rdquo;
             </p>
           </div>
           
           {canSeeRewards ? (
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-50 dark:bg-gray-900/40 p-3.5 rounded-xl border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
-                    <span className="text-[10px] font-black text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Enemy Stats</span>
+                    <span className="text-[10px] font-black text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">
+                      {totalWaves > 1 ? "Total Wave Stats" : "Enemy Stats"}
+                    </span>
                     <div className="text-sm font-bold flex flex-wrap justify-center gap-x-4 gap-y-1">
                       <span className="text-green-600 dark:text-green-400 inline-flex items-center gap-1.5">
-                        <GameIcon name="hp" fallback="❤️" size="sm" /> {foe?.maxHp || 50}
+                        <GameIcon name="hp" fallback="❤️" size="sm" />{" "}
+                        {waveFoes && waveFoes.length > 0
+                          ? waveFoes.reduce((sum, wf) => sum + (wf.maxHp || 0), 0)
+                          : primaryFoe?.maxHp || 50}
                       </span>
                       <span className="text-red-600 dark:text-red-400 inline-flex items-center gap-1.5">
-                        <GameIcon name="foeAttack" fallback="⚔️" size="sm" /> {foe?.attackDamage || 5}
+                        <GameIcon name="foeAttack" fallback="⚔️" size="sm" />{" "}
+                        {waveFoes && waveFoes.length > 1
+                          ? `${Math.min(...waveFoes.map((wf) => wf.attackDamage || 0))}–${Math.max(...waveFoes.map((wf) => wf.attackDamage || 0))}`
+                          : primaryFoe?.attackDamage || 5}
                       </span>
                     </div>
                 </div>
@@ -96,7 +114,8 @@ export function BattleIntro({ encounter, foe, questionCount, onStartBattle, char
           )}
 
           <p className="text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            You have <span className="text-red-600 dark:text-red-500 text-sm px-1">{questionCount} Turns</span> to defeat this enemy!
+            You have <span className="text-red-600 dark:text-red-500 text-sm px-1">{questionCount} Turns</span> to defeat{" "}
+            {totalWaves > 1 ? `all ${totalWaves} waves!` : "this enemy!"}
           </p>
 
           <button
